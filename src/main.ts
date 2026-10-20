@@ -64,9 +64,40 @@ function draw(): void {
       if (code === "") {
         return
       }
-      actions = [...actions, { type: "select", code }]
+      const type: "select" | "deselect" = button.getAttribute("aria-pressed") === "true" ? "deselect" : "select"
+      actions = [...actions, { type, code }]
       draw()
     })
+  }
+
+  const removeButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="已選"] button')
+  for (const button of removeButtons) {
+    button.addEventListener("click", () => {
+      const code = button.dataset.code ?? ""
+      if (code === "") {
+        return
+      }
+      actions = [...actions, { type: "deselect", code }]
+      draw()
+    })
+  }
+
+  const pointButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="價格點"] button')
+  for (const button of pointButtons) {
+    const show = (): void => {
+      const date = button.dataset.date ?? ""
+      const code = button.dataset.code ?? ""
+      if (date === "" || code === "") {
+        return
+      }
+      actions = [
+        ...actions.filter((action) => action.type !== "point"),
+        { type: "point", date, code },
+      ]
+      draw()
+    }
+    button.addEventListener("click", show)
+    button.addEventListener("mouseover", show)
   }
 
   for (const label of ["起日", "迄日"]) {

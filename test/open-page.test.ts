@@ -46,7 +46,7 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   expect(point?.textContent).toContain("2024-06-15")
   expect(point?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
   expect(point?.textContent).toContain("18990")
-  const selected = [...document.querySelectorAll('[aria-label="已選"] li')].map((item) => item.textContent)
+  const selected = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)
   expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
 
   const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
@@ -60,7 +60,7 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   end.value = "2023-02-01"
   end.dispatchEvent(new Event("change", { bubbles: true }))
 
-  const selectedAfter = [...document.querySelectorAll('[aria-label="已選"] li')].map((item) => item.textContent)
+  const selectedAfter = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)
   expect(selectedAfter).toEqual(["華碩 DUAL-RTX4070-O12G"])
   expect(sectionByHeading("價格序列")?.textContent).not.toContain("18990")
   expect(document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')?.value).toBe("2023-02-01")

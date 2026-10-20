@@ -101,12 +101,25 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
     return `<option value="${escapeAttribute(name)}"${selected}>${escapeHtml(name)}</option>`
   }).join("")
   const candidates = view.candidates
-    .map((code) => `<li><button type="button">${escapeHtml(code)}</button></li>`)
+    .map((code) => {
+      const pressed = view.selected.includes(code) ? "true" : "false"
+      return `<li><button type="button" aria-pressed="${pressed}">${escapeHtml(code)}</button></li>`
+    })
     .join("")
-  const selected = view.selected.map((code) => `<li>${escapeHtml(code)}</li>`).join("")
+  const selected = view.selected
+    .map((code) => `<li><span>${escapeHtml(code)}</span><button type="button" data-code="${escapeAttribute(code)}">拿掉</button></li>`)
+    .join("")
   const points = view.series.flatMap((item) =>
-    item.quotes.map((quote) => `<li>${escapeHtml(quote.date)} ${escapeHtml(item.code)} ${quote.sellingPrice}</li>`),
+    item.quotes.map((quote) =>
+      `<li><button type="button" data-date="${escapeAttribute(quote.date)}" data-code="${escapeAttribute(item.code)}">${escapeHtml(quote.date)} ${escapeHtml(item.code)} ${quote.sellingPrice}</button></li>`,
+    ),
   ).join("")
+  const priceAxis = view.axis === null
+    ? ""
+    : `<span>${view.axis.lower}</span><span>${view.axis.upper}</span>`
+  const readout = view.readout === null
+    ? ""
+    : `${escapeHtml(view.readout.date)} ${escapeHtml(view.readout.code)} ${view.readout.sellingPrice}`
   const axis = axisDates(view).map((date) => `<span>${escapeHtml(date)}</span>`).join("")
   const segments = lineSegments(view).map((segment) => `<span>${escapeHtml(segment)}</span>`).join("")
   return `<!DOCTYPE html>
@@ -125,8 +138,10 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
     <section>
       <h2>價格序列</h2>
       <div aria-label="日期軸">${axis}</div>
+      <div aria-label="金額軸">${priceAxis}</div>
       <div aria-label="折線">${segments}</div>
-      <ul>${points}</ul>
+      <p aria-label="讀數">${readout}</p>
+      <ul aria-label="價格點">${points}</ul>
     </section>
   </body>
 </html>`

@@ -33,8 +33,10 @@ export type View = {
 export type Action =
   | { type: "setKeyword"; text: string }
   | { type: "select"; code: string }
+  | { type: "deselect"; code: string }
   | { type: "setRange"; start: string; end: string }
   | { type: "setChipGroup"; name: string }
+  | { type: "point"; date: string; code: string }
 
 const EARLIEST_DATE = "2020-01-01"
 const VGA_LABEL = "顯示卡VGA"
@@ -105,6 +107,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
   let chipGroup = ""
   const selected: string[] = []
   let rangeOverride: { start: string; end: string } | null = null
+  let pointer: { date: string; code: string } | null = null
 
   for (const action of actions) {
     if (action.type === "setKeyword") {
@@ -118,6 +121,17 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     if (action.type === "setRange") {
       const start = action.start < EARLIEST_DATE ? EARLIEST_DATE : action.start
       rangeOverride = { start, end: action.end }
+      continue
+    }
+    if (action.type === "deselect") {
+      const index = selected.indexOf(action.code)
+      if (index >= 0) {
+        selected.splice(index, 1)
+      }
+      continue
+    }
+    if (action.type === "point") {
+      pointer = { date: action.date, code: action.code }
       continue
     }
     const known = series.quotes.some((quote) => quote.code === action.code)
@@ -136,22 +150,97 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     : pool
       .filter((code) => keyword === "" || matchesKeyword(code, latestRowText(visibleQuotes, code), keyword))
       .sort(compareCodePoints)
+  const plotted = selected.map((code) => ({
+    code,
+    quotes: visibleQuotes
+      .filter((quote) => quote.code === code)
+      .sort((left, right) => left.date.localeCompare(right.date))
+      .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
+  }))
 
   return {
     queryRange,
     chipGroups: chipGroupsInOrder(visibleQuotes),
     candidates,
     selected,
-    series: selected.map((code) => ({
-      code,
-      quotes: visibleQuotes
-        .filter((quote) => quote.code === code)
-        .sort((left, right) => left.date.localeCompare(right.date))
-        .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
-    })),
-    axis: null,
-    readout: null,
+    series: plotted,
+    axis: priceAxis(plotted),
+    readout: readoutFor(plotted, pointer),
   }
+}
+
+function readoutFor(
+  series: readonly { code: string; quotes: readonly { date: string; sellingPrice: number }[] }[],
+  pointer: { date: string; code: string } | null,
+): { date: string; code: string; sellingPrice: number } | null {
+  if (pointer === null) {
+    return null
+  }
+  const target = dayNumber(pointer.date)
+  const item = series.find((entry) => entry.code === pointer.code)
+  if (target === null || item === undefined) {
+    return null
+  }
+  let nearest: { date: string; sellingPrice: number } | null = null
+  let best: number | null = null
+  for (const quote of item.quotes) {
+    const day = dayNumber(quote.date)
+    if (day === null) {
+      continue
+    }
+    const distance = Math.abs(day - target)
+    if (best === null || distance < best) {
+      best = distance
+      nearest = quote
+    }
+  }
+  if (nearest === null) {
+    return null
+  }
+  return { date: nearest.date, code: item.code, sellingPrice: nearest.sellingPrice }
+}
+
+function dayNumber(isoDate: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
+  if (match === null) {
+    return null
+  }
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null
+  }
+  return Math.floor(date.getTime() / 86400000)
+}
+
+function priceAxis(
+  series: readonly { quotes: readonly { sellingPrice: number }[] }[],
+): { lower: number; upper: number } | null {
+  let min: number | null = null
+  let max: number | null = null
+  for (const item of series) {
+    for (const quote of item.quotes) {
+      if (min === null || quote.sellingPrice < min) {
+        min = quote.sellingPrice
+      }
+      if (max === null || quote.sellingPrice > max) {
+        max = quote.sellingPrice
+      }
+    }
+  }
+  if (min === null || max === null) {
+    return null
+  }
+  const span = max - min
+  const pad = span === 0 ? Math.max(1, Math.floor(min / 10)) : span / 10
+  let lower = min - pad
+  const upper = max + pad
+  if (min > 0 && lower <= 0) {
+    lower = min / 2
+  }
+  return { lower, upper }
 }
 
 function taipeiDate(capturedAt: string): string {

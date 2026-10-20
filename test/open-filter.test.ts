@@ -41,6 +41,6 @@ test("選了晶片分組後候選出現代號，點下去圖上有售價", () =>
   input.dispatchEvent(new Event("input", { bubbles: true }))
 
   expect(candidateTexts()).toEqual([])
-  const selected = [...document.querySelectorAll('[aria-label="已選"] li')].map((item) => item.textContent)
+  const selected = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)
   expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
 })

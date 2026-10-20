@@ -69,7 +69,7 @@ describe("單日單卡頁面", () => {
       { type: "setKeyword", text: "DUAL-RTX4070" },
       { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
     ]))
-    const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li") ?? [])]
+    const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li span") ?? [])]
       .map((item) => item.textContent)
     const chart = sectionByHeading(doc, "價格序列")
     const points = [...(chart?.querySelectorAll("li") ?? [])]
@@ -198,7 +198,7 @@ describe("查詢區間", () => {
       { type: "setRange", start: "2023-01-01", end: "2023-02-01" },
     ]))
     const points = [...(sectionByHeading(doc, "價格序列")?.querySelectorAll("li") ?? [])]
-    const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li") ?? [])]
+    const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li span") ?? [])]
       .map((item) => item.textContent)
 
     expect(inputValue(doc, "起日")).toBe("2023-01-01")
@@ -278,5 +278,52 @@ describe("篩選候選", () => {
 
     expect(groups).toEqual(["RTX 4070", "RTX 4060"])
     expect(candidates).toEqual(["華碩 DUAL-RTX4070-O12G"])
+  })
+})
+
+describe("已選、金額軸與讀數", () => {
+  test("已選可以拿掉，圖上有金額軸與一筆讀數", () => {
+    const series = update(emptySeries(), [{
+      capturedAt: "2024-06-15T02:00:00.000Z",
+      html: `
+        <tr>
+          <td>顯示卡VGA</td>
+          <td>
+            <select name="n12">
+              <optgroup label="RTX 4070">
+                <option>｛華碩 DUAL-RTX4070-O12G｝, $18990</option>
+              </optgroup>
+              <optgroup label="RTX 4060">
+                <option>｛華碩 RTX4060｝, $9000</option>
+              </optgroup>
+            </select>
+          </td>
+        </tr>
+      `,
+    }])
+    const doc = documentOf(renderPage(series, [
+      { type: "setKeyword", text: "華碩" },
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+      { type: "select", code: "華碩 RTX4060" },
+      { type: "point", date: "2024-06-15", code: "華碩 DUAL-RTX4070-O12G" },
+    ]))
+    const removeLabels = [...doc.querySelectorAll('[aria-label="已選"] button')].map((button) => button.textContent)
+    const bounds = [...(doc.querySelector('[aria-label="金額軸"]')?.querySelectorAll("span") ?? [])]
+      .map((node) => Number(node.textContent))
+    const readout = doc.querySelector('[aria-label="讀數"]')
+    const pressed = [...doc.querySelectorAll('[aria-label="候選"] button')]
+      .map((button) => button.getAttribute("aria-pressed"))
+
+    expect(removeLabels).toEqual(["拿掉", "拿掉"])
+    expect(bounds).toHaveLength(2)
+    expect(bounds[0]).toBeGreaterThan(0)
+    expect(bounds[0]).toBeLessThan(9000)
+    expect(bounds[1]).toBeGreaterThan(18990)
+    expect(readout?.textContent).toContain("2024-06-15")
+    expect(readout?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
+    expect(readout?.textContent).toContain("18990")
+    expect(pressed).toEqual(["true", "true"])
+    expect(doc.body.textContent).not.toContain("登入")
+    expect(doc.body.textContent).not.toContain("收藏")
   })
 })
