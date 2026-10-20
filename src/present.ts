@@ -9,6 +9,7 @@ type StoredQuote = {
   sellingPrice: number
   group: string
   rowText: string
+  capturedAt: string
 }
 
 export type PriceSeries = {
@@ -31,6 +32,7 @@ export type View = {
 export type Action =
   | { type: "setKeyword"; text: string }
   | { type: "select"; code: string }
+  | { type: "setRange"; start: string; end: string }
 
 const EARLIEST_DATE = "2020-01-01"
 const VGA_LABEL = "顯示卡VGA"
@@ -53,9 +55,12 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
       continue
     }
     for (const row of rowsInSelect(selectHtml)) {
+      if (row.group.includes("周邊") || row.group.includes("配件") || row.group.includes("支架")) {
+        continue
+      }
       const code = extractCode(row.text)
       const sellingPrice = parseSellingPrice(row.text)
-      if (code === null || sellingPrice === null) {
+      if (code === null || code.includes("支架") || sellingPrice === null) {
         continue
       }
       const next: StoredQuote = {
@@ -64,12 +69,14 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
         sellingPrice,
         group: row.group,
         rowText: row.text,
+        capturedAt: snapshot.capturedAt,
       }
       const existing = quotes.findIndex((quote) => quote.code === code && quote.date === date)
-      if (existing >= 0) {
-        quotes[existing] = next
-      } else {
+      const previous = existing >= 0 ? quotes[existing] : undefined
+      if (previous === undefined) {
         quotes.push(next)
+      } else if (replacesDailyQuote(previous, next)) {
+        quotes[existing] = next
       }
     }
   }
@@ -77,13 +84,26 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
   return { quotes }
 }
 
+function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
+  const order = previous.capturedAt.localeCompare(next.capturedAt)
+  if (order < 0) {
+    return true
+  }
+  return order === 0 && next.sellingPrice < previous.sellingPrice
+}
+
 export function present(series: PriceSeries, actions: readonly Action[]): View {
   let keyword = ""
   const selected: string[] = []
+  let rangeOverride: { start: string; end: string } | null = null
 
   for (const action of actions) {
     if (action.type === "setKeyword") {
       keyword = action.text
+      continue
+    }
+    if (action.type === "setRange") {
+      rangeOverride = { start: action.start, end: action.end }
       continue
     }
     const known = series.quotes.some((quote) => quote.code === action.code)
@@ -92,7 +112,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     }
   }
 
-  const queryRange = queryRangeFor(series.quotes)
+  const queryRange = rangeOverride ?? queryRangeFor(series.quotes)
   const visibleQuotes = series.quotes.filter((quote) => quoteInRange(quote.date, queryRange))
   const candidates = keyword === ""
     ? []
