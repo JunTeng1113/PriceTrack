@@ -248,3 +248,35 @@ describe("查詢區間", () => {
     expect(regionTexts(doc, "日期軸")).toEqual([])
   })
 })
+
+describe("篩選候選", () => {
+  test("分組清單列出區間內的晶片分組，選了之後候選只顯示代號", () => {
+    const series = update(emptySeries(), [{
+      capturedAt: "2024-06-15T02:00:00.000Z",
+      html: `
+        <tr>
+          <td>顯示卡VGA</td>
+          <td>
+            <select name="n12">
+              <optgroup label="RTX 4070">
+                <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz/限搭機, $18990</option>
+              </optgroup>
+              <optgroup label="RTX 4060">
+                <option>｛華碩 RTX4060｝, $9000</option>
+              </optgroup>
+            </select>
+          </td>
+        </tr>
+      `,
+    }])
+    const doc = documentOf(renderPage(series, [{ type: "setChipGroup", name: "RTX 4070" }]))
+    const groups = [...doc.querySelectorAll('[aria-label="晶片分組"] option')]
+      .map((option) => option.textContent ?? "")
+      .filter((name) => name !== "")
+    const candidates = [...doc.querySelectorAll('[aria-label="候選"] li')]
+      .map((item) => item.textContent)
+
+    expect(groups).toEqual(["RTX 4070", "RTX 4060"])
+    expect(candidates).toEqual(["華碩 DUAL-RTX4070-O12G"])
+  })
+})

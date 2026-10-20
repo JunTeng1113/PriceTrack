@@ -10,6 +10,7 @@ type StoredQuote = {
   group: string
   rowText: string
   capturedAt: string
+  rowIndex: number
 }
 
 export type PriceSeries = {
@@ -33,6 +34,7 @@ export type Action =
   | { type: "setKeyword"; text: string }
   | { type: "select"; code: string }
   | { type: "setRange"; start: string; end: string }
+  | { type: "setChipGroup"; name: string }
 
 const EARLIEST_DATE = "2020-01-01"
 const VGA_LABEL = "顯示卡VGA"
@@ -54,7 +56,12 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
     if (selectHtml === null) {
       continue
     }
-    for (const row of rowsInSelect(selectHtml)) {
+    const rows = rowsInSelect(selectHtml)
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex]
+      if (row === undefined) {
+        continue
+      }
       if (row.group.includes("周邊") || row.group.includes("配件") || row.group.includes("支架")) {
         continue
       }
@@ -70,6 +77,7 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
         group: row.group,
         rowText: row.text,
         capturedAt: snapshot.capturedAt,
+        rowIndex,
       }
       const existing = quotes.findIndex((quote) => quote.code === code && quote.date === date)
       const previous = existing >= 0 ? quotes[existing] : undefined
@@ -94,12 +102,17 @@ function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
 
 export function present(series: PriceSeries, actions: readonly Action[]): View {
   let keyword = ""
+  let chipGroup = ""
   const selected: string[] = []
   let rangeOverride: { start: string; end: string } | null = null
 
   for (const action of actions) {
     if (action.type === "setKeyword") {
       keyword = action.text
+      continue
+    }
+    if (action.type === "setChipGroup") {
+      chipGroup = action.name
       continue
     }
     if (action.type === "setRange") {
@@ -115,11 +128,14 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
 
   const queryRange = rangeOverride ?? queryRangeFor(series.quotes)
   const visibleQuotes = series.quotes.filter((quote) => quoteInRange(quote.date, queryRange))
-  const candidates = keyword === ""
+  const pool = uniqueCodes(visibleQuotes).filter((code) =>
+    chipGroup === "" || visibleQuotes.some((quote) => quote.code === code && quote.group === chipGroup),
+  )
+  const candidates = keyword === "" && chipGroup === ""
     ? []
-    : uniqueCodes(visibleQuotes)
-      .filter((code) => matchesKeyword(code, latestRowText(visibleQuotes, code), keyword))
-      .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+    : pool
+      .filter((code) => keyword === "" || matchesKeyword(code, latestRowText(visibleQuotes, code), keyword))
+      .sort(compareCodePoints)
 
   return {
     queryRange,
@@ -280,12 +296,46 @@ function matchesKeyword(code: string, rowText: string, keyword: string): boolean
   return code.toLowerCase().includes(needle) || rowText.toLowerCase().includes(needle)
 }
 
-function chipGroupsInOrder(quotes: readonly StoredQuote[]): string[] {
-  const groups: string[] = []
-  for (const quote of quotes) {
-    if (quote.group !== "" && !groups.includes(quote.group)) {
-      groups.push(quote.group)
+function compareCodePoints(left: string, right: string): number {
+  const leftPoints = Array.from(left)
+  const rightPoints = Array.from(right)
+  const count = Math.min(leftPoints.length, rightPoints.length)
+  for (let index = 0; index < count; index += 1) {
+    const leftPoint = leftPoints[index]?.codePointAt(0) ?? 0
+    const rightPoint = rightPoints[index]?.codePointAt(0) ?? 0
+    if (leftPoint !== rightPoint) {
+      return leftPoint < rightPoint ? -1 : 1
     }
   }
-  return groups
+  if (leftPoints.length === rightPoints.length) {
+    return 0
+  }
+  return leftPoints.length < rightPoints.length ? -1 : 1
+}
+
+function chipGroupsInOrder(quotes: readonly StoredQuote[]): string[] {
+  let latestCapturedAt = ""
+  for (const quote of quotes) {
+    if (quote.capturedAt > latestCapturedAt) {
+      latestCapturedAt = quote.capturedAt
+    }
+  }
+  const leading: string[] = []
+  const latestRows = quotes
+    .filter((quote) => quote.capturedAt === latestCapturedAt && quote.group !== "")
+    .sort((left, right) => left.rowIndex - right.rowIndex)
+  for (const quote of latestRows) {
+    if (!leading.includes(quote.group)) {
+      leading.push(quote.group)
+    }
+  }
+  const trailing: string[] = []
+  for (const quote of quotes) {
+    if (quote.group === "" || leading.includes(quote.group) || trailing.includes(quote.group)) {
+      continue
+    }
+    trailing.push(quote.group)
+  }
+  trailing.sort(compareCodePoints)
+  return [...leading, ...trailing]
 }

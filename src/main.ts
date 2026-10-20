@@ -27,6 +27,18 @@ function draw(): void {
   document.documentElement.lang = parsed.documentElement.lang
   document.body.replaceChildren(...parsed.body.childNodes)
 
+  const group = document.querySelector<HTMLSelectElement>('select[aria-label="晶片分組"]')
+  if (group !== null) {
+    group.addEventListener("change", () => {
+      const name = group.value
+      actions = [
+        ...actions.filter((action) => action.type !== "setChipGroup"),
+        { type: "setChipGroup", name },
+      ]
+      draw()
+    })
+  }
+
   const input = document.querySelector<HTMLInputElement>('input[aria-label="關鍵字"]')
   if (input !== null) {
     input.addEventListener("input", () => {
