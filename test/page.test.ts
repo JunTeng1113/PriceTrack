@@ -166,3 +166,85 @@ describe("多日走勢", () => {
     expect(doc.body.textContent).not.toContain("重新抓取")
   })
 })
+
+function inputValue(doc: Document, label: string): string | null {
+  const input = doc.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+  return input === null ? null : input.value
+}
+
+describe("查詢區間", () => {
+  test("打開頁面時迄日是最新日報價，起日是往前 12 個月的同一日", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, []))
+
+    expect(inputValue(doc, "迄日")).toBe("2024-06-15")
+    expect(inputValue(doc, "起日")).toBe("2023-06-15")
+  })
+
+  test("改了起日也不能早於 2020-01-01", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, [
+      { type: "setRange", start: "2019-06-01", end: "2024-06-15" },
+    ]))
+
+    expect(inputValue(doc, "起日")).toBe("2020-01-01")
+    expect(inputValue(doc, "迄日")).toBe("2024-06-15")
+  })
+
+  test("改了查詢區間之後已選還在，區間外的日子圖上沒有點", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, [
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+      { type: "setRange", start: "2023-01-01", end: "2023-02-01" },
+    ]))
+    const points = [...(sectionByHeading(doc, "價格序列")?.querySelectorAll("li") ?? [])]
+    const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li") ?? [])]
+      .map((item) => item.textContent)
+
+    expect(inputValue(doc, "起日")).toBe("2023-01-01")
+    expect(inputValue(doc, "迄日")).toBe("2023-02-01")
+    expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
+    expect(points).toHaveLength(0)
+  })
+
+  test("往前 12 個月若該月沒有這一天，起日是該月最後一天", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-02-29T02:00:00.000Z", 18990),
+    ])
+    const doc = documentOf(renderPage(series, []))
+
+    expect(inputValue(doc, "迄日")).toBe("2024-02-29")
+    expect(inputValue(doc, "起日")).toBe("2023-02-28")
+  })
+
+  test("預設起日不早於 2020-01-01", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2020-06-15T02:00:00.000Z", 18990),
+    ])
+    const doc = documentOf(renderPage(series, []))
+
+    expect(inputValue(doc, "迄日")).toBe("2020-06-15")
+    expect(inputValue(doc, "起日")).toBe("2020-01-01")
+  })
+
+  test("迄日是多筆日報價裡最新的一天", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 18990),
+      pricedSnapshot("2024-08-01T02:00:00.000Z", 17990),
+    ])
+    const doc = documentOf(renderPage(series, []))
+
+    expect(inputValue(doc, "迄日")).toBe("2024-08-01")
+    expect(inputValue(doc, "起日")).toBe("2023-08-01")
+  })
+
+  test("完全沒有日報價時圖是空的", () => {
+    const doc = documentOf(renderPage(emptySeries(), []))
+    const chart = sectionByHeading(doc, "價格序列")
+
+    expect(inputValue(doc, "起日")).toBe("")
+    expect(inputValue(doc, "迄日")).toBe("")
+    expect(chart?.querySelector("li")).toBeNull()
+    expect(regionTexts(doc, "日期軸")).toEqual([])
+  })
+})

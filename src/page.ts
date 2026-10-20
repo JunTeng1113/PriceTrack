@@ -83,6 +83,8 @@ function keywordText(actions: readonly Action[]): string {
 export function renderPage(series: PriceSeries, actions: readonly Action[]): string {
   const view = present(series, actions)
   const keyword = escapeAttribute(keywordText(actions))
+  const rangeStart = view.queryRange === null ? "" : view.queryRange.start
+  const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
   const candidates = view.candidates
     .map((code) => `<li><button type="button">${escapeHtml(code)}</button></li>`)
     .join("")
@@ -97,6 +99,8 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   <body>
     <section>
       <h2>篩選</h2>
+      <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
+      <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
       <label>關鍵字 <input aria-label="關鍵字" value="${keyword}"></label>
       <ul aria-label="候選">${candidates}</ul>
       <p>已選</p>

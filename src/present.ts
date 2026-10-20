@@ -103,7 +103,8 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       continue
     }
     if (action.type === "setRange") {
-      rangeOverride = { start: action.start, end: action.end }
+      const start = action.start < EARLIEST_DATE ? EARLIEST_DATE : action.start
+      rangeOverride = { start, end: action.end }
       continue
     }
     const known = series.quotes.some((quote) => quote.code === action.code)

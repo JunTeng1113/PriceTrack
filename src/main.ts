@@ -56,6 +56,25 @@ function draw(): void {
       draw()
     })
   }
+
+  for (const label of ["起日", "迄日"]) {
+    const field = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+    if (field === null) {
+      continue
+    }
+    field.addEventListener("change", () => {
+      const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
+      const end = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')
+      if (start === null || end === null || start.value === "" || end.value === "") {
+        return
+      }
+      actions = [
+        ...actions.filter((action) => action.type !== "setRange"),
+        { type: "setRange", start: start.value, end: end.value },
+      ]
+      draw()
+    })
+  }
 }
 
 draw()

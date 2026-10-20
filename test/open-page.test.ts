@@ -48,4 +48,20 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   expect(point?.textContent).toContain("18990")
   const selected = [...document.querySelectorAll('[aria-label="已選"] li')].map((item) => item.textContent)
   expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
+
+  const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
+  const end = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')
+  expect(start?.value).toBe("2023-06-15")
+  expect(end?.value).toBe("2024-06-15")
+  if (start === null || end === null) {
+    return
+  }
+  start.value = "2023-01-01"
+  end.value = "2023-02-01"
+  end.dispatchEvent(new Event("change", { bubbles: true }))
+
+  const selectedAfter = [...document.querySelectorAll('[aria-label="已選"] li')].map((item) => item.textContent)
+  expect(selectedAfter).toEqual(["華碩 DUAL-RTX4070-O12G"])
+  expect(sectionByHeading("價格序列")?.textContent).not.toContain("18990")
+  expect(document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')?.value).toBe("2023-02-01")
 })
