@@ -60,7 +60,7 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
       }
       const code = extractCode(row.text)
       const sellingPrice = parseSellingPrice(row.text)
-      if (code === null || code.includes("支架") || sellingPrice === null) {
+      if (code === null || code.includes("支架") || code.includes("支撐架") || sellingPrice === null) {
         continue
       }
       const next: StoredQuote = {

@@ -76,4 +76,18 @@ describe("代號與排除", () => {
 
     expect(view.candidates).toEqual([])
   })
+
+  test("代號含支撐架的列不出現在候選", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX4070">
+          <option>｛華碩 顯卡支撐架｝氣泡水平儀, $1290</option>
+          <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setKeyword", text: "支撐架" }])
+
+    expect(view.candidates).toEqual([])
+  })
 })
