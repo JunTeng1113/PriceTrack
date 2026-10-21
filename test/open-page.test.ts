@@ -17,7 +17,7 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   expect(document.body.textContent).toContain("關鍵字")
   expect(document.body.textContent).toContain("已選")
   expect(sectionByHeading("價格序列")?.textContent).not.toContain("18990")
-  expect(document.querySelector('[aria-label="NVIDIA RTX4070"] [data-price="18990"]')).not.toBeNull()
+  expect(document.querySelector('[aria-label="NVIDIA RTX4070"]')).toBeNull()
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("archive.org")
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("wayback")
 

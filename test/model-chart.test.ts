@@ -32,8 +32,8 @@ function documentOf(html: string): Document {
 
 describe("每個晶片分組一張圖", () => {
   test("分組原文不同就各有一張圖", () => {
-    const twelveG = "NVIDIA RTX4070-12G"
-    const twelveGb = "NVIDIA RTX4070-12GB"
+    const twelveG = "NVIDIA RTX5070-12G"
+    const twelveGb = "NVIDIA RTX5070-12GB"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [
         { label: twelveG, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
@@ -53,8 +53,8 @@ describe("每個晶片分組一張圖", () => {
   })
 
   test("選一個品牌後只有該圖留該品牌", () => {
-    const twelveG = "NVIDIA RTX4070-12G"
-    const twelveGb = "NVIDIA RTX4070-12GB"
+    const twelveG = "NVIDIA RTX5070-12G"
+    const twelveGb = "NVIDIA RTX5070-12GB"
     const asusNarrow = "華碩 DUAL-RTX4070-O12G"
     const gigabyteNarrow = "技嘉 RTX4070 WINDFORCE OC 12G"
     const asusWide = "華碩 TUF-RTX4070-O12G"
@@ -84,8 +84,8 @@ describe("每個晶片分組一張圖", () => {
   })
 
   test("選了晶片分組就只留那一張圖", () => {
-    const twelveG = "NVIDIA RTX4070-12G"
-    const twelveGb = "NVIDIA RTX4070-12GB"
+    const twelveG = "NVIDIA RTX5070-12G"
+    const twelveGb = "NVIDIA RTX5070-12GB"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [
         { label: twelveG, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
@@ -98,8 +98,47 @@ describe("每個晶片分組一張圖", () => {
     expect(doc.querySelector(`[aria-label="${twelveGb}"]`)).toBeNull()
   })
 
+  test("沒選分組時只畫 RTX 50 系列，選了其他分組才顯示該圖", () => {
+    const older = "NVIDIA RTX4070"
+    const fifty = "NVIDIA RTX5090-32GB(GDDR7)"
+    const sale = "NVIDIA RTX5070-12GB(GDDR7) 3/5-10點開賣"
+    const saleModel = "NVIDIA RTX5070-12GB(GDDR7)"
+    const decoy = "NVIDIA RTX3050-8GB"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [
+        { label: older, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
+        { label: fifty, rows: ["華碩 TUF-RTX5090-O32G-GAMING(2520MHz), $99990"] },
+        { label: sale, rows: ["技嘉 RTX5070 GAMING OC 12G(2520MHz), $24990"] },
+        { label: decoy, rows: ["微星 RTX3050 VENTUS 2X 8G(1807MHz), $5990"] },
+      ]),
+    ])
+    const open = documentOf(renderPage(series, []))
+
+    expect(open.querySelector(`[aria-label="${fifty}"]`)).not.toBeNull()
+    expect(open.querySelector(`[aria-label="${saleModel}"]`)).not.toBeNull()
+    expect(open.querySelector(`[aria-label="${sale}"]`)).toBeNull()
+    expect(open.querySelector(`[aria-label="${older}"]`)).toBeNull()
+    expect(open.querySelector(`[aria-label="${decoy}"]`)).toBeNull()
+
+    const picked = documentOf(renderPage(series, [{ type: "setChipGroup", name: older }]))
+    expect(picked.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
+    expect(picked.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+
+    const both = documentOf(renderPage(series, [
+      { type: "setChipGroup", name: older },
+      { type: "setChipGroup", name: decoy },
+    ]))
+    expect(both.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
+    expect(both.querySelector(`[aria-label="${decoy}"]`)).not.toBeNull()
+    expect(both.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+    const marked = [...both.querySelectorAll('[data-slot="select-item"][aria-selected="true"]')]
+      .map((item) => item.textContent)
+    expect(marked).toEqual([older, decoy])
+    expect(both.querySelector('[aria-label="晶片分組"]')?.textContent).toBe(`${older}、${decoy}`)
+  })
+
   test("另一張分組圖也把缺日前後的日報價連起來", () => {
-    const twelveG = "NVIDIA RTX4070-12G"
+    const twelveG = "NVIDIA RTX5070-12G"
     const code = "華碩 DUAL-RTX4070-O12G"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [{ label: twelveG, rows: [`${code}(2535MHz), $18990`] }]),
@@ -108,13 +147,13 @@ describe("每個晶片分組一張圖", () => {
     const doc = documentOf(renderPage(series, []))
     const chart = doc.querySelector(`[aria-label="${twelveG}"]`)
 
-    expect(chart?.querySelectorAll("line")).toHaveLength(1)
+    expect(chart?.querySelectorAll("line:not([data-hit])")).toHaveLength(1)
     expect(chart?.querySelector("[data-date='2024-06-16']")).toBeNull()
     expect(chart?.textContent).not.toContain("2024-06-16")
   })
 
   test("圖上有背景、日期軸、金額軸和格線", () => {
-    const twelveG = "NVIDIA RTX4070-12G"
+    const twelveG = "NVIDIA RTX5070-12G"
     const code = "華碩 DUAL-RTX4070-O12G"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [{ label: twelveG, rows: [`${code}(2535MHz), $18990`] }]),
@@ -135,9 +174,11 @@ describe("每個晶片分組一張圖", () => {
     const plotEdge = Number(background?.getAttribute("x")) + Number(background?.getAttribute("width"))
     const yAxis = svg?.querySelector('[data-axis="y"]')
     const yLabel = svg?.querySelector('text[data-axis="y"]')
+    const axisX = Number(/^M([\d.]+)/.exec(yAxis?.getAttribute("d") ?? "")?.[1])
     expect(yAxis).not.toBeNull()
-    expect(Number(yLabel?.getAttribute("x"))).toBeGreaterThan(plotEdge)
-    expect(yAxis?.getAttribute("d")?.startsWith(`M${Number(yLabel?.getAttribute("x")) - 2} `)).toBe(true)
+    expect(axisX).toBe(plotEdge)
+    expect(Number(yLabel?.getAttribute("x"))).toBeGreaterThan(axisX)
+    expect(Number(name?.getAttribute("x"))).toBeGreaterThan(Number(yLabel?.getAttribute("x")))
     expect(svg?.querySelector('[data-axis="grid"]')).not.toBeNull()
     expect([...(svg?.querySelectorAll('text[data-axis="x"]') ?? [])].map((node) => node.textContent)).toEqual(["2024-06"])
     expect(prices).toHaveLength(11)
@@ -163,6 +204,7 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     expect(chart?.textContent).toContain("華碩 PRIME-RTX5060TI-8G")
     expect(chart?.querySelector('[data-price="18990"]')).not.toBeNull()
     expect(chart?.querySelector('[data-price="9000"]')).toBeNull()
+    expect(doc.querySelector('[aria-label="NVIDIA RTX4070"]')).toBeNull()
     expect(doc.querySelector('[aria-label="已選"]')?.textContent).not.toContain("華碩 PRIME-RTX5060TI-8G")
   })
 
@@ -209,23 +251,24 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     const twoDays = (points[2]?.x ?? 0) - (points[1]?.x ?? 0)
 
     expect(points.map((point) => point.date)).toEqual(["2024-06-15", "2024-06-16", "2024-06-18"])
-    expect(chart?.querySelectorAll("line")).toHaveLength(2)
+    expect(chart?.querySelectorAll("line:not([data-hit])")).toHaveLength(2)
     expect(chart?.querySelector("[data-date='2024-06-17']")).toBeNull()
     expect(chart?.textContent).not.toContain("2024-06-17")
     expect(twoDays).toBeCloseTo(oneDay * 2, 5)
   })
 
-  test("每條線一種顏色，點和線是同一色", () => {
+  test("一個品牌一種顏色，點和線是同一色", () => {
     const prime = "華碩 PRIME-RTX5060TI-8G"
+    const tuf = "華碩 TUF-RTX5060TI-8G"
     const windforce = "技嘉 RTX5060Ti WINDFORCE 8G"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [{
         label: modelGroup,
-        rows: [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`],
+        rows: [`${prime}(2505MHz), $18990`, `${tuf}(2565MHz), $19990`, `${windforce}(2497MHz), $17990`],
       }]),
       snapshot("2024-06-16T02:00:00.000Z", [{
         label: modelGroup,
-        rows: [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`],
+        rows: [`${prime}(2505MHz), $19990`, `${tuf}(2565MHz), $20990`, `${windforce}(2497MHz), $16990`],
       }]),
     ])
     const doc = documentOf(renderPage(series, []))
@@ -236,8 +279,40 @@ describe("RTX5060Ti-8GB 型號圖", () => {
       chart?.querySelector(`circle[data-code="${code}"]`)?.getAttribute("fill") ?? null
 
     expect(strokeOf(prime)).toBe(fillOf(prime))
+    expect(strokeOf(tuf)).toBe(fillOf(tuf))
     expect(strokeOf(windforce)).toBe(fillOf(windforce))
+    expect(strokeOf(prime)).toBe(strokeOf(tuf))
     expect(strokeOf(prime)).not.toBe(strokeOf(windforce))
+  })
+
+  test("同一品牌在每張圖和品牌按鈕上都是同一個顏色", () => {
+    const asus = "華碩 PRIME-RTX5060TI-8G"
+    const gigabyte = "技嘉 RTX5060Ti WINDFORCE 8G"
+    const gigabyte5090 = "技嘉 RTX5090 GAMING OC 32G"
+    const onlyGigabyte = "NVIDIA RTX5090"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [
+        { label: modelGroup, rows: [`${asus}(2505MHz), $18990`, `${gigabyte}(2497MHz), $17990`] },
+        { label: onlyGigabyte, rows: [`${gigabyte5090}(2520MHz), $99990`] },
+      ]),
+      snapshot("2024-06-16T02:00:00.000Z", [
+        { label: modelGroup, rows: [`${asus}(2505MHz), $19990`, `${gigabyte}(2497MHz), $16990`] },
+        { label: onlyGigabyte, rows: [`${gigabyte5090}(2520MHz), $98990`] },
+      ]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const strokeOf = (group: string, code: string): string | null =>
+      doc.querySelector(`[aria-label="${group}"] line[data-code="${code}"]`)?.getAttribute("stroke") ?? null
+    const swatch = (group: string, name: string): string => {
+      const button = [...(doc.querySelectorAll(`[aria-label="${group}"] [aria-label="品牌"] button`) ?? [])]
+        .find((node) => node.textContent === name)
+      return button?.querySelector("span[aria-hidden]")?.getAttribute("style") ?? ""
+    }
+
+    expect(strokeOf(modelGroup, gigabyte)).toBe(strokeOf(onlyGigabyte, gigabyte5090))
+    expect(swatch(modelGroup, "技嘉")).toContain(strokeOf(modelGroup, gigabyte) ?? "")
+    expect(swatch(onlyGigabyte, "技嘉")).toBe(swatch(modelGroup, "技嘉"))
+    expect(swatch(modelGroup, "華碩")).not.toBe(swatch(modelGroup, "技嘉"))
   })
 
   test("線末端用和該線相同的顏色標出代號", () => {
@@ -263,6 +338,40 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     expect(label(prime)?.getAttribute("fill")).toBe(strokeOf(prime))
     expect(label(windforce)?.getAttribute("fill")).toBe(strokeOf(windforce))
     expect(strokeOf(prime)).not.toBe(strokeOf(windforce))
+  })
+
+  test("售價相同的型號名稱會上下錯開", () => {
+    const prime = "華碩 PRIME-RTX5060TI-8G"
+    const windforce = "技嘉 RTX5060Ti WINDFORCE 8G"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [{
+        label: modelGroup,
+        rows: [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $18990`],
+      }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const labels = [...(doc.querySelector(`[aria-label="${modelGroup}"]`)?.querySelectorAll("text[data-series-label]") ?? [])]
+    const ys = labels.map((label) => Number(label.getAttribute("y"))).sort((left, right) => left - right)
+    const size = Number(labels[0]?.getAttribute("font-size"))
+
+    expect(ys).toHaveLength(2)
+    expect((ys[1] ?? 0) - (ys[0] ?? 0)).toBeGreaterThanOrEqual(size)
+  })
+
+  test("型號很多時縮小字級，名稱仍不重疊", () => {
+    const rows = Array.from({ length: 40 }, (_, index) => `廠牌${index} 型號${index}(1000MHz), $18990`)
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [{ label: modelGroup, rows }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const labels = [...(doc.querySelector(`[aria-label="${modelGroup}"]`)?.querySelectorAll("text[data-series-label]") ?? [])]
+    const ys = labels.map((label) => Number(label.getAttribute("y"))).sort((left, right) => left - right)
+    const size = Number(labels[0]?.getAttribute("font-size"))
+    const gaps = ys.slice(1).map((y, index) => y - (ys[index] ?? y))
+
+    expect(labels).toHaveLength(40)
+    expect(size).toBeLessThan(3.2)
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(size)
   })
 
   test("選一個品牌後圖上只留那個品牌", () => {

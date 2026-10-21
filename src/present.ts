@@ -88,6 +88,10 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
       if (row.group.includes("周邊") || row.group.includes("配件") || row.group.includes("支架")) {
         continue
       }
+      const group = chipModelName(row.group)
+      if (group === null) {
+        continue
+      }
       const code = extractCode(row.text)
       const sellingPrice = parseSellingPrice(row.text)
       if (code === null || code.includes("支架") || code.includes("支撐架") || sellingPrice === null) {
@@ -97,7 +101,7 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
         code,
         date,
         sellingPrice,
-        group: row.group,
+        group,
         rowText: row.text,
         capturedAt: snapshot.capturedAt,
         rowIndex,
@@ -123,6 +127,41 @@ function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
   return order === 0 && next.sellingPrice < previous.sellingPrice
 }
 
+function chipModelName(group: string): string | null {
+  if (group === "") {
+    return ""
+  }
+  if (group.includes("轉接盒")) {
+    return null
+  }
+  if (group.startsWith("微星 RX6600XT")) {
+    return "AMD RX6600XT"
+  }
+  if (group === "AMD 專業級/工作站級 顯卡") {
+    return "AMD Radeon AI PRO R9700"
+  }
+  let name = group.trim()
+  name = name.replace(/\s*\[[^\]]*\]\s*$/g, "")
+  name = name.replace(/\s*\([^)]*開賣\)\s*$/g, "")
+  name = name.replace(/-\d{1,2}\/\d{1,2}.*開賣\s*$/g, "")
+  name = name.replace(/\s+\d{1,2}\/\d{1,2}.*開賣\s*$/g, "")
+  name = name.replace(/\s+年節期間現貨\+預定皆已完售！\s*$/g, "")
+  name = name.replace(/\s+零星到貨! 隨時開放\s*$/g, "")
+  name = name.replace(/\s+解禁\d{1,2}\/\d{1,2}.*$/g, "")
+  name = name.replace(/\s+首批公版卡\s*$/g, "")
+  name = name.replace(/\s+\(無類比輸出\)\s*$/g, "")
+  name = name.replace(/\s+\(歡迎議價\)\s*$/g, "")
+  name = name.replace(/\s+\(客訂交貨\.歡迎議價\)\s*$/g, "")
+  name = name.replace(/\s+專業級顯示卡\s*$/g, "")
+  name = name.replace(/\s+顯示卡\s*$/g, "")
+  name = name.replace(/\s+系列\s*$/g, "")
+  const trimmed = name.trim()
+  if (trimmed === "") {
+    return null
+  }
+  return trimmed
+}
+
 function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
   const byKey = new Map<string, StoredQuote>()
   const order: string[] = []
@@ -131,7 +170,11 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
     if (code === null) {
       continue
     }
-    const next = code === quote.code ? quote : { ...quote, code }
+    const group = chipModelName(quote.group)
+    if (group === null) {
+      continue
+    }
+    const next = code === quote.code && group === quote.group ? quote : { ...quote, code, group }
     const key = `${next.code}\0${next.date}`
     const previous = byKey.get(key)
     if (previous === undefined) {
@@ -156,7 +199,7 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
 export function present(series: PriceSeries, actions: readonly Action[]): View {
   const stored = normalizeQuotes(series.quotes)
   let keyword = ""
-  let chipGroup = ""
+  const chosenGroups: string[] = []
   const brandByGroup = new Map<string, string>()
   const focusByGroup = new Map<string, string>()
   const selected: string[] = []
@@ -169,7 +212,9 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       continue
     }
     if (action.type === "setChipGroup") {
-      chipGroup = action.name
+      if (action.name !== "" && !chosenGroups.includes(action.name)) {
+        chosenGroups.push(action.name)
+      }
       continue
     }
     if (action.type === "setBrand") {
@@ -205,11 +250,11 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
 
   const queryRange = rangeOverride ?? queryRangeFor(stored)
   const visibleQuotes = stored.filter((quote) => quoteInRange(quote.date, queryRange))
-  const chipGroups = chipGroupsInOrder(visibleQuotes)
+  const chipGroups = chipGroupsInOrder(stored)
   const pool = uniqueCodes(visibleQuotes).filter((code) =>
-    chipGroup === "" || visibleQuotes.some((quote) => quote.code === code && quote.group === chipGroup),
+    chosenGroups.length === 0 || visibleQuotes.some((quote) => quote.code === code && chosenGroups.includes(quote.group)),
   )
-  const candidates = keyword === "" && chipGroup === ""
+  const candidates = keyword === "" && chosenGroups.length === 0
     ? []
     : pool
       .filter((code) => keyword === "" || matchesKeyword(code, latestRowText(visibleQuotes, code), keyword))
@@ -221,7 +266,9 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       .sort((left, right) => left.date.localeCompare(right.date))
       .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
   }))
-  const shownGroups = chipGroup === "" ? chipGroups : chipGroups.filter((group) => group === chipGroup)
+  const shownGroups = chosenGroups.length === 0
+    ? chipGroups.filter(isRtx50Group)
+    : chipGroups.filter((group) => chosenGroups.includes(group))
   const modelCharts = shownGroups.map((group) => {
     const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === group))
     const brand = brandByGroup.get(group) ?? ""
@@ -489,15 +536,45 @@ function brandOf(code: string): string {
   return code.slice(0, space)
 }
 
+const BRAND_ORDER = ["華碩", "技嘉", "微星", "INNO3D", "ZOTAC"]
+
+export function brandColorIndex(brand: string): number {
+  const ranked = BRAND_ORDER.indexOf(brand)
+  if (ranked >= 0) {
+    return ranked
+  }
+  let hash = 0
+  for (const char of brand) {
+    hash = (hash * 33 + (char.codePointAt(0) ?? 0)) % 353
+  }
+  return BRAND_ORDER.length + hash
+}
+
+export function brandColor(brand: string): string {
+  const hue = (brandColorIndex(brand) * 47) % 360
+  return `hsl(${hue} 70% 35%)`
+}
+
 function brandsInOrder(codes: readonly string[]): string[] {
-  const brands: string[] = []
+  const seen: string[] = []
   for (const code of codes) {
     const brand = brandOf(code)
-    if (!brands.includes(brand)) {
-      brands.push(brand)
+    if (!seen.includes(brand)) {
+      seen.push(brand)
     }
   }
-  return brands
+  const ranked: string[] = []
+  for (const name of BRAND_ORDER) {
+    if (seen.includes(name)) {
+      ranked.push(name)
+    }
+  }
+  for (const name of seen) {
+    if (!ranked.includes(name)) {
+      ranked.push(name)
+    }
+  }
+  return ranked
 }
 
 function uniqueCodes(quotes: readonly StoredQuote[]): string[] {
@@ -536,6 +613,10 @@ function compareCodePoints(left: string, right: string): number {
     return 0
   }
   return leftPoints.length < rightPoints.length ? -1 : 1
+}
+
+function isRtx50Group(group: string): boolean {
+  return /RTX50(?:50|60|70|80|90)/.test(group)
 }
 
 function chipGroupsInOrder(quotes: readonly StoredQuote[]): string[] {

@@ -112,6 +112,15 @@ describe("單日單卡頁面", () => {
     expect(doc.querySelector('input[aria-label="迄日"]')?.getAttribute("type")).toBe("date")
   })
 
+  test("內容和畫面邊界留有間距", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, []))
+    const frame = doc.body.firstElementChild
+
+    expect(frame?.classList.contains("p-4")).toBe(true)
+    expect(frame?.classList.contains("md:p-6")).toBe(true)
+  })
+
   test("價格序列用和篩選一樣的直向間距，並排在篩選下方", () => {
     const series = update(emptySeries(), [snapshot])
     const doc = documentOf(renderPage(series, []))
@@ -244,7 +253,7 @@ describe("多日走勢", () => {
       x: Number(node.getAttribute("cx")),
       y: Number(node.getAttribute("cy")),
     }))
-    const lines = [...(chart?.querySelectorAll("line") ?? [])].map((node) => ({
+    const lines = [...(chart?.querySelectorAll("line:not([data-hit])") ?? [])].map((node) => ({
       x1: Number(node.getAttribute("x1")),
       y1: Number(node.getAttribute("y1")),
       x2: Number(node.getAttribute("x2")),
@@ -447,6 +456,49 @@ describe("查詢區間", () => {
 })
 
 describe("篩選候選", () => {
+  test("晶片分組選單列出曾出現的全部分組，包含查詢區間以外的型號", () => {
+    const series = update(emptySeries(), [
+      {
+        capturedAt: "2024-01-15T02:00:00.000Z",
+        html: `
+          <tr>
+            <td>顯示卡VGA</td>
+            <td>
+              <select name="n12">
+                <optgroup label="NVIDIA RTX3060">
+                  <option>｛華碩 DUAL-RTX3060-O8G｝, $9990</option>
+                </optgroup>
+              </select>
+            </td>
+          </tr>
+        `,
+      },
+      {
+        capturedAt: "2026-01-15T02:00:00.000Z",
+        html: `
+          <tr>
+            <td>顯示卡VGA</td>
+            <td>
+              <select name="n12">
+                <optgroup label="NVIDIA RTX5090">
+                  <option>｛華碩 TUF-RTX5090-O32G-GAMING｝, $99990</option>
+                </optgroup>
+              </select>
+            </td>
+          </tr>
+        `,
+      },
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const items = [...(doc.querySelector('[aria-label="晶片分組"]')
+      ?.closest('[data-slot="select"]')
+      ?.querySelectorAll('[data-slot="select-item"]') ?? [])]
+      .map((item) => item.textContent)
+
+    expect(items).toEqual(["NVIDIA RTX5090", "NVIDIA RTX3060"])
+    expect(doc.querySelector('[data-slot="select-content"]')?.classList.contains("overflow-y-auto")).toBe(true)
+  })
+
   test("晶片分組是 shadcn 下拉，列出區間內的分組", () => {
     const series = update(emptySeries(), [{
       capturedAt: "2024-06-15T02:00:00.000Z",
@@ -584,7 +636,7 @@ describe("多條已選的折線圖", () => {
     const chart = doc.querySelector('[aria-label="折線圖"]')
     const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
-    const lineCodes = [...(chart?.querySelectorAll("line") ?? [])].map((node) => node.getAttribute("data-code"))
+    const lineCodes = [...(chart?.querySelectorAll("line:not([data-hit])") ?? [])].map((node) => node.getAttribute("data-code"))
 
     expect(labels).toEqual([code, secondCode])
     expect(lineCodes).toEqual([code, secondCode])
@@ -632,7 +684,7 @@ describe("多條已選的折線圖", () => {
     ]))
     const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
-    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
+    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line:not([data-hit])')].map((node) =>
       node.getAttribute("data-code"),
     )
 
@@ -679,7 +731,7 @@ describe("多條已選的折線圖", () => {
     ]))
     const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
-    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
+    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line:not([data-hit])')].map((node) =>
       node.getAttribute("data-code"),
     )
 
@@ -709,7 +761,7 @@ describe("多條已選的折線圖", () => {
     const doc = documentOf(renderPage(series, codes.map((item) => ({ type: "select" as const, code: item }))))
     const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
-    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
+    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line:not([data-hit])')].map((node) =>
       node.getAttribute("data-code"),
     )
 

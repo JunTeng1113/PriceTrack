@@ -1,5 +1,5 @@
-import { brandMarkup, buttonMarkup, chipGroupMarkup, keywordMarkup } from "./fields.tsx"
-import { present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
+import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, keywordMarkup } from "./fields.tsx"
+import { brandColorIndex, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 
 function escapeHtml(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -71,8 +71,13 @@ function seriesColor(index: number): string {
 }
 
 const plotLeft = 4
-const plotRight = 258
-const priceAxisX = 364
+const plotRight = 270
+const priceAxisX = plotRight
+const seriesNameX = priceAxisX + 24
+const labelSize = 3.2
+const labelGap = 3.6
+const labelTop = 2
+const labelBottom = 98
 const plotTop = 4
 const plotBottom = 84
 
@@ -174,6 +179,61 @@ export function preparedBrandChart(group: string, brand: string): string | null 
   return charts.get(brand) ?? null
 }
 
+function labelStyle(count: number): { fontSize: number; gap: number } {
+  if (count <= 1) {
+    return { fontSize: labelSize, gap: labelGap }
+  }
+  const fitted = (labelBottom - labelTop) / (count - 1)
+  if (fitted >= labelGap) {
+    return { fontSize: labelSize, gap: labelGap }
+  }
+  return { fontSize: fitted * 0.9, gap: fitted }
+}
+
+function spreadLabelYs(preferred: readonly number[], gap: number): number[] {
+  const count = preferred.length
+  if (count === 0) {
+    return []
+  }
+  const only = preferred[0] ?? labelTop
+  if (count === 1) {
+    return [Math.min(labelBottom, Math.max(labelTop, only))]
+  }
+  const order = preferred.map((y, index) => ({ y, index }))
+  order.sort((left, right) => left.y - right.y || left.index - right.index)
+  const placed: number[] = []
+  let cursor = labelTop
+  for (const item of order) {
+    const next = Math.max(item.y, cursor)
+    placed.push(next)
+    cursor = next + gap
+  }
+  const last = placed[count - 1] ?? labelBottom
+  if (last > labelBottom) {
+    const shift = last - labelBottom
+    for (let index = 0; index < placed.length; index += 1) {
+      placed[index] = (placed[index] ?? labelBottom) - shift
+    }
+  }
+  const first = placed[0] ?? labelTop
+  if (first < labelTop) {
+    cursor = labelTop
+    for (let index = 0; index < placed.length; index += 1) {
+      placed[index] = cursor
+      cursor += gap
+    }
+  }
+  const result = Array.from({ length: count }, () => labelTop)
+  for (let index = 0; index < order.length; index += 1) {
+    const item = order[index]
+    const y = placed[index]
+    if (item !== undefined && y !== undefined) {
+      result[item.index] = y
+    }
+  }
+  return result
+}
+
 function chartSvg(marks: string, label = ""): string {
   const named = label === "" ? "" : ` aria-label="${label}"`
   return `<svg${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
@@ -193,6 +253,7 @@ function chartMarks(view: View, connectGaps = false, focus = ""): string {
   const marks: string[] = [chartFrame(start, end, axis)]
   const laneCount = view.series.length
   const laneHeight = laneCount === 0 ? plotBottom - plotTop : (plotBottom - plotTop) / laneCount
+  const labels: { code: string; paint: string; opacity: string; focused: string; y: number }[] = []
   for (const [seriesIndex, item] of view.series.entries()) {
     const quoted = new Set(item.quotes.map((quote) => quote.date))
     for (const date of dates) {
@@ -211,8 +272,12 @@ function chartMarks(view: View, connectGaps = false, focus = ""): string {
       const x = xAt(quote.date, startDay, daySpan)
       const y = yAt(quote.sellingPrice, axis)
       if (previous !== null && (connectGaps || addDays(previous.date, 1) === quote.date)) {
+        const segment = `data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}"`
         marks.push(
-          `<line data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="${paint}" stroke-width="1.2" fill="none" opacity="${opacity}" />`,
+          `<line ${segment} stroke="${paint}" stroke-width="1.2" fill="none" opacity="${opacity}" pointer-events="none" />`,
+        )
+        marks.push(
+          `<line data-hit="true" ${segment} stroke="transparent" stroke-width="6" fill="none" pointer-events="stroke" />`,
         )
       }
       marks.push(
@@ -221,10 +286,22 @@ function chartMarks(view: View, connectGaps = false, focus = ""): string {
       previous = { date: quote.date, price: quote.sellingPrice, x, y }
     }
     if (previous !== null) {
-      marks.push(
-        `<text data-series-label="true" data-code="${escapeAttribute(item.code)}" data-focused="${focus === item.code ? "true" : "false"}" x="${previous.x + 2}" y="${previous.y}" font-size="3.2" fill="${paint}" opacity="${opacity}" dominant-baseline="middle">${escapeHtml(item.code)}</text>`,
-      )
+      labels.push({
+        code: item.code,
+        paint,
+        opacity,
+        focused: focus === item.code ? "true" : "false",
+        y: previous.y,
+      })
     }
+  }
+  const style = labelStyle(labels.length)
+  const labelYs = spreadLabelYs(labels.map((label) => label.y), style.gap)
+  for (const [index, label] of labels.entries()) {
+    const y = labelYs[index] ?? label.y
+    marks.push(
+      `<text data-series-label="true" data-code="${escapeAttribute(label.code)}" data-focused="${label.focused}" x="${seriesNameX}" y="${y}" font-size="${style.fontSize}" fill="${label.paint}" opacity="${label.opacity}" dominant-baseline="middle">${escapeHtml(label.code)}</text>`,
+    )
   }
   return marks.join("")
 }
@@ -253,21 +330,21 @@ function keywordText(actions: readonly Action[]): string {
   return keyword
 }
 
-function chipGroupName(actions: readonly Action[]): string {
-  let name = ""
+function chipGroupNames(actions: readonly Action[]): string[] {
+  const names: string[] = []
   for (const action of actions) {
-    if (action.type === "setChipGroup") {
-      name = action.name
+    if (action.type === "setChipGroup" && action.name !== "" && !names.includes(action.name)) {
+      names.push(action.name)
     }
   }
-  return name
+  return names
 }
 
 export function renderPage(series: PriceSeries, actions: readonly Action[]): string {
   preparedBrandSvgs.clear()
   const view = present(series, actions)
   const keyword = escapeAttribute(keywordText(actions))
-  const chipGroup = chipGroupName(actions)
+  const chipGroups = chipGroupNames(actions)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
   const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
   const candidates = view.candidates
@@ -287,11 +364,12 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
   <body>
+    <div class="p-4 md:p-6">
     <section class="flex flex-col gap-3 text-sm">
       <h2>篩選</h2>
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
-      <label>晶片分組 ${chipGroupMarkup(view.chipGroups, chipGroup)}</label>
+      <label>晶片分組 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</label>
       <label>關鍵字 ${keywordMarkup(keyword)}</label>
       ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
       <ul aria-label="候選">${candidates}</ul>
@@ -306,18 +384,19 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       ${chartSvg(chartMarks(view), "折線圖")}
     </section>
     ${view.modelCharts.map((chart) => modelSection(view, chart)).join("")}
+    </div>
   </body>
 </html>`
 }
 
 function modelSvg(
   view: View,
-  lines: readonly { code: string; quotes: readonly { date: string; sellingPrice: number }[] }[],
+  lines: readonly { code: string; brand: string; quotes: readonly { date: string; sellingPrice: number }[] }[],
   focus: string,
 ): string {
-  const series = lines.map((line, index) => ({
+  const series = lines.map((line) => ({
     code: line.code,
-    colorIndex: index,
+    colorIndex: brandColorIndex(line.brand),
     quotes: line.quotes,
   }))
   return chartSvg(chartMarks({

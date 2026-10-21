@@ -133,6 +133,15 @@ function followLine(node: Element): void {
   paintFocus(svg, code)
 }
 
+function isOnLine(node: Element): boolean {
+  const code = node.getAttribute("data-code") ?? ""
+  if (code === "") {
+    return false
+  }
+  const tag = node.tagName.toLowerCase()
+  return tag === "line" || tag === "circle"
+}
+
 function leaveLine(node: Element, event: Event): void {
   if (!(event instanceof MouseEvent)) {
     return
@@ -142,13 +151,79 @@ function leaveLine(node: Element, event: Event): void {
     return
   }
   const next = event.relatedTarget
-  if (next instanceof Element && svg.contains(next)) {
-    const onLine = next.getAttribute("data-code") ?? next.closest("[data-code]")?.getAttribute("data-code") ?? ""
-    if (onLine !== "") {
-      return
-    }
+  if (next instanceof Element && isOnLine(next)) {
+    return
   }
   paintFocus(svg, null)
+  hideTooltip()
+}
+
+function ensureTooltip(): HTMLElement {
+  const found = document.querySelector("[role=\"tooltip\"]")
+  if (found instanceof HTMLElement) {
+    return found
+  }
+  const tip = document.createElement("div")
+  tip.setAttribute("role", "tooltip")
+  tip.className = "pointer-events-none fixed z-50 hidden rounded-md border bg-background px-3 py-2 text-sm leading-5 shadow-md"
+  document.body.append(tip)
+  return tip
+}
+
+function placeTooltip(tip: HTMLElement, event: MouseEvent): void {
+  const offset = 12
+  const margin = 8
+  tip.style.left = `${event.clientX + offset}px`
+  tip.style.top = `${event.clientY + offset}px`
+  const box = tip.getBoundingClientRect()
+  if (box.width <= 0 || box.height <= 0) {
+    return
+  }
+  const maxLeft = Math.max(margin, window.innerWidth - box.width - margin)
+  const maxTop = Math.max(margin, window.innerHeight - box.height - margin)
+  tip.style.left = `${Math.min(Math.max(margin, event.clientX + offset), maxLeft)}px`
+  tip.style.top = `${Math.min(Math.max(margin, event.clientY + offset), maxTop)}px`
+}
+
+function formatTooltipPrice(price: string): string {
+  const value = Number(price)
+  if (!Number.isFinite(value)) {
+    return price
+  }
+  const rounded = Math.round(value)
+  const negative = rounded < 0
+  const digits = String(Math.abs(rounded))
+  let grouped = ""
+  for (let index = 0; index < digits.length; index += 1) {
+    const remaining = digits.length - index
+    if (index > 0 && remaining % 3 === 0) {
+      grouped += ","
+    }
+    grouped += digits.charAt(index)
+  }
+  return negative ? `-$${grouped}` : `$${grouped}`
+}
+
+function showTooltip(date: string, code: string, price: string, event: MouseEvent): void {
+  if (date === "" || code === "" || price === "") {
+    return
+  }
+  const tip = ensureTooltip()
+  tip.replaceChildren()
+  for (const text of [date, code, formatTooltipPrice(price)]) {
+    const row = document.createElement("p")
+    row.textContent = text
+    tip.append(row)
+  }
+  tip.classList.remove("hidden")
+  placeTooltip(tip, event)
+}
+
+function hideTooltip(): void {
+  const found = document.querySelector("[role=\"tooltip\"]")
+  if (found instanceof HTMLElement) {
+    found.classList.add("hidden")
+  }
 }
 
 function endpointQuote(line: SVGLineElement): { date: string; price: string } | null {
@@ -185,9 +260,33 @@ function quoteAt(
 
 type FilterDraft = {
   keyword: string
-  chipGroup: string
+  chipGroups: string[]
+  vendor: string
   start: string
   end: string
+}
+
+function pressedChipVendor(): string {
+  const pressed = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="晶片廠"] button')]
+    .find((button) => button.getAttribute("aria-pressed") === "true")
+  return pressed?.textContent ?? ""
+}
+
+function showChipVendor(vendor: string): void {
+  const buttons = document.querySelectorAll<HTMLButtonElement>('[aria-label="晶片廠"] button')
+  for (const button of buttons) {
+    button.setAttribute("aria-pressed", button.textContent === vendor ? "true" : "false")
+  }
+  const items = document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')
+  for (const item of items) {
+    const shown = vendor !== "" && item.getAttribute("data-vendor") === vendor
+    item.classList.toggle("hidden", !shown)
+  }
+}
+function selectedChipGroups(): string[] {
+  return [...document.querySelectorAll('[data-slot="select-item"][aria-selected="true"]')]
+    .map((item) => item.getAttribute("data-value") ?? "")
+    .filter((name) => name !== "")
 }
 
 function readFilterDraft(): FilterDraft | null {
@@ -200,7 +299,8 @@ function readFilterDraft(): FilterDraft | null {
   }
   return {
     keyword: keyword.value,
-    chipGroup: chip.textContent ?? "",
+    chipGroups: selectedChipGroups(),
+    vendor: pressedChipVendor(),
     start: start.value,
     end: end.value,
   }
@@ -220,9 +320,15 @@ function writeFilterDraft(draft: FilterDraft): void {
   if (end !== null) {
     end.value = draft.end
   }
-  if (chip !== null) {
-    chip.textContent = draft.chipGroup
+  const items = document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')
+  for (const item of items) {
+    const name = item.getAttribute("data-value") ?? ""
+    item.setAttribute("aria-selected", draft.chipGroups.includes(name) ? "true" : "false")
   }
+  if (chip !== null) {
+    chip.textContent = draft.chipGroups.join("、")
+  }
+  showChipVendor(draft.vendor)
 }
 
 export function start(series: PriceSeries): void {
@@ -230,7 +336,7 @@ export function start(series: PriceSeries): void {
   let lockedCode: string | null = null
   let lockedSvg: SVGSVGElement | null = null
 
-  const bindSelect = (label: string, apply: (name: string) => void): void => {
+  const bindSelect = (label: string, apply: (item: HTMLElement) => void): void => {
     const trigger = document.querySelector(`[aria-label="${label}"]`)
     const root = trigger?.closest("[data-slot=\"select\"]") ?? null
     if (root === null) {
@@ -243,7 +349,7 @@ export function start(series: PriceSeries): void {
     const items = root.querySelectorAll<HTMLElement>("[data-slot=\"select-item\"]")
     for (const item of items) {
       item.addEventListener("click", () => {
-        apply(item.dataset.value ?? "")
+        apply(item)
       })
     }
   }
@@ -272,53 +378,36 @@ export function start(series: PriceSeries): void {
       writeFilterDraft(draft)
     }
 
-    bindSelect("晶片分組", (name) => {
+    bindSelect("晶片分組", (item) => {
       const trigger = document.querySelector('[aria-label="晶片分組"]')
-      const root = trigger?.closest("[data-slot=\"select\"]") ?? null
-      if (trigger === null || root === null) {
+      if (trigger === null) {
         return
       }
-      trigger.textContent = name
-      root.querySelector("[data-slot=\"select-content\"]")?.classList.add("hidden")
+      const next = item.getAttribute("aria-selected") === "true" ? "false" : "true"
+      item.setAttribute("aria-selected", next)
+      trigger.textContent = selectedChipGroups().join("、")
     })
     const bindChart = (svg: SVGSVGElement): void => {
-      const seriesLabels = svg.querySelectorAll("text[data-series-label]")
-      for (const label of seriesLabels) {
-        label.addEventListener("mouseover", () => {
-          followLine(label)
-        })
-        label.addEventListener("mouseout", (event) => {
-          leaveLine(label, event)
-        })
-        label.addEventListener("click", () => {
-          const group = label.closest("section")?.getAttribute("aria-label") ?? ""
-          const code = label.getAttribute("data-code") ?? ""
-          if (group === "" || code === "") {
-            return
-          }
-          const next = label.getAttribute("data-focused") === "true" ? "" : code
-          actions = [
-            ...actions.filter((action) => action.type !== "setFocus" || action.group !== group),
-            { type: "setFocus", group, code: next },
-          ]
-          draw()
-        })
-      }
-
       const held = (code: string): boolean =>
         lockedCode !== null && (lockedSvg !== svg || lockedCode !== code)
 
       const chartMarks = svg.querySelectorAll<SVGElement>("[data-date], [data-day]")
       for (const mark of chartMarks) {
-        const show = (): void => {
-          followLine(mark)
+        const show = (event: Event): void => {
           const code = mark.getAttribute("data-code") ?? ""
-          if (code === "" || held(code)) {
+          if (code === "") {
             return
           }
           const explicitDate = mark.getAttribute("data-date")
           if (explicitDate !== null && explicitDate !== "") {
-            writeReadout(readoutOf(svg), explicitDate, code, mark.getAttribute("data-price") ?? "")
+            followLine(mark)
+            const price = mark.getAttribute("data-price") ?? ""
+            if (!held(code)) {
+              writeReadout(readoutOf(svg), explicitDate, code, price)
+            }
+            if (event instanceof MouseEvent) {
+              showTooltip(explicitDate, code, price, event)
+            }
             return
           }
           const circle = nearestByDate(circlesFor(svg, code), mark.getAttribute("data-day") ?? "")
@@ -368,14 +457,31 @@ export function start(series: PriceSeries): void {
           }
           followLine(line)
           const code = line.getAttribute("data-code") ?? ""
-          if (code === "" || held(code)) {
+          if (code === "") {
             return
           }
           const quote = quoteAt(svg, code, event, line)
           if (quote === null) {
             return
           }
-          writeReadout(readoutOf(svg), quote.date, code, quote.price)
+          if (!held(code)) {
+            writeReadout(readoutOf(svg), quote.date, code, quote.price)
+          }
+          showTooltip(quote.date, code, quote.price, event)
+        })
+        line.addEventListener("mousemove", (event) => {
+          if (!(event instanceof MouseEvent)) {
+            return
+          }
+          const code = line.getAttribute("data-code") ?? ""
+          if (code === "") {
+            return
+          }
+          const quote = quoteAt(svg, code, event, line)
+          if (quote === null) {
+            return
+          }
+          showTooltip(quote.date, code, quote.price, event)
         })
         line.addEventListener("mouseout", (event) => {
           leaveLine(line, event)
@@ -452,14 +558,26 @@ export function start(series: PriceSeries): void {
       const next: Action[] = [
         ...kept,
         { type: "setKeyword", text: nextDraft.keyword },
-        { type: "setChipGroup", name: nextDraft.chipGroup },
       ]
+      for (const name of nextDraft.chipGroups) {
+        next.push({ type: "setChipGroup", name })
+      }
       if (nextDraft.start !== "" && nextDraft.end !== "") {
         next.push({ type: "setRange", start: nextDraft.start, end: nextDraft.end })
       }
       actions = next
       draw(false)
+      showChipVendor(nextDraft.vendor)
     })
+
+    const vendorButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="晶片廠"] button')
+    for (const button of vendorButtons) {
+      button.addEventListener("click", () => {
+        const name = button.textContent ?? ""
+        const next = button.getAttribute("aria-pressed") === "true" ? "" : name
+        showChipVendor(next)
+      })
+    }
 
     const buttons = document.querySelectorAll<HTMLButtonElement>('[aria-label="候選"] button')
     for (const button of buttons) {

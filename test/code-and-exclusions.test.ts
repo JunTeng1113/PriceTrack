@@ -21,6 +21,90 @@ function vgaSnapshot(options: string): Snapshot {
 }
 
 describe("代號與排除", () => {
+  test("不是型號的分組名稱會拿掉宣傳字，轉接盒不列入", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX5070-12GB(GDDR7) 3/5-10點開賣">
+          <option>技嘉 RTX5070 GAMING(2520MHz), $24990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX5070-12GB(GDDR7)">
+          <option>華碩 PRIME-RTX5070-12G(2520MHz), $25990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX5090-32GB(GDDR7) 年節期間現貨+預定皆已完售！">
+          <option>微星 RTX5090 32G VENTUS(2520MHz), $99990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3080 零星到貨! 隨時開放">
+          <option>華碩 TUF-RTX3080-O10G-GAMING(1800MHz), $29990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3070 解禁10/29 21:00">
+          <option>華碩 DUAL-RTX3070-O8G(1800MHz), $19990</option>
+        </optgroup>
+        <optgroup label="AMD RX6800 首批公版卡">
+          <option>華碩 Radeon RX6800-16G(1800MHz), $19990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX4080-16G [11/16 10PM 開賣]">
+          <option>華碩 TUF-RTX4080-16G-GAMING(2500MHz), $39990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX4070 SUPER 12GB(1/17晚上10點開賣)">
+          <option>華碩 DUAL-RTX4070S-12G(2500MHz), $22990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX5070Ti-16GB(GDDR7)-2/20晚上10點開賣">
+          <option>華碩 PRIME-RTX5070TI-16G(2500MHz), $28990</option>
+        </optgroup>
+        <optgroup label="INTEL Arc B580 顯示卡">
+          <option>華擎 ARC B580 Challenger 12G OC(2800MHz), $8990</option>
+        </optgroup>
+        <optgroup label="NVIDIA GTX1660Ti (無類比輸出)">
+          <option>技嘉 GTX1660Ti OC 6G(1770MHz), $6990</option>
+        </optgroup>
+        <optgroup label="AMD Radeon 550 系列">
+          <option>華碩 Radeon 550(1000MHz), $1990</option>
+        </optgroup>
+        <optgroup label="NVIDIA Quadro 專業繪圖卡 (歡迎議價)">
+          <option>NVIDIA Quadro P620(1000MHz), $4990</option>
+        </optgroup>
+        <optgroup label="NVIDIA Quadro 專業繪圖卡">
+          <option>NVIDIA Quadro P600(1000MHz), $3990</option>
+        </optgroup>
+        <optgroup label="微星 RX6600XT MECH 2X 8G V1(2589MHz/21.5cm/註四年)*參考價$13490">
+          <option>微星 RX6600XT MECH 2X 8G OCV1(2589MHz), $9990</option>
+        </optgroup>
+        <optgroup label="AMD 專業級/工作站級 顯卡">
+          <option>華碩 TURBO AI PRO R9700(2000MHz), $39990</option>
+        </optgroup>
+        <optgroup label="NVIDIA / AMD 外接顯卡轉接盒 (需另購顯卡)">
+          <option>Razer Core X(0MHz), $9990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX4070-12GB (GDDR6)">
+          <option>華碩 DUAL-RTX4070-O12G(2535MHz), $18990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX4070-12GB (GDDR6X)">
+          <option>技嘉 RTX4070 GAMING OC 12G(2520MHz), $19990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [])
+
+    expect(view.chipGroups).toEqual([
+      "NVIDIA RTX5070-12GB(GDDR7)",
+      "NVIDIA RTX5090-32GB(GDDR7)",
+      "NVIDIA RTX3080",
+      "NVIDIA RTX3070",
+      "AMD RX6800",
+      "NVIDIA RTX4080-16G",
+      "NVIDIA RTX4070 SUPER 12GB",
+      "NVIDIA RTX5070Ti-16GB(GDDR7)",
+      "INTEL Arc B580",
+      "NVIDIA GTX1660Ti",
+      "AMD Radeon 550",
+      "NVIDIA Quadro 專業繪圖卡",
+      "AMD RX6600XT",
+      "AMD Radeon AI PRO R9700",
+      "NVIDIA RTX4070-12GB (GDDR6)",
+      "NVIDIA RTX4070-12GB (GDDR6X)",
+    ])
+  })
+
   test("晶片分組名稱含周邊的列不出現在候選", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`
@@ -248,6 +332,24 @@ describe("代號與排除", () => {
     ])
   })
 
+  test("品牌按鈕依華碩、技嘉、微星、INNO3D、ZOTAC，其餘在後", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX5090">
+          <option>藍寶石 脈動 RX9070(2497MHz), $18990</option>
+          <option>ZOTAC RTX5090 SOLID(2520MHz), $99990</option>
+          <option>INNO3D RTX5090 X3(2520MHz), $98990</option>
+          <option>微星 RTX5090 32G(2520MHz), $97990</option>
+          <option>技嘉 RTX5090 GAMING(2520MHz), $96990</option>
+          <option>華碩 TUF-RTX5090(2520MHz), $95990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [])
+
+    expect(view.modelCharts[0]?.brands).toEqual(["華碩", "技嘉", "微星", "INNO3D", "ZOTAC", "藍寶石"])
+  })
+
   test("方括號裡的銷售宣傳不是代號，品牌取後面的廠牌", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`
@@ -274,7 +376,7 @@ describe("代號與排除", () => {
     const view = present(series, [])
     const chart = view.modelCharts[0]
 
-    expect(chart?.brands).toEqual(["華碩", "技嘉", "Acer", "ACER", "買華擎", "ZOTAC", "微星", "華擎", "藍寶石"])
+    expect(chart?.brands).toEqual(["華碩", "技嘉", "微星", "ZOTAC", "Acer", "ACER", "買華擎", "華擎", "藍寶石"])
     expect(chart?.series.map((line) => line.code)).toEqual([
       "華碩 TUF-RTX5090-O32G-GAMING",
       "技嘉 RTX5090 GAMING OC 32G",

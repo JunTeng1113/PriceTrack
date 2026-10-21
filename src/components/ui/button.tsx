@@ -7,7 +7,7 @@ function Button({ className, type = "button", ...props }: ComponentProps<"button
       type={type}
       data-slot="button"
       className={cn(
-        "inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 py-2 text-sm font-medium",
+        "inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 py-2 text-sm font-medium aria-pressed:border-slate-900 aria-pressed:bg-slate-900 aria-pressed:text-white",
         className,
       )}
       {...props}

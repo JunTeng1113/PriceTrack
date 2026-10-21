@@ -36,7 +36,7 @@ describe("篩選候選", () => {
     expect(view.candidates).toEqual([])
   })
 
-  test("分組清單只含查詢區間內至少出現過一次的名稱", () => {
+  test("分組清單包含查詢區間以外、曾經出現過的名稱", () => {
     const series = update(emptySeries(), [
       vgaSnapshot("2024-01-15T02:00:00.000Z", [
         {
@@ -55,7 +55,7 @@ describe("篩選候選", () => {
       { type: "setRange", start: "2024-06-01", end: "2024-06-30" },
     ])
 
-    expect(view.chipGroups).toEqual(["NVIDIA RTX4070"])
+    expect(view.chipGroups).toEqual(["NVIDIA RTX4070", "舊分組"])
   })
 
   test("「RTX 4070」與「RTX4070」是兩個分組", () => {
@@ -163,6 +163,31 @@ describe("篩選候選", () => {
     ])
 
     expect(view.candidates).toEqual(["華碩 DUAL-RTX4070-O12G"])
+  })
+
+  test("複選晶片分組時，候選包含這些分組的代號", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot("2024-06-15T02:00:00.000Z", [
+        {
+          label: "RTX 4070",
+          rows: ["｛華碩 DUAL-RTX4070-O12G｝, $18990"],
+        },
+        {
+          label: "RTX 4060",
+          rows: ["｛華碩 RTX4060｝, $9000"],
+        },
+        {
+          label: "RTX 3050",
+          rows: ["｛微星 RTX3050｝, $5990"],
+        },
+      ]),
+    ])
+    const view = present(series, [
+      { type: "setChipGroup", name: "RTX 4070" },
+      { type: "setChipGroup", name: "RTX 3050" },
+    ])
+
+    expect(view.candidates).toEqual(["微星 RTX3050", "華碩 DUAL-RTX4070-O12G"])
   })
 
   test("報價列在區間內換過晶片分組時，圖上仍包含那些日子的日報價", () => {

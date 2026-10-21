@@ -40,25 +40,40 @@ function SelectItem({ className, ...props }: ComponentProps<"div">) {
   )
 }
 
+const chipVendors = ["NVIDIA", "AMD", "INTEL"]
+
+function chipVendor(group: string): string {
+  const found = chipVendors.find((vendor) => group.startsWith(vendor))
+  return found ?? ""
+}
+
 function ChipGroupSelect({
   groups,
   selected,
   label = "晶片分組",
 }: {
   groups: readonly string[]
-  selected: string
+  selected: readonly string[]
   label?: string
 }): ReactNode {
   return (
     <Select>
-      <SelectTrigger aria-label={label}>{selected}</SelectTrigger>
-      <SelectContent>
+      <SelectTrigger aria-label={label}>{selected.join("、")}</SelectTrigger>
+      <SelectContent aria-multiselectable="true" className="max-h-60 overflow-y-auto" role="listbox">
         {groups.map((name) => (
-          <SelectItem key={name} data-value={name}>{name}</SelectItem>
+          <SelectItem
+            key={name}
+            aria-selected={selected.includes(name)}
+            className="hidden aria-selected:bg-slate-100"
+            data-value={name}
+            data-vendor={chipVendor(name)}
+          >
+            {name}
+          </SelectItem>
         ))}
       </SelectContent>
     </Select>
   )
 }
 
-export { ChipGroupSelect }
+export { ChipGroupSelect, chipVendors }
