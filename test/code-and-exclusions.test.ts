@@ -91,7 +91,7 @@ describe("代號與排除", () => {
       "NVIDIA RTX3080",
       "NVIDIA RTX3070",
       "AMD RX6800",
-      "NVIDIA RTX4080-16G",
+      "NVIDIA RTX4080-16GB",
       "NVIDIA RTX4070 SUPER 12GB",
       "NVIDIA RTX5070Ti-16GB(GDDR7)",
       "INTEL Arc B580",
@@ -102,6 +102,57 @@ describe("代號與排除", () => {
       "AMD Radeon AI PRO R9700",
       "NVIDIA RTX4070-12GB (GDDR6)",
       "NVIDIA RTX4070-12GB (GDDR6X)",
+    ])
+  })
+
+  test("容量的 G 與 GB、括號容量與連字號容量是同一分組", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX3060-8G">
+          <option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060-8GB">
+          <option>技嘉 RTX3060 GAMING OC 8G(1807MHz), $10990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060-12GB">
+          <option>華碩 TUF-RTX3060-O12G(1807MHz), $12990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX2060(12G)">
+          <option>華碩 DUAL-RTX2060-O12G(1680MHz), $8990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX2060-12G">
+          <option>技嘉 RTX2060 WINDFORCE 12G(1680MHz), $7990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3080(10G)">
+          <option>華碩 TUF-RTX3080-O10G(1800MHz), $19990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3080-10G">
+          <option>技嘉 RTX3080 GAMING 10G(1800MHz), $18990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX4070TI-12G">
+          <option>華碩 TUF-RTX4070TI-O12G(2500MHz), $24990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX4070Ti 12GB">
+          <option>技嘉 RTX4070 Ti GAMING 12G(2500MHz), $23990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060TI-8G(GDDR6)">
+          <option>華碩 DUAL-RTX3060TI-O8G(1695MHz), $11990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060TI-8G(GDDR6X)">
+          <option>華碩 TUF-RTX3060TI-O8G-GAMING(1695MHz), $13990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [])
+
+    expect(view.chipGroups).toEqual([
+      "NVIDIA RTX3060-8GB",
+      "NVIDIA RTX3060-12GB",
+      "NVIDIA RTX2060-12GB",
+      "NVIDIA RTX3080-10GB",
+      "NVIDIA RTX4070Ti-12GB",
+      "NVIDIA RTX3060Ti-8GB(GDDR6)",
+      "NVIDIA RTX3060Ti-8GB(GDDR6X)",
     ])
   })
 

@@ -31,71 +31,65 @@ function documentOf(html: string): Document {
 }
 
 describe("每個晶片分組一張圖", () => {
-  test("分組原文不同就各有一張圖", () => {
-    const twelveG = "NVIDIA RTX5070-12G"
-    const twelveGb = "NVIDIA RTX5070-12GB"
+  test("容量寫成 8G 或 8GB 是同一張圖，容量不同仍分開", () => {
+    const eight = "NVIDIA RTX5060-8G"
+    const eightGb = "NVIDIA RTX5060-8GB"
+    const sixteen = "NVIDIA RTX5060-16GB"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [
-        { label: twelveG, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
-        { label: twelveGb, rows: ["華碩 TUF-RTX4070-O12G(2565MHz), $20990"] },
+        { label: eight, rows: ["華碩 DUAL-RTX5060-O8G(2497MHz), $9990"] },
+        { label: eightGb, rows: ["華碩 TUF-RTX5060-O8G(2497MHz), $10990"] },
+        { label: sixteen, rows: ["技嘉 RTX5060 GAMING OC 16G(2497MHz), $14990"] },
       ]),
     ])
     const doc = documentOf(renderPage(series, []))
-    const narrow = doc.querySelector(`[aria-label="${twelveG}"]`)
-    const wide = doc.querySelector(`[aria-label="${twelveGb}"]`)
+    const merged = doc.querySelector(`[aria-label="${eightGb}"]`)
 
-    expect(narrow?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
-    expect(narrow?.querySelector('[data-price="18990"]')).not.toBeNull()
-    expect(narrow?.querySelector('[data-price="20990"]')).toBeNull()
-    expect(wide?.textContent).toContain("華碩 TUF-RTX4070-O12G")
-    expect(wide?.querySelector('[data-price="20990"]')).not.toBeNull()
-    expect(wide?.querySelector('[data-price="18990"]')).toBeNull()
+    expect(doc.querySelector(`[aria-label="${eight}"]`)).toBeNull()
+    expect(merged?.textContent).toContain("華碩 DUAL-RTX5060-O8G")
+    expect(merged?.textContent).toContain("華碩 TUF-RTX5060-O8G")
+    expect(merged?.querySelector('[data-price="14990"]')).toBeNull()
+    expect(doc.querySelector(`[aria-label="${sixteen}"]`)?.textContent).toContain("技嘉 RTX5060 GAMING OC 16G")
   })
 
   test("選一個品牌後只有該圖留該品牌", () => {
-    const twelveG = "NVIDIA RTX5070-12G"
-    const twelveGb = "NVIDIA RTX5070-12GB"
-    const asusNarrow = "華碩 DUAL-RTX4070-O12G"
-    const gigabyteNarrow = "技嘉 RTX4070 WINDFORCE OC 12G"
-    const asusWide = "華碩 TUF-RTX4070-O12G"
-    const gigabyteWide = "技嘉 RTX4070 GAMING OC 12G"
+    const group = "NVIDIA RTX5060-8GB"
+    const asus = "華碩 DUAL-RTX5060-O8G"
+    const gigabyte = "技嘉 RTX5060 WINDFORCE 8G"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [
-        {
-          label: twelveG,
-          rows: [`${asusNarrow}(2535MHz), $18990`, `${gigabyteNarrow}(2520MHz), $17990`],
-        },
-        {
-          label: twelveGb,
-          rows: [`${asusWide}(2565MHz), $20990`, `${gigabyteWide}(2535MHz), $19990`],
-        },
+        { label: "NVIDIA RTX5060-8G", rows: [`${asus}(2497MHz), $9990`] },
+        { label: group, rows: [`${gigabyte}(2497MHz), $8990`] },
+      ]),
+      snapshot("2024-06-16T02:00:00.000Z", [
+        { label: "NVIDIA RTX5060-8G", rows: [`${asus}(2497MHz), $10990`] },
+        { label: group, rows: [`${gigabyte}(2497MHz), $9890`] },
       ]),
     ])
     const open = documentOf(renderPage(series, []))
-    const codesOf = (doc: Document, label: string): string[] =>
-      [...(doc.querySelector(`[aria-label="${label}"]`)?.querySelectorAll("[data-code]") ?? [])]
+    const codesOf = (doc: Document): string[] =>
+      [...(doc.querySelector(`[aria-label="${group}"]`)?.querySelectorAll("line:not([data-hit])") ?? [])]
         .map((node) => node.getAttribute("data-code") ?? "")
-    expect(new Set(codesOf(open, twelveG))).toEqual(new Set([asusNarrow, gigabyteNarrow]))
-    expect(new Set(codesOf(open, twelveGb))).toEqual(new Set([asusWide, gigabyteWide]))
+    expect(new Set(codesOf(open))).toEqual(new Set([asus, gigabyte]))
 
-    const filtered = documentOf(renderPage(series, [{ type: "setBrand", group: twelveG, name: "華碩" }]))
-    expect(new Set(codesOf(filtered, twelveG))).toEqual(new Set([asusNarrow]))
-    expect(new Set(codesOf(filtered, twelveGb))).toEqual(new Set([asusWide, gigabyteWide]))
+    const filtered = documentOf(renderPage(series, [{ type: "setBrand", group, name: "華碩" }]))
+    expect(codesOf(filtered)).toEqual([asus])
   })
 
   test("選了晶片分組就只留那一張圖", () => {
-    const twelveG = "NVIDIA RTX5070-12G"
-    const twelveGb = "NVIDIA RTX5070-12GB"
+    const chosen = "NVIDIA RTX5060-8GB"
+    const other = "NVIDIA RTX5090-32GB(GDDR7)"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [
-        { label: twelveG, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
-        { label: twelveGb, rows: ["華碩 TUF-RTX4070-O12G(2565MHz), $20990"] },
+        { label: "NVIDIA RTX5060-8G", rows: ["華碩 DUAL-RTX5060-O8G(2497MHz), $9990"] },
+        { label: other, rows: ["華碩 TUF-RTX5090-O32G(2520MHz), $99990"] },
       ]),
     ])
-    const doc = documentOf(renderPage(series, [{ type: "setChipGroup", name: twelveG }]))
+    const doc = documentOf(renderPage(series, [{ type: "setChipGroup", name: chosen }]))
 
-    expect(doc.querySelector(`[aria-label="${twelveG}"]`)).not.toBeNull()
-    expect(doc.querySelector(`[aria-label="${twelveGb}"]`)).toBeNull()
+    expect(doc.querySelector(`[aria-label="${chosen}"]`)).not.toBeNull()
+    expect(doc.querySelector('[aria-label="NVIDIA RTX5060-8G"]')).toBeNull()
+    expect(doc.querySelector(`[aria-label="${other}"]`)).toBeNull()
   })
 
   test("沒選分組時只畫 RTX 50 系列，選了其他分組才顯示該圖", () => {
@@ -138,7 +132,7 @@ describe("每個晶片分組一張圖", () => {
   })
 
   test("另一張分組圖也把缺日前後的日報價連起來", () => {
-    const twelveG = "NVIDIA RTX5070-12G"
+    const twelveG = "NVIDIA RTX5070-12GB"
     const code = "華碩 DUAL-RTX4070-O12G"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [{ label: twelveG, rows: [`${code}(2535MHz), $18990`] }]),
@@ -153,7 +147,7 @@ describe("每個晶片分組一張圖", () => {
   })
 
   test("圖上有背景、日期軸、金額軸和格線", () => {
-    const twelveG = "NVIDIA RTX5070-12G"
+    const twelveG = "NVIDIA RTX5070-12GB"
     const code = "華碩 DUAL-RTX4070-O12G"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [{ label: twelveG, rows: [`${code}(2535MHz), $18990`] }]),

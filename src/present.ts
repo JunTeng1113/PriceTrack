@@ -159,7 +159,14 @@ function chipModelName(group: string): string | null {
   if (trimmed === "") {
     return null
   }
-  return trimmed
+  return sameCapacitySpelling(trimmed)
+}
+
+function sameCapacitySpelling(name: string): string {
+  const withUnit = name.replace(/(\d+)G(?!B)/gi, "$1GB")
+  const unwrapped = withUnit.replace(/\((\d+GB)\)/gi, "-$1")
+  const ti = unwrapped.replace(/TI(?=-)/g, "Ti")
+  return ti.replace(/Ti\s+(\d+GB)\b/g, "Ti-$1")
 }
 
 function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
@@ -496,26 +503,7 @@ function queryRangeFor(quotes: readonly StoredQuote[]): { start: string; end: st
   if (end === undefined) {
     return null
   }
-  const shifted = shiftMonths(end, -12)
-  const start = shifted < EARLIEST_DATE ? EARLIEST_DATE : shifted
-  return { start, end }
-}
-
-function shiftMonths(isoDate: string, months: number): string {
-  const [yearText, monthText, dayText] = isoDate.split("-")
-  const year = Number(yearText)
-  const month = Number(monthText)
-  const day = Number(dayText)
-  const monthIndex = month - 1 + months
-  const nextYear = year + Math.floor(monthIndex / 12)
-  const nextMonthIndex = ((monthIndex % 12) + 12) % 12
-  const lastDay = new Date(Date.UTC(nextYear, nextMonthIndex + 1, 0)).getUTCDate()
-  const nextDay = Math.min(day, lastDay)
-  return [
-    String(nextYear).padStart(4, "0"),
-    String(nextMonthIndex + 1).padStart(2, "0"),
-    String(nextDay).padStart(2, "0"),
-  ].join("-")
+  return { start: EARLIEST_DATE, end }
 }
 
 function quoteInRange(date: string, range: { start: string; end: string } | null): boolean {
