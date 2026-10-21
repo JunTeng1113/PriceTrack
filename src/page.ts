@@ -1,4 +1,4 @@
-import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup } from "./fields.tsx"
+import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, listingTableMarkup } from "./fields.tsx"
 import { brandColorIndex, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 
 function escapeHtml(text: string): string {
@@ -322,12 +322,12 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   const chipGroups = chipGroupNames(actions)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
   const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
-  const candidates = view.candidates
-    .map((code) => {
-      const pressed = view.selected.includes(code) ? "true" : "false"
-      return `<li>${buttonMarkup(code, { "aria-pressed": pressed })}</li>`
-    })
-    .join("")
+  const candidates = listingTableMarkup(view.listings.map((row) => ({
+    code: row.code,
+    price: formatSellingPrice(row.sellingPrice),
+    date: row.date,
+    pressed: view.selected.includes(row.code),
+  })))
   const selected = view.selected
     .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
     .join("")
@@ -341,13 +341,28 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
       <div>晶片分組 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</div>
       ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
-      <ul aria-label="候選">${candidates}</ul>
+      ${candidates}
       <ul aria-label="已選">${selected}</ul>
     </section>
     ${view.modelCharts.map((chart) => modelSection(view, chart)).join("")}
     </div>
   </body>
 </html>`
+}
+
+function formatSellingPrice(price: number): string {
+  const rounded = Math.round(price)
+  const negative = rounded < 0
+  const digits = String(Math.abs(rounded))
+  let grouped = ""
+  for (let index = 0; index < digits.length; index += 1) {
+    const remaining = digits.length - index
+    if (index > 0 && remaining % 3 === 0) {
+      grouped += ","
+    }
+    grouped += digits.charAt(index)
+  }
+  return negative ? `-$${grouped}` : `$${grouped}`
 }
 
 function modelSvg(
@@ -364,6 +379,7 @@ function modelSvg(
     queryRange: view.queryRange,
     chipGroups: [],
     candidates: [],
+    listings: [],
     selected: [],
     series,
     axis: priceBounds(series),

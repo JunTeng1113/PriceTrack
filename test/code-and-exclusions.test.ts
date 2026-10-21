@@ -427,14 +427,12 @@ describe("代號與排除", () => {
     const view = present(series, [])
     const chart = view.modelCharts[0]
 
-    expect(chart?.brands).toEqual(["華碩", "技嘉", "微星", "ZOTAC", "Acer", "ACER", "買華擎", "華擎", "藍寶石"])
+    expect(chart?.brands).toEqual(["華碩", "技嘉", "微星", "ZOTAC", "Acer", "ACER", "華擎", "藍寶石"])
     expect(chart?.series.map((line) => line.code)).toEqual([
       "華碩 TUF-RTX5090-O32G-GAMING",
       "技嘉 RTX5090 GAMING OC 32G",
-      "技嘉 GTX1660Ti OC 6G + 技嘉 GP-P650B",
       "Acer Nitro ARC B580 OC 12GB",
       "ACER NITRO RX9070XT 16G OC",
-      "買華擎 RX9060XT Challenger+加購 SL-750G",
       "ZOTAC RTX5070Ti AMP Extreme INFINITY",
       "ZOTAC RTX5080 SOLID CORE",
       "ZOTAC RTX5070Ti SOLID CORE",
@@ -449,6 +447,32 @@ describe("代號與排除", () => {
     ])
     expect(chart?.series.find((line) => line.code === "藍寶石 脈動 PULSE RX9060XT GAMING OC 8GB")?.quotes).toEqual([
       { date: "2024-06-15", sellingPrice: 8990 },
+    ])
+  })
+
+  test("組合價不呈現", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX4070">
+          <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>
+          <option>[限組裝] 華碩 TUF-RTX4070-O12G-GAMING(2520MHz), $19990</option>
+          <option>[合購價] 技嘉 RTX4070 GAMING OC 12G + 技嘉 GP-UD750GM(2520MHz), $20990</option>
+          <option>[原廠指定組合]華碩TURBO-RTX4070-12G + TUF GAMING 650W銅(限組裝), $21990</option>
+          <option>&#x2764; [活動]2/18前買 微星4070 Super 加價購 微星 A750GL PCIE5 只要 $2790(原價$3490)</option>
+          <option>[紅包500] 買技嘉 RTX4070顯卡+購 GP-P650G(650W)金牌電源(原價2490), $1990</option>
+          <option>[加購省!] 買華擎 RX9060XT Challenger+加購 SL-750G(2497MHz), $7990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setChipGroup", name: "NVIDIA RTX4070" }])
+
+    expect(view.modelCharts[0]?.series.map((line) => line.code)).toEqual([
+      "華碩 DUAL-RTX4070-O12G",
+      "華碩 TUF-RTX4070-O12G-GAMING",
+    ])
+    expect(view.candidates).toEqual([
+      "華碩 DUAL-RTX4070-O12G",
+      "華碩 TUF-RTX4070-O12G-GAMING",
     ])
   })
 
@@ -468,6 +492,34 @@ describe("代號與排除", () => {
     expect(chart?.series.map((line) => line.code)).toEqual([
       "ROG-STRIX-RTX5070TI-16G-GAMING",
       "華碩 ROG-STRIX-RTX5070TI-O16G-GAMING",
+    ])
+  })
+
+  test("愛心和列首的振興方案不是代號，型號裡的版本名仍在", () => {
+    const card = "技嘉 RTX3060 GAMING OC 8G"
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX3060-8G">
+          <option>&#x2764; ${card}(1807MHz), $10990</option>
+          <option>【振興方案】${card}(1807MHz), $9990</option>
+          <option>【猛】${card}(1807MHz), $9890</option>
+          <option>&#x2764; [活動]${card}(1807MHz), $9790</option>
+          <option>華碩 TUF-RTX3060-O12G-【V2】-GAMING(1807MHz), $11990</option>
+          <option>ZOTAC RTX4060 8G OC SPIDER-MAN【蜘蛛人】(2497MHz), $8990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setChipGroup", name: "NVIDIA RTX3060-8GB" }])
+    const chart = view.modelCharts[0]
+
+    expect(chart?.brands).toEqual(["華碩", "技嘉", "ZOTAC"])
+    expect(chart?.series.map((line) => line.code)).toEqual([
+      card,
+      "華碩 TUF-RTX3060-O12G-【V2】-GAMING",
+      "ZOTAC RTX4060 8G OC SPIDER-MAN【蜘蛛人】",
+    ])
+    expect(chart?.series.find((line) => line.code === card)?.quotes).toEqual([
+      { date: "2024-06-15", sellingPrice: 9790 },
     ])
   })
 

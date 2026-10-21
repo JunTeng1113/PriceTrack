@@ -4,7 +4,7 @@ import { expect, test } from "vitest"
 import "../src/main.ts"
 
 function candidateTexts(): string[] {
-  return [...document.querySelectorAll('[aria-label="候選"] li')].map((item) => item.textContent ?? "")
+  return [...document.querySelectorAll('[aria-label="候選"] button')].map((item) => item.textContent ?? "")
 }
 
 test("選了晶片分組後候選出現代號，點下去圖上有售價", () => {

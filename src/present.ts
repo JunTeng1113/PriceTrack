@@ -21,6 +21,7 @@ export type View = {
   queryRange: { start: string; end: string } | null
   chipGroups: readonly string[]
   candidates: readonly string[]
+  listings: readonly { code: string; date: string; sellingPrice: number }[]
   selected: readonly string[]
   series: readonly {
     code: string
@@ -173,6 +174,9 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
   const byKey = new Map<string, StoredQuote>()
   const order: string[] = []
   for (const quote of quotes) {
+    if (comboPrice(quote.rowText)) {
+      continue
+    }
     const code = promotionFree(quote.code)
     if (code === null) {
       continue
@@ -266,6 +270,10 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     : pool
       .filter((code) => keyword === "" || matchesKeyword(code, latestRowText(visibleQuotes, code), keyword))
       .sort(compareCodePoints)
+  const listings = candidates.flatMap((code) => {
+    const nearest = latestQuote(visibleQuotes, code)
+    return nearest === null ? [] : [{ code, date: nearest.date, sellingPrice: nearest.sellingPrice }]
+  })
   const plotted = selected.map((code) => ({
     code,
     quotes: visibleQuotes
@@ -311,6 +319,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     queryRange,
     chipGroups,
     candidates,
+    listings,
     selected,
     series: plotted,
     axis: priceAxis(plotted),
@@ -466,18 +475,33 @@ function extractCode(text: string): string | null {
   return promotionFree(code)
 }
 
+function comboPrice(text: string): boolean {
+  return text.includes("組合") || text.includes("合購") || text.includes("加價購") || text.includes("加購") || text.includes("+購")
+}
+
 function promotionFree(code: string): string | null {
   const trimmed = code.trim()
   if (trimmed.startsWith("&#x21AA;") || trimmed.startsWith("↪")) {
     return null
   }
   let rest = trimmed
-  while (rest.startsWith("[")) {
-    const close = rest.indexOf("]")
-    if (close < 0) {
-      break
+  let previous = ""
+  while (rest !== previous) {
+    previous = rest
+    rest = rest.replace(/&#x2764;/gi, "").replaceAll("❤", "").trim()
+    while (rest.startsWith("[")) {
+      const close = rest.indexOf("]")
+      if (close < 0) {
+        break
+      }
+      rest = rest.slice(close + 1).trim()
     }
-    rest = rest.slice(close + 1).trim()
+    if (rest.startsWith("【")) {
+      const close = rest.indexOf("】")
+      if (close >= 0) {
+        rest = rest.slice(close + 1).trim()
+      }
+    }
   }
   return rest === "" ? null : rest
 }
@@ -563,6 +587,21 @@ function brandsInOrder(codes: readonly string[]): string[] {
     }
   }
   return ranked
+}
+
+function latestQuote(quotes: readonly StoredQuote[], code: string): { date: string; sellingPrice: number } | null {
+  let date = ""
+  let sellingPrice = 0
+  let found = false
+  for (const quote of quotes) {
+    if (quote.code !== code || (found && quote.date <= date)) {
+      continue
+    }
+    date = quote.date
+    sellingPrice = quote.sellingPrice
+    found = true
+  }
+  return found ? { date, sellingPrice } : null
 }
 
 function uniqueCodes(quotes: readonly StoredQuote[]): string[] {

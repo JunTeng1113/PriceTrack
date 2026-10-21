@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { Button } from "./components/ui/button.tsx"
 import { ChipGroupSelect, chipVendors } from "./components/ui/select.tsx"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table.tsx"
 import { brandColor } from "./present.ts"
 
 export function buttonMarkup(
@@ -20,6 +21,48 @@ export function chipVendorMarkup(): string {
 
 export function chipGroupMarkup(groups: readonly string[], selected: readonly string[]): string {
   return renderToStaticMarkup(createElement(ChipGroupSelect, { groups, selected }))
+}
+
+export function listingTableMarkup(
+  rows: readonly { code: string; price: string; date: string; pressed: boolean }[],
+): string {
+  if (rows.length === 0) {
+    return ""
+  }
+  return renderToStaticMarkup(
+    createElement(
+      Table,
+      { "aria-label": "候選" },
+      createElement(
+        TableHeader,
+        null,
+        createElement(
+          TableRow,
+          null,
+          createElement(TableHead, null, "型號名稱"),
+          createElement(TableHead, { className: "text-right" }, "價格"),
+          createElement(TableHead, null, "日期"),
+        ),
+      ),
+      createElement(
+        TableBody,
+        null,
+        rows.map((row) =>
+          createElement(
+            TableRow,
+            { key: row.code },
+            createElement(
+              TableCell,
+              { className: "whitespace-normal font-medium" },
+              createElement(Button, { "aria-pressed": row.pressed ? "true" : "false" }, row.code),
+            ),
+            createElement(TableCell, { className: "text-right" }, row.price),
+            createElement(TableCell, null, row.date),
+          ),
+        ),
+      ),
+    ),
+  )
 }
 
 export function brandMarkup(brands: readonly string[], selected: string): string {

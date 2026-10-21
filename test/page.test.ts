@@ -80,10 +80,35 @@ describe("單日單卡頁面", () => {
   test("用代號的一部分當關鍵字，候選清單只顯示代號", () => {
     const series = update(emptySeries(), [snapshot])
     const doc = documentOf(renderPage(series, [{ type: "setKeyword", text: "dual-rtx4070" }]))
-    const list = doc.querySelector('[aria-label="候選"]')
-    const items = [...(list?.querySelectorAll("li") ?? [])].map((item) => item.textContent)
+    const items = [...doc.querySelectorAll('[aria-label="候選"] button')].map((item) => item.textContent)
 
     expect(items).toEqual(["華碩 DUAL-RTX4070-O12G"])
+  })
+
+  test("候選表格列出離迄日最近的售價", () => {
+    const series = update(emptySeries(), [
+      snapshot,
+      {
+        capturedAt: "2024-06-20T02:00:00.000Z",
+        html: snapshot.html.replace("$18990", "$17990"),
+      },
+    ])
+    const nearest = documentOf(renderPage(series, [{ type: "setKeyword", text: "DUAL" }]))
+    const table = nearest.querySelector('[aria-label="候選"]')
+    const heads = [...(table?.querySelectorAll("th") ?? [])].map((cell) => cell.textContent)
+    const cells = [...(table?.querySelectorAll("tbody td") ?? [])].map((cell) => cell.textContent)
+
+    expect(table?.getAttribute("data-slot")).toBe("table")
+    expect(heads).toEqual(["型號名稱", "價格", "日期"])
+    expect(cells).toEqual(["華碩 DUAL-RTX4070-O12G", "$17,990", "2024-06-20"])
+
+    const earlier = documentOf(renderPage(series, [
+      { type: "setKeyword", text: "DUAL" },
+      { type: "setRange", start: "2024-06-01", end: "2024-06-16" },
+    ]))
+    const earlierCells = [...earlier.querySelectorAll('[aria-label="候選"] tbody td')]
+      .map((cell) => cell.textContent)
+    expect(earlierCells).toEqual(["華碩 DUAL-RTX4070-O12G", "$18,990", "2024-06-15"])
   })
 
   test("加入已選後圖上有該台北日的售價", () => {
@@ -343,7 +368,7 @@ describe("篩選候選", () => {
       ?.closest('[data-slot="select"]')
       ?.querySelectorAll('[data-slot="select-item"]') ?? [])]
       .map((item) => item.textContent ?? "")
-    const candidates = [...doc.querySelectorAll('[aria-label="候選"] li')]
+    const candidates = [...doc.querySelectorAll('[aria-label="候選"] button')]
       .map((item) => item.textContent)
 
     expect(groups).toEqual(["RTX 4070", "RTX 4060"])
