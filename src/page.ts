@@ -70,8 +70,9 @@ function seriesColor(index: number): string {
   return `hsl(${hue} 70% 35%)`
 }
 
-const plotLeft = 36
-const plotRight = 278
+const plotLeft = 4
+const plotRight = 258
+const priceAxisX = 364
 const plotTop = 4
 const plotBottom = 84
 
@@ -151,16 +152,26 @@ function chartFrame(start: string, end: string, axis: { lower: number; upper: nu
     return `<text data-axis="x" x="${x}" y="96" font-size="3.2" fill="#334155" text-anchor="${anchor}">${escapeHtml(tick.label)}</text>`
   }).join("")
   const yLabels = prices.map((price) =>
-    `<text data-axis="y" x="${plotLeft - 2}" y="${yAt(price, axis)}" font-size="3.2" fill="#334155" text-anchor="end" dominant-baseline="middle">${formatPrice(price)}</text>`,
+    `<text data-axis="y" x="${priceAxisX + 2}" y="${yAt(price, axis)}" font-size="3.2" fill="#334155" text-anchor="start" dominant-baseline="middle">${formatPrice(price)}</text>`,
   ).join("")
   return [
     `<rect data-axis="background" x="${plotLeft}" y="${plotTop}" width="${plotRight - plotLeft}" height="${plotBottom - plotTop}" fill="#e8eef7" pointer-events="none" />`,
     `<path data-axis="grid" d="${horizontal} ${vertical}" fill="none" stroke="#c5d0de" stroke-width="0.35" pointer-events="none" />`,
     `<path data-axis="x" d="M${plotLeft} ${plotBottom} H${plotRight}" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
-    `<path data-axis="y" d="M${plotLeft} ${plotTop} V${plotBottom}" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
+    `<path data-axis="y" d="M${priceAxisX} ${plotTop} V${plotBottom}" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
     xLabels,
     yLabels,
   ].join("")
+}
+
+const preparedBrandSvgs = new Map<string, Map<string, string>>()
+
+export function preparedBrandChart(group: string, brand: string): string | null {
+  const charts = preparedBrandSvgs.get(group)
+  if (charts === undefined) {
+    return null
+  }
+  return charts.get(brand) ?? null
 }
 
 function chartSvg(marks: string, label = ""): string {
@@ -253,6 +264,7 @@ function chipGroupName(actions: readonly Action[]): string {
 }
 
 export function renderPage(series: PriceSeries, actions: readonly Action[]): string {
+  preparedBrandSvgs.clear()
   const view = present(series, actions)
   const keyword = escapeAttribute(keywordText(actions))
   const chipGroup = chipGroupName(actions)
@@ -298,19 +310,40 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
 </html>`
 }
 
-function modelSection(view: View, chart: View["modelCharts"][number]): string {
-  const marks = chartMarks({
+function modelSvg(
+  view: View,
+  lines: readonly { code: string; quotes: readonly { date: string; sellingPrice: number }[] }[],
+  focus: string,
+): string {
+  const series = lines.map((line, index) => ({
+    code: line.code,
+    colorIndex: index,
+    quotes: line.quotes,
+  }))
+  return chartSvg(chartMarks({
     queryRange: view.queryRange,
     chipGroups: [],
     candidates: [],
     selected: [],
-    series: chart.series,
-    axis: priceBounds(chart.series),
+    series,
+    axis: priceBounds(series),
     readout: null,
     modelCharts: [],
-  }, true, chart.focus)
+  }, true, focus))
+}
+
+function modelSection(view: View, chart: View["modelCharts"][number]): string {
+  const stored = new Map<string, string>()
+  stored.set("", modelSvg(view, chart.allSeries, ""))
+  for (const name of chart.brands) {
+    stored.set(name, modelSvg(view, chart.allSeries.filter((line) => line.brand === name), ""))
+  }
+  preparedBrandSvgs.set(chart.group, stored)
+  const visibleLines = chart.brand === ""
+    ? chart.allSeries
+    : chart.allSeries.filter((line) => line.brand === chart.brand)
   const brands = brandMarkup(chart.brands, chart.brand)
-  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(chart.group)}"><h3 class="font-medium">${escapeHtml(chart.group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${chartSvg(marks)}</section>`
+  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(chart.group)}"><h3 class="font-medium">${escapeHtml(chart.group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${modelSvg(view, visibleLines, chart.focus)}</section>`
 }
 
 function priceBounds(

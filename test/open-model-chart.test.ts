@@ -35,11 +35,22 @@ test("點品牌按鈕後，圖上只留該品牌的線", () => {
     .find((node) => node.textContent === "華碩")
   expect(button?.getAttribute("data-slot")).toBe("button")
   expect(button?.getAttribute("aria-pressed")).toBe("false")
+  const marker = document.createElement("p")
+  marker.id = "keep"
+  document.body.append(marker)
   button?.click()
 
-  const codes = [...document.querySelectorAll(`[aria-label="${modelGroup}"] [data-code]`)]
-    .map((node) => node.getAttribute("data-code"))
-  expect(new Set(codes)).toEqual(new Set([prime]))
+  const codes = (): string[] =>
+    [...document.querySelectorAll(`[aria-label="${modelGroup}"] [data-code]`)]
+      .map((node) => node.getAttribute("data-code") ?? "")
+  expect(new Set(codes())).toEqual(new Set([prime]))
+  expect(button?.getAttribute("aria-pressed")).toBe("true")
+  expect(document.getElementById("keep")).not.toBeNull()
+
+  button?.click()
+  expect(new Set(codes())).toEqual(new Set([prime, windforce]))
+  expect(button?.getAttribute("aria-pressed")).toBe("false")
+  expect(document.getElementById("keep")).not.toBeNull()
 })
 
 test("滑鼠移到線上時，頁面不重畫", () => {

@@ -1,4 +1,4 @@
-import { renderPage } from "./page.ts"
+import { preparedBrandChart, renderPage } from "./page.ts"
 import type { Action, PriceSeries } from "./present.ts"
 
 function dayNumber(isoDate: string): number | null {
@@ -281,45 +281,162 @@ export function start(series: PriceSeries): void {
       trigger.textContent = name
       root.querySelector("[data-slot=\"select-content\"]")?.classList.add("hidden")
     })
+    const bindChart = (svg: SVGSVGElement): void => {
+      const seriesLabels = svg.querySelectorAll("text[data-series-label]")
+      for (const label of seriesLabels) {
+        label.addEventListener("mouseover", () => {
+          followLine(label)
+        })
+        label.addEventListener("mouseout", (event) => {
+          leaveLine(label, event)
+        })
+        label.addEventListener("click", () => {
+          const group = label.closest("section")?.getAttribute("aria-label") ?? ""
+          const code = label.getAttribute("data-code") ?? ""
+          if (group === "" || code === "") {
+            return
+          }
+          const next = label.getAttribute("data-focused") === "true" ? "" : code
+          actions = [
+            ...actions.filter((action) => action.type !== "setFocus" || action.group !== group),
+            { type: "setFocus", group, code: next },
+          ]
+          draw()
+        })
+      }
+
+      const held = (code: string): boolean =>
+        lockedCode !== null && (lockedSvg !== svg || lockedCode !== code)
+
+      const chartMarks = svg.querySelectorAll<SVGElement>("[data-date], [data-day]")
+      for (const mark of chartMarks) {
+        const show = (): void => {
+          followLine(mark)
+          const code = mark.getAttribute("data-code") ?? ""
+          if (code === "" || held(code)) {
+            return
+          }
+          const explicitDate = mark.getAttribute("data-date")
+          if (explicitDate !== null && explicitDate !== "") {
+            writeReadout(readoutOf(svg), explicitDate, code, mark.getAttribute("data-price") ?? "")
+            return
+          }
+          const circle = nearestByDate(circlesFor(svg, code), mark.getAttribute("data-day") ?? "")
+          if (circle === null) {
+            return
+          }
+          writeReadout(
+            readoutOf(svg),
+            circle.getAttribute("data-date") ?? "",
+            code,
+            circle.getAttribute("data-price") ?? "",
+          )
+        }
+        mark.addEventListener("click", show)
+        mark.addEventListener("mouseover", show)
+        mark.addEventListener("mouseout", (event) => {
+          leaveLine(mark, event)
+        })
+      }
+
+      const seriesLines = svg.querySelectorAll<SVGLineElement>("line[data-code]")
+      for (const line of seriesLines) {
+        line.addEventListener("click", (event) => {
+          if (!(event instanceof MouseEvent)) {
+            return
+          }
+          const code = line.getAttribute("data-code") ?? ""
+          if (code === "") {
+            return
+          }
+          if (lockedCode === code && lockedSvg === svg) {
+            lockedCode = null
+            lockedSvg = null
+            return
+          }
+          lockedCode = code
+          lockedSvg = svg
+          const quote = quoteAt(svg, code, event, line)
+          if (quote === null) {
+            return
+          }
+          writeReadout(readoutOf(svg), quote.date, code, quote.price)
+        })
+        line.addEventListener("mouseover", (event) => {
+          if (!(event instanceof MouseEvent)) {
+            return
+          }
+          followLine(line)
+          const code = line.getAttribute("data-code") ?? ""
+          if (code === "" || held(code)) {
+            return
+          }
+          const quote = quoteAt(svg, code, event, line)
+          if (quote === null) {
+            return
+          }
+          writeReadout(readoutOf(svg), quote.date, code, quote.price)
+        })
+        line.addEventListener("mouseout", (event) => {
+          leaveLine(line, event)
+        })
+      }
+
+      svg.addEventListener("mousemove", (event) => {
+        if (!(event instanceof MouseEvent) || lockedSvg !== svg || lockedCode === null) {
+          return
+        }
+        const quote = quoteAt(svg, lockedCode, event, null)
+        if (quote === null) {
+          return
+        }
+        writeReadout(readoutOf(svg), quote.date, lockedCode, quote.price)
+      })
+    }
+
+    const showPreparedBrand = (section: Element, brand: string): boolean => {
+      const markup = preparedBrandChart(section.getAttribute("aria-label") ?? "", brand)
+      if (markup === null) {
+        return false
+      }
+      const parsed = new DOMParser().parseFromString(markup, "text/html")
+      const nextSvg = parsed.querySelector("svg")
+      const current = section.querySelector("svg")
+      if (!isSvg(nextSvg) || !isSvg(current)) {
+        return false
+      }
+      if (lockedSvg === current) {
+        lockedCode = null
+        lockedSvg = null
+      }
+      current.replaceWith(nextSvg)
+      const peers = section.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
+      for (const peer of peers) {
+        peer.setAttribute("aria-pressed", brand !== "" && peer.textContent === brand ? "true" : "false")
+      }
+      bindChart(nextSvg)
+      return true
+    }
+
     const brandButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
     for (const button of brandButtons) {
       button.addEventListener("click", () => {
-        const group = button.closest("section")?.getAttribute("aria-label") ?? ""
+        const section = button.closest("section")
         const name = button.textContent ?? ""
-        if (group === "" || name === "") {
+        if (section === null || name === "") {
           return
         }
+        const group = section.getAttribute("aria-label") ?? ""
         const next = button.getAttribute("aria-pressed") === "true" ? "" : name
+        if (!showPreparedBrand(section, next)) {
+          return
+        }
         actions = [
           ...actions.filter((action) =>
             (action.type !== "setBrand" && action.type !== "setFocus") || action.group !== group,
           ),
           { type: "setBrand", group, name: next },
         ]
-        draw()
-      })
-    }
-
-    const seriesLabels = document.querySelectorAll("svg text[data-series-label]")
-    for (const label of seriesLabels) {
-      label.addEventListener("mouseover", () => {
-        followLine(label)
-      })
-      label.addEventListener("mouseout", (event) => {
-        leaveLine(label, event)
-      })
-      label.addEventListener("click", () => {
-        const group = label.closest("section")?.getAttribute("aria-label") ?? ""
-        const code = label.getAttribute("data-code") ?? ""
-        if (group === "" || code === "") {
-          return
-        }
-        const next = label.getAttribute("data-focused") === "true" ? "" : code
-        actions = [
-          ...actions.filter((action) => action.type !== "setFocus" || action.group !== group),
-          { type: "setFocus", group, code: next },
-        ]
-        draw()
       })
     }
 
@@ -369,102 +486,13 @@ export function start(series: PriceSeries): void {
       })
     }
 
-    const held = (svg: SVGSVGElement, code: string): boolean =>
-      lockedCode !== null && (lockedSvg !== svg || lockedCode !== code)
-
-    const chartMarks = document.querySelectorAll<SVGElement>("svg [data-date], svg [data-day]")
-    for (const mark of chartMarks) {
-      const show = (): void => {
-        followLine(mark)
-        const code = mark.getAttribute("data-code") ?? ""
-        const svg = svgOf(mark)
-        if (code === "" || svg === null || held(svg, code)) {
-          return
-        }
-        const explicitDate = mark.getAttribute("data-date")
-        if (explicitDate !== null && explicitDate !== "") {
-          writeReadout(readoutOf(svg), explicitDate, code, mark.getAttribute("data-price") ?? "")
-          return
-        }
-        const circle = nearestByDate(circlesFor(svg, code), mark.getAttribute("data-day") ?? "")
-        if (circle === null) {
-          return
-        }
-        writeReadout(
-          readoutOf(svg),
-          circle.getAttribute("data-date") ?? "",
-          code,
-          circle.getAttribute("data-price") ?? "",
-        )
-      }
-      mark.addEventListener("click", show)
-      mark.addEventListener("mouseover", show)
-      mark.addEventListener("mouseout", (event) => {
-        leaveLine(mark, event)
-      })
-    }
-
-    const seriesLines = document.querySelectorAll<SVGLineElement>("svg line[data-code]")
-    for (const line of seriesLines) {
-      line.addEventListener("click", (event) => {
-        if (!(event instanceof MouseEvent)) {
-          return
-        }
-        const code = line.getAttribute("data-code") ?? ""
-        const svg = svgOf(line)
-        if (code === "" || svg === null) {
-          return
-        }
-        if (lockedCode === code && lockedSvg === svg) {
-          lockedCode = null
-          lockedSvg = null
-          return
-        }
-        lockedCode = code
-        lockedSvg = svg
-        const quote = quoteAt(svg, code, event, line)
-        if (quote === null) {
-          return
-        }
-        writeReadout(readoutOf(svg), quote.date, code, quote.price)
-      })
-      line.addEventListener("mouseover", (event) => {
-        if (!(event instanceof MouseEvent)) {
-          return
-        }
-        followLine(line)
-        const code = line.getAttribute("data-code") ?? ""
-        const svg = svgOf(line)
-        if (code === "" || svg === null || held(svg, code)) {
-          return
-        }
-        const quote = quoteAt(svg, code, event, line)
-        if (quote === null) {
-          return
-        }
-        writeReadout(readoutOf(svg), quote.date, code, quote.price)
-      })
-      line.addEventListener("mouseout", (event) => {
-        leaveLine(line, event)
-      })
-    }
-
     const charts = document.querySelectorAll("svg")
     for (const chart of charts) {
       const svg = svgOf(chart)
       if (svg === null) {
         continue
       }
-      svg.addEventListener("mousemove", (event) => {
-        if (!(event instanceof MouseEvent) || lockedSvg !== svg || lockedCode === null) {
-          return
-        }
-        const quote = quoteAt(svg, lockedCode, event, null)
-        if (quote === null) {
-          return
-        }
-        writeReadout(readoutOf(svg), quote.date, lockedCode, quote.price)
-      })
+      bindChart(svg)
     }
 
     if (typeof window.scrollTo === "function") {

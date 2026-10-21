@@ -40,6 +40,11 @@ export type View = {
       colorIndex: number
       quotes: readonly { date: string; sellingPrice: number }[]
     }[]
+    allSeries: readonly {
+      code: string
+      brand: string
+      quotes: readonly { date: string; sellingPrice: number }[]
+    }[]
     readout: { date: string; code: string; sellingPrice: number } | null
   }[]
 }
@@ -221,23 +226,29 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === group))
     const brand = brandByGroup.get(group) ?? ""
     const focus = focusByGroup.get(group) ?? ""
-    const branded = groupCodes.filter((code) => brand === "" || brandOf(code) === brand)
-    const activeFocus = branded.includes(focus) ? focus : ""
-    const lines = branded.map((code) => ({
+    const allSeries = groupCodes.map((code) => ({
       code,
-      colorIndex: Math.max(0, branded.indexOf(code)),
+      brand: brandOf(code),
       quotes: visibleQuotes
         .filter((quote) => quote.code === code)
         .sort((left, right) => left.date.localeCompare(right.date))
         .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
+    }))
+    const branded = allSeries.filter((line) => brand === "" || line.brand === brand)
+    const activeFocus = branded.some((line) => line.code === focus) ? focus : ""
+    const lines = branded.map((line, index) => ({
+      code: line.code,
+      colorIndex: index,
+      quotes: line.quotes,
     }))
     return {
       group,
       brand,
       focus: activeFocus,
       brands: brandsInOrder(groupCodes),
-      legend: branded,
+      legend: branded.map((line) => line.code),
       series: lines,
+      allSeries,
       readout: readoutFor(lines, pointer),
     }
   })
