@@ -299,7 +299,12 @@ function rowsInSelect(selectHtml: string): { text: string; group: string }[] {
 function extractCode(text: string): string | null {
   const open = text.indexOf("｛")
   if (open < 0) {
-    return null
+    const paren = text.indexOf("(")
+    if (paren <= 0) {
+      return null
+    }
+    const code = text.slice(0, paren).trim()
+    return code === "" ? null : code
   }
   const close = text.indexOf("｝", open + 1)
   if (close >= 0) {

@@ -152,6 +152,19 @@ describe("代號與排除", () => {
     ])
   })
 
+  test("沒有｛但有半形括號的列，代號是括號前的文字", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA GTX1650 (DDR6)">
+          <option>華碩 DUAL-GTX1650-O4GD6-P-EVO(1785MHz/21.2cm/雙風扇)時脈高, $4490</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setKeyword", text: "DUAL" }])
+
+    expect(view.candidates).toEqual(["華碩 DUAL-GTX1650-O4GD6-P-EVO"])
+  })
+
   test("沒有｛的列和沒有金額的統計列不出現在候選清單", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`
