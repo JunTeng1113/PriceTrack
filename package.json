@@ -6,7 +6,8 @@
     "test": "vitest run",
     "dev": "vite",
     "build": "vite build",
-    "update": "vite-node src/update-wayback.ts"
+    "update": "vite-node src/update-wayback.ts",
+    "used": "vite-node src/add-used-post.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
