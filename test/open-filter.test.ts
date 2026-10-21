@@ -24,10 +24,7 @@ test("選了晶片分組後候選出現代號，點下去圖上有售價", () =>
   const button = document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')
   button?.click()
 
-  const point = [...document.querySelectorAll("h2")]
-    .find((node) => node.textContent === "價格序列")
-    ?.parentElement
-    ?.querySelector("li")
+  const point = document.querySelector('[aria-label="價格點"] li')
   expect(point?.textContent).toContain("2024-06-15")
   expect(point?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
   expect(point?.textContent).toContain("18990")

@@ -71,8 +71,7 @@ describe("單日單卡頁面", () => {
     ]))
     const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li span") ?? [])]
       .map((item) => item.textContent)
-    const chart = sectionByHeading(doc, "價格序列")
-    const points = [...(chart?.querySelectorAll("li") ?? [])]
+    const points = [...(doc.querySelector('[aria-label="價格點"]')?.querySelectorAll("li") ?? [])]
 
     expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
     expect(points).toHaveLength(1)
@@ -317,7 +316,7 @@ describe("查詢區間", () => {
       { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
       { type: "setRange", start: "2023-01-01", end: "2023-02-01" },
     ]))
-    const points = [...(sectionByHeading(doc, "價格序列")?.querySelectorAll("li") ?? [])]
+    const points = [...(doc.querySelector('[aria-label="價格點"]')?.querySelectorAll("li") ?? [])]
     const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li span") ?? [])]
       .map((item) => item.textContent)
 
@@ -445,5 +444,171 @@ describe("已選、金額軸與讀數", () => {
     expect(pressed).toEqual(["true", "true"])
     expect(doc.body.textContent).not.toContain("登入")
     expect(doc.body.textContent).not.toContain("收藏")
+  })
+})
+
+const secondCode = "華碩 DUAL-RTX4070-O12G-WHITE"
+
+function twoCardDay(capturedAt: string, leftPrice: number, rightPrice: number): Snapshot {
+  return {
+    capturedAt,
+    html: `
+      <tr>
+        <td>顯示卡VGA</td>
+        <td>
+          <select name="n12">
+            <option>｛${code}｝, $${leftPrice}</option>
+            <option>｛${secondCode}｝, $${rightPrice}</option>
+          </select>
+        </td>
+      </tr>
+    `,
+  }
+}
+
+describe("多條已選的折線圖", () => {
+  test("兩條已選畫在同一張圖上，每條線標出自己的代號", () => {
+    const series = update(emptySeries(), [
+      twoCardDay("2024-06-15T02:00:00.000Z", 18990, 19990),
+      twoCardDay("2024-06-16T02:00:00.000Z", 17990, 20990),
+    ])
+    const doc = documentOf(renderPage(series, [
+      { type: "select", code },
+      { type: "select", code: secondCode },
+    ]))
+    const chart = doc.querySelector('[aria-label="折線圖"]')
+    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+      .map((item) => item.textContent)
+    const lineCodes = [...(chart?.querySelectorAll("line") ?? [])].map((node) => node.getAttribute("data-code"))
+
+    expect(labels).toEqual([code, secondCode])
+    expect(lineCodes).toEqual([code, secondCode])
+  })
+
+  test("多條已選共用同一條時間軸和同一條金額軸", () => {
+    const series = update(emptySeries(), [
+      twoCardDay("2024-06-15T02:00:00.000Z", 10000, 30000),
+      twoCardDay("2024-06-16T02:00:00.000Z", 20000, 20000),
+    ])
+    const doc = documentOf(renderPage(series, [
+      { type: "select", code },
+      { type: "select", code: secondCode },
+    ]))
+    const points = [...doc.querySelectorAll('[aria-label="折線圖"] [data-date]')].map((node) => ({
+      date: node.getAttribute("data-date"),
+      seriesCode: node.getAttribute("data-code"),
+      x: Number(node.getAttribute("cx")),
+      y: Number(node.getAttribute("cy")),
+    }))
+    const low = points.find((point) => point.date === "2024-06-15" && point.seriesCode === code)
+    const high = points.find((point) => point.date === "2024-06-15" && point.seriesCode === secondCode)
+    const laterLeft = points.find((point) => point.date === "2024-06-16" && point.seriesCode === code)
+    const laterRight = points.find((point) => point.date === "2024-06-16" && point.seriesCode === secondCode)
+
+    expect(doc.querySelectorAll('[aria-label="日期軸"]')).toHaveLength(1)
+    expect(doc.querySelectorAll('[aria-label="金額軸"]')).toHaveLength(1)
+    expect(doc.querySelectorAll('[aria-label="折線圖"]')).toHaveLength(1)
+    expect(low?.x).toBe(high?.x)
+    expect(high?.y ?? 0).toBeLessThan(low?.y ?? 0)
+    expect(laterLeft?.x).toBe(laterRight?.x)
+    expect(laterLeft?.y).toBeCloseTo(laterRight?.y ?? Number.NaN)
+    expect(laterLeft?.x ?? 0).toBeGreaterThan(low?.x ?? 0)
+  })
+
+  test("從已選拿掉一條，那條線和圖例一起消失", () => {
+    const series = update(emptySeries(), [
+      twoCardDay("2024-06-15T02:00:00.000Z", 18990, 19990),
+      twoCardDay("2024-06-16T02:00:00.000Z", 17990, 20990),
+    ])
+    const doc = documentOf(renderPage(series, [
+      { type: "select", code },
+      { type: "select", code: secondCode },
+      { type: "deselect", code: secondCode },
+    ]))
+    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+      .map((item) => item.textContent)
+    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
+      node.getAttribute("data-code"),
+    )
+
+    expect(labels).toEqual([code])
+    expect(lineCodes).toEqual([code])
+  })
+
+  test("改了關鍵字和晶片分組之後，圖上的線還在", () => {
+    const series = update(emptySeries(), [
+      {
+        capturedAt: "2024-06-15T02:00:00.000Z",
+        html: `
+          <tr>
+            <td>顯示卡VGA</td>
+            <td>
+              <select name="n12">
+                <optgroup label="RTX 4070"><option>｛${code}｝, $18990</option></optgroup>
+                <optgroup label="RTX 4060"><option>｛${secondCode}｝, $19990</option></optgroup>
+              </select>
+            </td>
+          </tr>
+        `,
+      },
+      {
+        capturedAt: "2024-06-16T02:00:00.000Z",
+        html: `
+          <tr>
+            <td>顯示卡VGA</td>
+            <td>
+              <select name="n12">
+                <optgroup label="RTX 4070"><option>｛${code}｝, $17990</option></optgroup>
+                <optgroup label="RTX 4060"><option>｛${secondCode}｝, $20990</option></optgroup>
+              </select>
+            </td>
+          </tr>
+        `,
+      },
+    ])
+    const doc = documentOf(renderPage(series, [
+      { type: "select", code },
+      { type: "select", code: secondCode },
+      { type: "setChipGroup", name: "RTX 4060" },
+      { type: "setKeyword", text: "不存在的關鍵字" },
+    ]))
+    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+      .map((item) => item.textContent)
+    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
+      node.getAttribute("data-code"),
+    )
+
+    expect(labels).toEqual([code, secondCode])
+    expect(lineCodes).toEqual([code, secondCode])
+  })
+
+  test("圖上最多畫 8 條已選", () => {
+    const codes = ["A", "B", "C", "D", "E", "F", "G", "H", "I"]
+    const day = (capturedAt: string, offset: number): Snapshot => ({
+      capturedAt,
+      html: `
+        <tr>
+          <td>顯示卡VGA</td>
+          <td>
+            <select name="n12">
+              ${codes.map((item, index) => `<option>｛${item}｝, $${1000 + index + offset}</option>`).join("")}
+            </select>
+          </td>
+        </tr>
+      `,
+    })
+    const series = update(emptySeries(), [
+      day("2024-06-15T02:00:00.000Z", 0),
+      day("2024-06-16T02:00:00.000Z", 100),
+    ])
+    const doc = documentOf(renderPage(series, codes.map((item) => ({ type: "select" as const, code: item }))))
+    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+      .map((item) => item.textContent)
+    const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
+      node.getAttribute("data-code"),
+    )
+
+    expect(labels).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"])
+    expect(lineCodes).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"])
   })
 })

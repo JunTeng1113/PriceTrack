@@ -84,7 +84,7 @@ function chartMarks(view: View): string {
       const y = priceSpan === 0 ? 50 : 100 - ((quote.sellingPrice - axis.lower) / priceSpan) * 100
       if (previous !== null && addDays(previous.date, 1) === quote.date) {
         marks.push(
-          `<line x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="0.6" fill="none" />`,
+          `<line data-code="${escapeAttribute(item.code)}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="0.6" fill="none" />`,
         )
       }
       marks.push(
@@ -181,6 +181,7 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <div aria-label="金額軸">${priceAxis}</div>
       <div aria-label="折線">${segments}</div>
       <svg aria-label="折線圖" viewBox="0 0 100 100" width="100%" height="240">${chartMarks(view)}</svg>
+      <ul aria-label="圖例">${view.series.map((item) => `<li>${escapeHtml(item.code)}</li>`).join("")}</ul>
       <p aria-label="讀數">${readout}</p>
       <ul aria-label="價格點">${points}</ul>
     </section>

@@ -42,7 +42,7 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   expect(button?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
   button?.click()
 
-  const point = sectionByHeading("價格序列")?.querySelector("li")
+  const point = document.querySelector('[aria-label="價格點"] li')
   expect(point?.textContent).toContain("2024-06-15")
   expect(point?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
   expect(point?.textContent).toContain("18990")
