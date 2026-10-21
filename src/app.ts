@@ -1,55 +1,56 @@
 import "./index.css"
 import { start } from "./browse.ts"
 import { demoSeries } from "./main.ts"
-import type { PriceSeries } from "./present.ts"
+import { emptySeries, type PriceSeries } from "./present.ts"
+import { isQuote } from "./quote.ts"
 
-const response = await fetch("/data/series.json", { cache: "no-store" })
-if (!response.ok) {
-  start(demoSeries())
-} else {
-  const text = await response.text()
-  const series = text.startsWith("{") ? readPrepared(JSON.parse(text) as unknown) : null
-  start(series === null || series.quotes.length === 0 ? demoSeries() : series)
+const session = start(emptySeries())
+const quotes: PriceSeries["quotes"][number][] = []
+
+function showProgress(text: string): void {
+  const existing = document.querySelector("[data-loading]")
+  if (existing instanceof HTMLElement) {
+    existing.textContent = text
+    return
+  }
+  const section = document.querySelector("section")
+  if (section === null) {
+    return
+  }
+  const created = document.createElement("p")
+  created.setAttribute("data-loading", "")
+  created.setAttribute("aria-live", "polite")
+  created.textContent = text
+  section.append(created)
 }
 
-function readPrepared(value: unknown): PriceSeries | null {
-  if (typeof value !== "object" || value === null || !("quotes" in value) || !Array.isArray(value.quotes)) {
-    return null
+showProgress("正在讀取報價")
+
+const worker = new Worker(new URL("./series-worker.ts", import.meta.url), { type: "module" })
+
+worker.addEventListener("message", (event: MessageEvent<unknown>) => {
+  const data = event.data
+  if (typeof data !== "object" || data === null || !("type" in data) || typeof data.type !== "string") {
+    return
   }
-  const quotes: PriceSeries["quotes"][number][] = []
-  for (const item of value.quotes) {
-    if (!isQuote(item)) {
-      return null
+  if (data.type === "batch" && "quotes" in data && Array.isArray(data.quotes)) {
+    for (const quote of data.quotes) {
+      if (isQuote(quote)) {
+        quotes.push(quote)
+      }
     }
-    quotes.push(item)
+    showProgress(`已讀取 ${quotes.length} 筆報價`)
+    return
   }
-  return { quotes }
-}
+  if (data.type === "done") {
+    session.setSeries(quotes.length === 0 ? demoSeries() : { quotes })
+    return
+  }
+  if (data.type === "empty") {
+    session.setSeries(demoSeries())
+  }
+})
 
-function isQuote(value: unknown): value is PriceSeries["quotes"][number] {
-  if (typeof value !== "object" || value === null) {
-    return false
-  }
-  if (!("code" in value) || typeof value.code !== "string") {
-    return false
-  }
-  if (!("date" in value) || typeof value.date !== "string") {
-    return false
-  }
-  if (!("sellingPrice" in value) || typeof value.sellingPrice !== "number") {
-    return false
-  }
-  if (!("group" in value) || typeof value.group !== "string") {
-    return false
-  }
-  if (!("rowText" in value) || typeof value.rowText !== "string") {
-    return false
-  }
-  if (!("capturedAt" in value) || typeof value.capturedAt !== "string") {
-    return false
-  }
-  if (!("rowIndex" in value) || typeof value.rowIndex !== "number") {
-    return false
-  }
-  return true
-}
+worker.addEventListener("error", () => {
+  session.setSeries(demoSeries())
+})

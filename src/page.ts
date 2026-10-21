@@ -239,13 +239,13 @@ function chartSvg(marks: string, label = ""): string {
   return `<svg${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
 }
 
-function chartMarks(view: View, connectGaps = false, focus = ""): string {
+function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
   const dates = axisDates(view)
   const start = dates[0]
   const end = dates.at(-1)
   const axis = view.axis
   if (start === undefined || end === undefined || axis === null) {
-    return ""
+    return []
   }
   const startDay = dayNumber(start)
   const endDay = dayNumber(end)
@@ -303,7 +303,11 @@ function chartMarks(view: View, connectGaps = false, focus = ""): string {
       `<text data-series-label="true" data-code="${escapeAttribute(label.code)}" data-focused="${label.focused}" x="${seriesNameX}" y="${y}" font-size="${style.fontSize}" fill="${label.paint}" opacity="${label.opacity}" dominant-baseline="middle">${escapeHtml(label.code)}</text>`,
     )
   }
-  return marks.join("")
+  return marks
+}
+
+function chartMarks(view: View, connectGaps = false, focus = ""): string {
+  return chartMarkList(view, connectGaps, focus).join("")
 }
 
 function chipGroupNames(actions: readonly Action[]): string[] {
@@ -316,9 +320,7 @@ function chipGroupNames(actions: readonly Action[]): string[] {
   return names
 }
 
-export function renderPage(series: PriceSeries, actions: readonly Action[]): string {
-  preparedBrandSvgs.clear()
-  const view = present(series, actions)
+function filterSection(view: View, actions: readonly Action[]): string {
   const chipGroups = chipGroupNames(actions)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
   const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
@@ -331,11 +333,7 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   const selected = view.selected
     .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
     .join("")
-  return `<!DOCTYPE html>
-<html lang="zh-Hant">
-  <body>
-    <div class="p-4 md:p-6">
-    <section class="mb-6 flex flex-col gap-6 text-sm">
+  return `<section class="mb-6 flex flex-col gap-6 text-sm">
       <h2>篩選</h2>
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
@@ -343,11 +341,29 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
       ${candidates}
       <ul aria-label="已選">${selected}</ul>
-    </section>
-    ${view.modelCharts.map((chart) => modelSection(view, chart)).join("")}
+    </section>`
+}
+
+function documentHtml(body: string): string {
+  return `<!DOCTYPE html>
+<html lang="zh-Hant">
+  <body>
+    <div class="p-4 md:p-6">
+    ${body}
     </div>
   </body>
 </html>`
+}
+
+export function renderShell(view: View, actions: readonly Action[]): string {
+  return documentHtml(filterSection(view, actions))
+}
+
+export function renderPage(series: PriceSeries, actions: readonly Action[]): string {
+  preparedBrandSvgs.clear()
+  const view = present(series, actions)
+  const charts = view.modelCharts.map((chart) => modelSection(view, chart)).join("")
+  return documentHtml(`${filterSection(view, actions)}${charts}`)
 }
 
 function formatSellingPrice(price: number): string {
@@ -388,6 +404,17 @@ function modelSvg(
   }, true, focus))
 }
 
+function chartSection(group: string, brands: string, svg: string): string {
+  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${svg}</section>`
+}
+
+function visibleLines(chart: View["modelCharts"][number]): View["modelCharts"][number]["allSeries"] {
+  if (chart.brand === "") {
+    return chart.allSeries
+  }
+  return chart.allSeries.filter((line) => line.brand === chart.brand)
+}
+
 function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const stored = new Map<string, string>()
   stored.set("", modelSvg(view, chart.allSeries, ""))
@@ -395,11 +422,58 @@ function modelSection(view: View, chart: View["modelCharts"][number]): string {
     stored.set(name, modelSvg(view, chart.allSeries.filter((line) => line.brand === name), ""))
   }
   preparedBrandSvgs.set(chart.group, stored)
-  const visibleLines = chart.brand === ""
-    ? chart.allSeries
-    : chart.allSeries.filter((line) => line.brand === chart.brand)
   const brands = brandMarkup(chart.brands, chart.brand)
-  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(chart.group)}"><h3 class="font-medium">${escapeHtml(chart.group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${modelSvg(view, visibleLines, chart.focus)}</section>`
+  return chartSection(chart.group, brands, modelSvg(view, visibleLines(chart), chart.focus))
+}
+
+export function clearPreparedCharts(): void {
+  preparedBrandSvgs.clear()
+}
+
+export function storeBrandChart(group: string, brand: string, markup: string): void {
+  const stored = preparedBrandSvgs.get(group) ?? new Map<string, string>()
+  stored.set(brand, markup)
+  preparedBrandSvgs.set(group, stored)
+}
+
+export function renderBrandSvg(view: View, group: string, brand: string): string | null {
+  const cached = preparedBrandChart(group, brand)
+  if (cached !== null) {
+    return cached
+  }
+  const chart = view.modelCharts.find((item) => item.group === group)
+  if (chart === undefined) {
+    return null
+  }
+  const lines = brand === "" ? chart.allSeries : chart.allSeries.filter((line) => line.brand === brand)
+  const markup = modelSvg(view, lines, "")
+  storeBrandChart(group, brand, markup)
+  return markup
+}
+
+export function visibleChart(
+  view: View,
+  chart: View["modelCharts"][number],
+): { section: string; marks: string[] } {
+  const series = visibleLines(chart).map((line) => ({
+    code: line.code,
+    colorIndex: brandColorIndex(line.brand),
+    quotes: line.quotes,
+  }))
+  const marks = chartMarkList({
+    queryRange: view.queryRange,
+    chipGroups: [],
+    candidates: [],
+    listings: [],
+    selected: [],
+    series,
+    axis: priceBounds(series),
+    readout: null,
+    modelCharts: [],
+  }, true, chart.focus)
+  const frame = marks[0] ?? ""
+  const brands = brandMarkup(chart.brands, chart.brand)
+  return { section: chartSection(chart.group, brands, chartSvg(frame)), marks: marks.slice(1) }
 }
 
 function priceBounds(

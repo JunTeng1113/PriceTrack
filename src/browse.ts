@@ -1,5 +1,5 @@
-import { preparedBrandChart, renderPage } from "./page.ts"
-import type { Action, PriceSeries } from "./present.ts"
+import { clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, visibleChart } from "./page.ts"
+import { present, type Action, type PriceSeries, type View } from "./present.ts"
 
 function dayNumber(isoDate: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
@@ -339,7 +339,12 @@ function writeFilterDraft(draft: FilterDraft): void {
   showChipVendor(draft.vendor)
 }
 
-export function start(series: PriceSeries): void {
+const chartQuoteLimit = 2000
+const markBatch = 1200
+
+export function start(series: PriceSeries): { setSeries(next: PriceSeries): void } {
+  let latestView: View | null = null
+  let renderToken = 0
   let actions: Action[] = []
   let lockedCode: string | null = null
   let lockedSvg: SVGSVGElement | null = null
@@ -378,23 +383,21 @@ export function start(series: PriceSeries): void {
     lockedCode = null
     lockedSvg = null
     const scrollY = window.scrollY
-    const html = renderPage(series, actions)
-    const parsed = new DOMParser().parseFromString(html, "text/html")
-    document.documentElement.lang = parsed.documentElement.lang
-    document.body.replaceChildren(...parsed.body.childNodes)
-    if (draft !== null) {
-      writeFilterDraft(draft)
+    const paint = (html: string): void => {
+      const parsed = new DOMParser().parseFromString(html, "text/html")
+      document.documentElement.lang = parsed.documentElement.lang
+      document.body.replaceChildren(...parsed.body.childNodes)
+      if (draft !== null) {
+        const renderedStart = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')?.value ?? ""
+        const renderedEnd = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')?.value ?? ""
+        writeFilterDraft({
+          ...draft,
+          start: draft.start === "" ? renderedStart : draft.start,
+          end: draft.end === "" ? renderedEnd : draft.end,
+        })
+      }
     }
 
-    bindSelect("晶片分組", (item) => {
-      const trigger = document.querySelector('[aria-label="晶片分組"]')
-      if (trigger === null) {
-        return
-      }
-      const next = item.getAttribute("aria-selected") === "true" ? "false" : "true"
-      item.setAttribute("aria-selected", next)
-      trigger.textContent = selectedChipGroups().join("、")
-    })
     const bindChart = (svg: SVGSVGElement): void => {
       const held = (code: string): boolean =>
         lockedCode !== null && (lockedSvg !== svg || lockedCode !== code)
@@ -509,7 +512,8 @@ export function start(series: PriceSeries): void {
     }
 
     const showPreparedBrand = (section: Element, brand: string): boolean => {
-      const markup = preparedBrandChart(section.getAttribute("aria-label") ?? "", brand)
+      const group = section.getAttribute("aria-label") ?? ""
+      const markup = preparedBrandChart(group, brand) ?? (latestView === null ? null : renderBrandSvg(latestView, group, brand))
       if (markup === null) {
         return false
       }
@@ -532,27 +536,41 @@ export function start(series: PriceSeries): void {
       return true
     }
 
-    const brandButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
-    for (const button of brandButtons) {
-      button.addEventListener("click", () => {
-        const section = button.closest("section")
-        const name = button.textContent ?? ""
-        if (section === null || name === "") {
-          return
-        }
-        const group = section.getAttribute("aria-label") ?? ""
-        const next = button.getAttribute("aria-pressed") === "true" ? "" : name
-        if (!showPreparedBrand(section, next)) {
-          return
-        }
-        actions = [
-          ...actions.filter((action) =>
-            (action.type !== "setBrand" && action.type !== "setFocus") || action.group !== group,
-          ),
-          { type: "setBrand", group, name: next },
-        ]
-      })
+    const bindBrands = (scope: ParentNode): void => {
+      const brandButtons = scope.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
+      for (const button of brandButtons) {
+        button.addEventListener("click", () => {
+          const section = button.closest("section")
+          const name = button.textContent ?? ""
+          if (section === null || name === "") {
+            return
+          }
+          const group = section.getAttribute("aria-label") ?? ""
+          const next = button.getAttribute("aria-pressed") === "true" ? "" : name
+          if (!showPreparedBrand(section, next)) {
+            return
+          }
+          actions = [
+            ...actions.filter((action) =>
+              (action.type !== "setBrand" && action.type !== "setFocus") || action.group !== group,
+            ),
+            { type: "setBrand", group, name: next },
+          ]
+        })
+      }
     }
+
+    const bindShell = (): void => {
+      bindSelect("晶片分組", (item) => {
+        const trigger = document.querySelector('[aria-label="晶片分組"]')
+        if (trigger === null) {
+          return
+        }
+        const next = item.getAttribute("aria-selected") === "true" ? "false" : "true"
+        item.setAttribute("aria-selected", next)
+        trigger.textContent = selectedChipGroups().join("、")
+      })
+      bindBrands(document)
 
     const search = document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')
     search?.addEventListener("click", () => {
@@ -614,15 +632,113 @@ export function start(series: PriceSeries): void {
         draw()
       })
     }
-
-    const charts = document.querySelectorAll("svg")
-    for (const chart of charts) {
-      const svg = svgOf(chart)
-      if (svg === null) {
-        continue
-      }
-      bindChart(svg)
     }
+
+    const bindDrawnCharts = (): void => {
+      const charts = document.querySelectorAll("svg")
+      for (const chart of charts) {
+        const svg = svgOf(chart)
+        if (svg === null) {
+          continue
+        }
+        bindChart(svg)
+      }
+    }
+
+    const rememberChart = (group: string, brand: string, svg: SVGSVGElement): void => {
+      storeBrandChart(group, brand, svg.outerHTML)
+    }
+
+    const paintCharts = (view: View, generation: number): void => {
+      const host = document.querySelector(".p-4")
+      const note = document.querySelector("[data-loading]")
+      const charts = view.modelCharts
+      const appendChart = (index: number): void => {
+        if (generation !== renderToken) {
+          return
+        }
+        const chart = charts[index]
+        if (chart === undefined || host === null) {
+          note?.remove()
+          return
+        }
+        if (note !== null) {
+          note.textContent = `正在繪製圖表 ${index + 1}/${charts.length}`
+        }
+        const piece = visibleChart(view, chart)
+        const parsed = new DOMParser().parseFromString(piece.section, "text/html")
+        const section = parsed.querySelector("section")
+        const svg = section?.querySelector("svg") ?? null
+        if (section === null || !isSvg(svg)) {
+          setTimeout(() => appendChart(index + 1), 0)
+          return
+        }
+        host.append(section)
+        bindBrands(section)
+        const pump = (offset: number): void => {
+          if (generation !== renderToken || !svg.isConnected) {
+            return
+          }
+          const slice = piece.marks.slice(offset, offset + markBatch).join("")
+          if (slice !== "") {
+            const parsedMarks = new DOMParser().parseFromString(
+              `<svg xmlns="http://www.w3.org/2000/svg">${slice}</svg>`,
+              "image/svg+xml",
+            )
+            const root = parsedMarks.documentElement
+            if (root.namespaceURI === "http://www.w3.org/2000/svg" && root.localName !== "parsererror") {
+              while (root.firstChild !== null) {
+                svg.append(root.firstChild)
+              }
+            }
+          }
+          if (offset + markBatch < piece.marks.length) {
+            setTimeout(() => pump(offset + markBatch), 0)
+            return
+          }
+          rememberChart(chart.group, chart.brand, svg)
+          bindChart(svg)
+          setTimeout(() => appendChart(index + 1), 0)
+        }
+        setTimeout(() => pump(0), 0)
+      }
+      setTimeout(() => appendChart(0), 0)
+    }
+
+    if (series.quotes.length > chartQuoteLimit) {
+      const generation = renderToken + 1
+      renderToken = generation
+      const loading = document.querySelector("[data-loading]")
+      if (loading !== null) {
+        loading.textContent = "正在整理報價"
+      }
+      setTimeout(() => {
+        if (generation !== renderToken) {
+          return
+        }
+        const view = present(series, actions)
+        latestView = view
+        clearPreparedCharts()
+        paint(renderShell(view, actions))
+        bindShell()
+        const status = document.createElement("p")
+        status.setAttribute("data-loading", "")
+        status.setAttribute("aria-live", "polite")
+        status.textContent = "正在繪製圖表"
+        document.querySelector("section")?.append(status)
+        if (typeof window.scrollTo === "function") {
+          window.scrollTo(0, scrollY)
+        }
+        paintCharts(view, generation)
+      }, 0)
+      return
+    }
+
+    renderToken += 1
+    latestView = present(series, actions)
+    paint(renderPage(series, actions))
+    bindShell()
+    bindDrawnCharts()
 
     if (typeof window.scrollTo === "function") {
       window.scrollTo(0, scrollY)
@@ -630,4 +746,10 @@ export function start(series: PriceSeries): void {
   }
 
   draw()
+  return {
+    setSeries(next: PriceSeries): void {
+      series = next
+      draw(true)
+    },
+  }
 }
