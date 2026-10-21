@@ -105,6 +105,27 @@ describe("代號與排除", () => {
     ])
   })
 
+  test("RTX5090 標題寫成 16GB 時仍是 32GB 那一組", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX5090-32GB(GDDR7)">
+          <option>華碩 ROG-ASTRAL-RTX5090-O32G-GAMING(2520MHz), $99990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX5090-16GB(GDDR7) 年節期間現貨+預定皆已完售！">
+          <option>微星 RTX5090 32G VENTUS 3X OC(2452MHz), $71990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [])
+    const chart = view.modelCharts.find((item) => item.group === "NVIDIA RTX5090-32GB(GDDR7)")
+
+    expect(view.chipGroups).toEqual(["NVIDIA RTX5090-32GB(GDDR7)"])
+    expect(chart?.series.map((line) => line.code)).toEqual([
+      "華碩 ROG-ASTRAL-RTX5090-O32G-GAMING",
+      "微星 RTX5090 32G VENTUS 3X OC",
+    ])
+  })
+
   test("容量的 G 與 GB、括號容量與連字號容量是同一分組", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`
@@ -473,6 +494,32 @@ describe("代號與排除", () => {
     expect(view.candidates).toEqual([
       "華碩 DUAL-RTX4070-O12G",
       "華碩 TUF-RTX4070-O12G-GAMING",
+    ])
+  })
+
+  test("配件、買卡優惠不是顯示卡，卡加電源是組合價", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX4070">
+          <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>
+          <option>INNO3D GTX1650 4GB Compact(1665MHz/三年保+365天換新), $4490</option>
+          <option>藍寶石 氮動 NITRO+ RX9060XT GAMING OC 16GB(2497MHz), $9990</option>
+          <option>華碩 ROG Strix Riser Cable PCIe X16 90度延長線/240mm/SafeSlot (限搭華碩顯卡), $990</option>
+          <option>麗臺 mini-DP轉DVI-D轉接線(轉接), $390</option>
+          <option>&#x2764; [鷹援團集合]9/30前購買技嘉系列產品.抽【洲際棒球場假日家庭席】兩張(價值$2,000元)</option>
+          <option>&#x2764; [台灣ZOTAC奪冠!!] 買ZOTAC RTX3050 任搭主機板現折 NT.$500元 (9/10止)</option>
+          <option>&#x2764; [台灣ZOTAC奪冠!!] 買ZOTAC RTX4070 SUPER 任搭主機板現折 NT.$1500元(9/10止)</option>
+          <option>&#x2764; [超級618]買微星4070/4080 SUPER系列送VAMPIRIC 300R電競機殼(市價$2890)</option>
+          <option>【振興方案】技嘉 GTX1650 D6 OC-4G + 技嘉 GP-P550B 銅牌 (現省800), $5480</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setChipGroup", name: "NVIDIA RTX4070" }])
+
+    expect(view.modelCharts[0]?.series.map((line) => line.code)).toEqual([
+      "華碩 DUAL-RTX4070-O12G",
+      "INNO3D GTX1650 4GB Compact",
+      "藍寶石 氮動 NITRO+ RX9060XT GAMING OC 16GB",
     ])
   })
 

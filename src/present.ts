@@ -167,18 +167,19 @@ function sameCapacitySpelling(name: string): string {
   const withUnit = name.replace(/(\d+)G(?!B)/gi, "$1GB")
   const unwrapped = withUnit.replace(/\((\d+GB)\)/gi, "-$1")
   const ti = unwrapped.replace(/TI(?=-)/g, "Ti")
-  return ti.replace(/Ti\s+(\d+GB)\b/g, "Ti-$1")
+  const spelled = ti.replace(/Ti\s+(\d+GB)\b/g, "Ti-$1")
+  if (spelled === "NVIDIA RTX5090-16GB(GDDR7)") {
+    return "NVIDIA RTX5090-32GB(GDDR7)"
+  }
+  return spelled
 }
 
 function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
   const byKey = new Map<string, StoredQuote>()
   const order: string[] = []
   for (const quote of quotes) {
-    if (comboPrice(quote.rowText)) {
-      continue
-    }
     const code = promotionFree(quote.code)
-    if (code === null) {
+    if (code === null || comboPrice(quote.rowText, code) || notGraphicsCard(code)) {
       continue
     }
     const group = chipModelName(quote.group)
@@ -475,8 +476,25 @@ function extractCode(text: string): string | null {
   return promotionFree(code)
 }
 
-function comboPrice(text: string): boolean {
-  return text.includes("組合") || text.includes("合購") || text.includes("加價購") || text.includes("加購") || text.includes("+購")
+function comboPrice(rowText: string, code: string): boolean {
+  if (
+    rowText.includes("組合")
+    || rowText.includes("合購")
+    || rowText.includes("加價購")
+    || rowText.includes("加購")
+    || rowText.includes("+購")
+  ) {
+    return true
+  }
+  return code.replaceAll("NITRO+", "").includes("+")
+}
+
+function notGraphicsCard(code: string): boolean {
+  return code.includes("買")
+    || code.includes("抽")
+    || code.includes("延長線")
+    || code.includes("Riser")
+    || code.includes("轉接線")
 }
 
 function promotionFree(code: string): string | null {
