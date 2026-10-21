@@ -1,3 +1,4 @@
+import { buttonMarkup, chipGroupMarkup, keywordMarkup } from "./fields.tsx"
 import { present, type Action, type PriceSeries, type View } from "./present.ts"
 
 function escapeHtml(text: string): string {
@@ -148,18 +149,14 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   const chipGroup = chipGroupName(actions)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
   const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
-  const groups = view.chipGroups.map((name) => {
-    const selected = name === chipGroup ? " selected" : ""
-    return `<option value="${escapeAttribute(name)}"${selected}>${escapeHtml(name)}</option>`
-  }).join("")
   const candidates = view.candidates
     .map((code) => {
       const pressed = view.selected.includes(code) ? "true" : "false"
-      return `<li><button type="button" aria-pressed="${pressed}">${escapeHtml(code)}</button></li>`
+      return `<li>${buttonMarkup(code, { "aria-pressed": pressed })}</li>`
     })
     .join("")
   const selected = view.selected
-    .map((code) => `<li><span>${escapeHtml(code)}</span><button type="button" data-code="${escapeAttribute(code)}">拿掉</button></li>`)
+    .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
     .join("")
   const points = view.series.flatMap((item) =>
     item.quotes.map((quote) =>
@@ -177,12 +174,12 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
   <body>
-    <section>
+    <section class="flex flex-col gap-3">
       <h2>篩選</h2>
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
-      <label>晶片分組 <select aria-label="晶片分組"><option value=""></option>${groups}</select></label>
-      <label>關鍵字 <input aria-label="關鍵字" value="${keyword}"></label>
+      <label>晶片分組 ${chipGroupMarkup(view.chipGroups, chipGroup)}</label>
+      <label>關鍵字 ${keywordMarkup(keyword)}</label>
       <ul aria-label="候選">${candidates}</ul>
       <p>已選</p>
       <ul aria-label="已選">${selected}</ul>

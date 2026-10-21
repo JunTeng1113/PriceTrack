@@ -44,6 +44,15 @@ describe("單日單卡頁面", () => {
     expect(chart?.textContent).not.toContain("華碩 DUAL-RTX4070-O12G")
   })
 
+  test("關鍵字是 shadcn 輸入欄", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, [{ type: "setKeyword", text: "dual" }]))
+    const input = doc.querySelector('input[aria-label="關鍵字"]')
+
+    expect(input?.getAttribute("data-slot")).toBe("input")
+    expect(input?.getAttribute("value")).toBe("dual")
+  })
+
   test("介面文字為繁體中文", () => {
     const series = update(emptySeries(), [snapshot])
     const doc = documentOf(renderPage(series, []))
@@ -52,6 +61,22 @@ describe("單日單卡頁面", () => {
     expect(doc.body.textContent).toContain("關鍵字")
     expect(doc.body.textContent).toContain("已選")
     expect(doc.body.textContent).toContain("價格序列")
+  })
+
+  test("候選和拿掉是 shadcn 按鈕", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, [
+      { type: "setKeyword", text: "DUAL" },
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+    ]))
+    const candidate = doc.querySelector('[aria-label="候選"] button')
+    const remove = doc.querySelector('[aria-label="已選"] button')
+
+    expect(candidate?.getAttribute("data-slot")).toBe("button")
+    expect(candidate?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
+    expect(remove?.getAttribute("data-slot")).toBe("button")
+    expect(remove?.textContent).toBe("拿掉")
+    expect(remove?.getAttribute("data-code")).toBe("華碩 DUAL-RTX4070-O12G")
   })
 
   test("用代號的一部分當關鍵字，候選清單只顯示代號", () => {
@@ -78,6 +103,32 @@ describe("單日單卡頁面", () => {
     expect(points[0]?.textContent).toContain("2024-06-15")
     expect(points[0]?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
     expect(points[0]?.textContent).toContain("18990")
+  })
+
+  test("起日和迄日仍是日期欄位", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, []))
+
+    expect(doc.querySelector('input[aria-label="起日"]')?.getAttribute("type")).toBe("date")
+    expect(doc.querySelector('input[aria-label="迄日"]')?.getAttribute("type")).toBe("date")
+  })
+
+  test("篩選用 Tailwind 直向間距排在價格序列上方", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, []))
+    const filter = sectionByHeading(doc, "篩選")
+    const chart = sectionByHeading(doc, "價格序列")
+
+    expect(filter?.classList.contains("flex")).toBe(true)
+    expect(filter?.classList.contains("flex-col")).toBe(true)
+    expect(filter?.classList.contains("gap-3")).toBe(true)
+    expect(filter).not.toBeNull()
+    expect(chart).not.toBeNull()
+    if (filter !== null && chart !== null) {
+      expect(filter.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      )
+    }
   })
 
   test("窄螢幕時篩選在圖的上方", () => {
@@ -369,6 +420,34 @@ describe("查詢區間", () => {
 })
 
 describe("篩選候選", () => {
+  test("晶片分組是 shadcn 下拉，列出區間內的分組", () => {
+    const series = update(emptySeries(), [{
+      capturedAt: "2024-06-15T02:00:00.000Z",
+      html: `
+        <tr>
+          <td>顯示卡VGA</td>
+          <td>
+            <select name="n12">
+              <optgroup label="RTX 4070">
+                <option>｛華碩 DUAL-RTX4070-O12G｝, $18990</option>
+              </optgroup>
+              <optgroup label="RTX 4060">
+                <option>｛華碩 RTX4060｝, $9000</option>
+              </optgroup>
+            </select>
+          </td>
+        </tr>
+      `,
+    }])
+    const doc = documentOf(renderPage(series, [{ type: "setChipGroup", name: "RTX 4070" }]))
+    const trigger = doc.querySelector('[aria-label="晶片分組"]')
+    const items = [...doc.querySelectorAll('[data-slot="select-item"]')].map((item) => item.textContent)
+
+    expect(trigger?.getAttribute("data-slot")).toBe("select-trigger")
+    expect(trigger?.textContent).toBe("RTX 4070")
+    expect(items).toEqual(["RTX 4070", "RTX 4060"])
+  })
+
   test("分組清單列出區間內的晶片分組，選了之後候選只顯示代號", () => {
     const series = update(emptySeries(), [{
       capturedAt: "2024-06-15T02:00:00.000Z",
@@ -389,9 +468,8 @@ describe("篩選候選", () => {
       `,
     }])
     const doc = documentOf(renderPage(series, [{ type: "setChipGroup", name: "RTX 4070" }]))
-    const groups = [...doc.querySelectorAll('[aria-label="晶片分組"] option')]
-      .map((option) => option.textContent ?? "")
-      .filter((name) => name !== "")
+    const groups = [...doc.querySelectorAll('[data-slot="select-item"]')]
+      .map((item) => item.textContent ?? "")
     const candidates = [...doc.querySelectorAll('[aria-label="候選"] li')]
       .map((item) => item.textContent)
 

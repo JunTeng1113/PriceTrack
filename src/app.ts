@@ -1,3 +1,4 @@
+import "./index.css"
 import { start } from "./browse.ts"
 import { demoSeries } from "./main.ts"
 import type { PriceSeries } from "./present.ts"

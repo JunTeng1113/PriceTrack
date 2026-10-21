@@ -10,13 +10,15 @@ function candidateTexts(): string[] {
 test("選了晶片分組後候選出現代號，點下去圖上有售價", () => {
   expect(candidateTexts()).toEqual([])
 
-  const group = document.querySelector<HTMLSelectElement>('select[aria-label="晶片分組"]')
-  expect(group).not.toBeNull()
-  if (group === null) {
-    return
-  }
-  group.value = "NVIDIA RTX4070"
-  group.dispatchEvent(new Event("change", { bubbles: true }))
+  const content = document.querySelector('[data-slot="select-content"]')
+  expect(content?.classList.contains("hidden")).toBe(true)
+  document.querySelector<HTMLElement>('[data-slot="select-trigger"]')?.click()
+  expect(content?.classList.contains("hidden")).toBe(false)
+
+  const group = [...document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')]
+    .find((item) => item.textContent === "NVIDIA RTX4070")
+  expect(group).not.toBeUndefined()
+  group?.click()
 
   expect(candidateTexts()).toEqual(["華碩 DUAL-RTX4070-O12G"])
   expect(document.body.textContent).not.toContain("2535MHz")

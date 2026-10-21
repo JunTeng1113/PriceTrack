@@ -10,10 +10,15 @@ export function start(series: PriceSeries): void {
     document.documentElement.lang = parsed.documentElement.lang
     document.body.replaceChildren(...parsed.body.childNodes)
 
-    const group = document.querySelector<HTMLSelectElement>('select[aria-label="晶片分組"]')
-    if (group !== null) {
-      group.addEventListener("change", () => {
-        const name = group.value
+    const trigger = document.querySelector<HTMLElement>('[data-slot="select-trigger"]')
+    trigger?.addEventListener("click", () => {
+      document.querySelector('[data-slot="select-content"]')?.classList.toggle("hidden")
+    })
+
+    const groupItems = document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')
+    for (const item of groupItems) {
+      item.addEventListener("click", () => {
+        const name = item.dataset.value ?? ""
         actions = [
           ...actions.filter((action) => action.type !== "setChipGroup"),
           { type: "setChipGroup", name },
