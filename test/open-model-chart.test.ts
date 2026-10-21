@@ -181,15 +181,20 @@ test("晶片分組可以複選，搜尋後留下勾選的圖", () => {
     [...document.querySelectorAll<HTMLButtonElement>('[aria-label="晶片廠"] button')]
       .find((node) => node.textContent === name)
 
-  expect(item(older)?.classList.contains("hidden")).toBe(true)
-  vendor("NVIDIA")?.click()
-  expect(vendor("NVIDIA")?.className).toContain("aria-pressed:bg-slate-900")
+  expect(document.querySelector('[aria-label="晶片廠"]')?.closest("label")).toBeNull()
+  expect(vendor("NVIDIA")?.getAttribute("aria-pressed")).toBe("true")
   expect(item(older)?.classList.contains("hidden")).toBe(false)
   expect(item("AMD RX6800")?.classList.contains("hidden")).toBe(true)
+  vendor("NVIDIA")?.click()
+  expect(vendor("NVIDIA")?.getAttribute("aria-pressed")).toBe("true")
+  expect(vendor("NVIDIA")?.className).toContain("aria-pressed:bg-slate-900")
 
   document.querySelector<HTMLElement>('[data-slot="select-trigger"]')?.click()
   item(older)?.click()
   item(other)?.click()
+  expect(vendor("NVIDIA")?.getAttribute("aria-pressed")).toBe("true")
+  expect(item(older)?.getAttribute("aria-selected")).toBe("true")
+  expect(item(other)?.getAttribute("aria-selected")).toBe("true")
 
   expect(document.querySelector('[data-slot="select-content"]')?.classList.contains("hidden")).toBe(false)
   expect(document.querySelector('[aria-label="晶片分組"]')?.textContent).toBe(`${older}、${other}`)

@@ -12,41 +12,27 @@ function sectionByHeading(heading: string): HTMLElement | null {
   return found.parentElement
 }
 
-test("訪客打開頁面、用關鍵字加入已選", () => {
+test("訪客打開頁面、用晶片分組加入已選", () => {
   expect(document.documentElement.lang).toBe("zh-Hant")
-  expect(document.body.textContent).toContain("關鍵字")
-  expect(document.body.textContent).toContain("已選")
-  expect(sectionByHeading("價格序列")?.textContent).not.toContain("18990")
+  expect(document.querySelector('input[aria-label="關鍵字"]')).toBeNull()
+  expect(document.body.textContent).not.toContain("已選")
+  expect(sectionByHeading("價格序列")).toBeNull()
   expect(document.querySelector('[aria-label="NVIDIA RTX4070"]')).toBeNull()
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("archive.org")
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("wayback")
 
-  const filter = sectionByHeading("篩選")
-  const chart = sectionByHeading("價格序列")
-  expect(filter).not.toBeNull()
-  expect(chart).not.toBeNull()
-  if (filter !== null && chart !== null) {
-    expect(filter.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    )
-  }
+  expect(sectionByHeading("篩選")).not.toBeNull()
 
-  const input = document.querySelector<HTMLInputElement>('input[aria-label="關鍵字"]')
-  expect(input).not.toBeNull()
-  if (input === null) {
-    return
-  }
-  input.value = "dual-rtx4070"
   expect(document.querySelector('[aria-label="候選"] button')).toBeNull()
+  const group = [...document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')]
+    .find((item) => item.textContent === "NVIDIA RTX4070")
+  group?.click()
   document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   const button = document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')
   expect(button?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
   button?.click()
 
-  const point = document.querySelector('[aria-label="折線圖"] [data-date="2024-06-15"]')
-  expect(point?.getAttribute("data-code")).toBe("華碩 DUAL-RTX4070-O12G")
-  expect(point?.getAttribute("data-price")).toBe("18990")
   const selected = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)
   expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
 
@@ -59,11 +45,10 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   }
   start.value = "2023-01-01"
   end.value = "2023-02-01"
-  expect(document.querySelector('[aria-label="折線圖"] [data-date="2024-06-15"]')).not.toBeNull()
   document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   const selectedAfter = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)
   expect(selectedAfter).toEqual(["華碩 DUAL-RTX4070-O12G"])
-  expect(sectionByHeading("價格序列")?.textContent).not.toContain("18990")
+  expect(sectionByHeading("價格序列")).toBeNull()
   expect(document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')?.value).toBe("2023-02-01")
 })

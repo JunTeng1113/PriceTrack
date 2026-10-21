@@ -283,6 +283,19 @@ function showChipVendor(vendor: string): void {
     item.classList.toggle("hidden", !shown)
   }
 }
+
+function ensureChipVendor(): void {
+  const current = pressedChipVendor()
+  if (current !== "") {
+    showChipVendor(current)
+    return
+  }
+  const first = document.querySelector<HTMLButtonElement>('[aria-label="晶片廠"] button')
+  const name = first?.textContent ?? ""
+  if (name !== "") {
+    showChipVendor(name)
+  }
+}
 function selectedChipGroups(): string[] {
   return [...document.querySelectorAll('[data-slot="select-item"][aria-selected="true"]')]
     .map((item) => item.getAttribute("data-value") ?? "")
@@ -290,15 +303,14 @@ function selectedChipGroups(): string[] {
 }
 
 function readFilterDraft(): FilterDraft | null {
-  const keyword = document.querySelector<HTMLInputElement>('input[aria-label="關鍵字"]')
   const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
   const end = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')
   const chip = document.querySelector('[aria-label="晶片分組"]')
-  if (keyword === null || start === null || end === null || chip === null) {
+  if (start === null || end === null || chip === null) {
     return null
   }
   return {
-    keyword: keyword.value,
+    keyword: "",
     chipGroups: selectedChipGroups(),
     vendor: pressedChipVendor(),
     start: start.value,
@@ -307,13 +319,9 @@ function readFilterDraft(): FilterDraft | null {
 }
 
 function writeFilterDraft(draft: FilterDraft): void {
-  const keyword = document.querySelector<HTMLInputElement>('input[aria-label="關鍵字"]')
   const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
   const end = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')
   const chip = document.querySelector('[aria-label="晶片分組"]')
-  if (keyword !== null) {
-    keyword.value = draft.keyword
-  }
   if (start !== null) {
     start.value = draft.start
   }
@@ -574,10 +582,13 @@ export function start(series: PriceSeries): void {
     for (const button of vendorButtons) {
       button.addEventListener("click", () => {
         const name = button.textContent ?? ""
-        const next = button.getAttribute("aria-pressed") === "true" ? "" : name
-        showChipVendor(next)
+        if (name === "") {
+          return
+        }
+        showChipVendor(name)
       })
     }
+    ensureChipVendor()
 
     const buttons = document.querySelectorAll<HTMLButtonElement>('[aria-label="候選"] button')
     for (const button of buttons) {

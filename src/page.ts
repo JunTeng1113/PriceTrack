@@ -1,4 +1,4 @@
-import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, keywordMarkup } from "./fields.tsx"
+import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup } from "./fields.tsx"
 import { brandColorIndex, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 
 function escapeHtml(text: string): string {
@@ -306,30 +306,6 @@ function chartMarks(view: View, connectGaps = false, focus = ""): string {
   return marks.join("")
 }
 
-function lineSegments(view: View): string[] {
-  const segments: string[] = []
-  for (const item of view.series) {
-    for (let index = 1; index < item.quotes.length; index += 1) {
-      const previous = item.quotes[index - 1]
-      const current = item.quotes[index]
-      if (previous !== undefined && current !== undefined && addDays(previous.date, 1) === current.date) {
-        segments.push(`${previous.date} ${current.date}`)
-      }
-    }
-  }
-  return segments
-}
-
-function keywordText(actions: readonly Action[]): string {
-  let keyword = ""
-  for (const action of actions) {
-    if (action.type === "setKeyword") {
-      keyword = action.text
-    }
-  }
-  return keyword
-}
-
 function chipGroupNames(actions: readonly Action[]): string[] {
   const names: string[] = []
   for (const action of actions) {
@@ -343,7 +319,6 @@ function chipGroupNames(actions: readonly Action[]): string[] {
 export function renderPage(series: PriceSeries, actions: readonly Action[]): string {
   preparedBrandSvgs.clear()
   const view = present(series, actions)
-  const keyword = escapeAttribute(keywordText(actions))
   const chipGroups = chipGroupNames(actions)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
   const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
@@ -356,32 +331,18 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   const selected = view.selected
     .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
     .join("")
-  const priceAxis = view.axis === null
-    ? ""
-    : `<span>${view.axis.lower}</span><span>${view.axis.upper}</span>`
-  const axis = axisDates(view).map((date) => `<span>${escapeHtml(date)}</span>`).join("")
-  const segments = lineSegments(view).map((segment) => `<span>${escapeHtml(segment)}</span>`).join("")
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
   <body>
     <div class="p-4 md:p-6">
-    <section class="flex flex-col gap-3 text-sm">
+    <section class="mb-6 flex flex-col gap-6 text-sm">
       <h2>篩選</h2>
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
-      <label>晶片分組 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</label>
-      <label>關鍵字 ${keywordMarkup(keyword)}</label>
+      <div>晶片分組 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</div>
       ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
       <ul aria-label="候選">${candidates}</ul>
-      <p>已選</p>
       <ul aria-label="已選">${selected}</ul>
-    </section>
-    <section class="flex flex-col gap-3 text-sm">
-      <h2>價格序列</h2>
-      <div aria-label="日期軸">${axis}</div>
-      <div aria-label="金額軸">${priceAxis}</div>
-      <div aria-label="折線">${segments}</div>
-      ${chartSvg(chartMarks(view), "折線圖")}
     </section>
     ${view.modelCharts.map((chart) => modelSection(view, chart)).join("")}
     </div>

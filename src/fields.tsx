@@ -2,12 +2,7 @@ import { createElement, type ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { Button } from "./components/ui/button.tsx"
 import { ChipGroupSelect, chipVendors } from "./components/ui/select.tsx"
-import { Input } from "./components/ui/input.tsx"
 import { brandColor } from "./present.ts"
-
-export function keywordMarkup(value: string): string {
-  return renderToStaticMarkup(createElement(Input, { "aria-label": "關鍵字", defaultValue: value }))
-}
 
 export function buttonMarkup(
   label: ReactNode,
@@ -18,9 +13,9 @@ export function buttonMarkup(
 
 export function chipVendorMarkup(): string {
   const buttons = chipVendors
-    .map((name) => buttonMarkup(name, { "aria-pressed": "false" }))
+    .map((name, index) => buttonMarkup(name, { "aria-pressed": index === 0 ? "true" : "false" }))
     .join("")
-  return `<div aria-label="晶片廠" class="mb-2 flex flex-wrap gap-2">${buttons}</div>`
+  return `<div aria-label="晶片廠" class="mb-4 flex flex-wrap gap-2">${buttons}</div>`
 }
 
 export function chipGroupMarkup(groups: readonly string[], selected: readonly string[]): string {

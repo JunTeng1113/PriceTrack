@@ -64,7 +64,7 @@ function ChipGroupSelect({
           <SelectItem
             key={name}
             aria-selected={selected.includes(name)}
-            className="hidden aria-selected:bg-slate-100"
+            className={`${chipVendor(name) === chipVendors[0] ? "" : "hidden"} aria-selected:bg-slate-100`}
             data-value={name}
             data-vendor={chipVendor(name)}
           >

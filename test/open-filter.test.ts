@@ -28,17 +28,14 @@ test("選了晶片分組後候選出現代號，點下去圖上有售價", () =>
   const button = document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')
   button?.click()
 
-  const point = document.querySelector('[aria-label="折線圖"] [data-date="2024-06-15"]')
+  const point = document.querySelector('[aria-label="NVIDIA RTX4070"] [data-date="2024-06-15"]')
   expect(point?.getAttribute("data-code")).toBe("華碩 DUAL-RTX4070-O12G")
   expect(point?.getAttribute("data-price")).toBe("18990")
 
-  const input = document.querySelector<HTMLInputElement>('input[aria-label="關鍵字"]')
-  expect(input).not.toBeNull()
-  if (input === null) {
-    return
-  }
-  input.value = "不存在"
   expect(candidateTexts()).toEqual(["華碩 DUAL-RTX4070-O12G"])
+  const chosen = [...document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')]
+    .find((item) => item.textContent === "NVIDIA RTX4070")
+  chosen?.click()
   document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   expect(candidateTexts()).toEqual([])
