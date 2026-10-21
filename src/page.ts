@@ -174,7 +174,7 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
   <body>
-    <section class="flex flex-col gap-3">
+    <section class="flex flex-col gap-3 text-sm">
       <h2>篩選</h2>
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
@@ -184,7 +184,7 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <p>已選</p>
       <ul aria-label="已選">${selected}</ul>
     </section>
-    <section>
+    <section class="flex flex-col gap-3 text-sm">
       <h2>價格序列</h2>
       <div aria-label="日期軸">${axis}</div>
       <div aria-label="金額軸">${priceAxis}</div>

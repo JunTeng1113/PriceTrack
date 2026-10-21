@@ -113,6 +113,35 @@ describe("單日單卡頁面", () => {
     expect(doc.querySelector('input[aria-label="迄日"]')?.getAttribute("type")).toBe("date")
   })
 
+  test("價格序列用和篩選一樣的直向間距，並排在篩選下方", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, []))
+    const filter = sectionByHeading(doc, "篩選")
+    const chart = sectionByHeading(doc, "價格序列")
+
+    expect(chart?.classList.contains("flex")).toBe(true)
+    expect(chart?.classList.contains("flex-col")).toBe(true)
+    expect(chart?.classList.contains("gap-3")).toBe(true)
+    expect(filter?.classList.contains("gap-3")).toBe(true)
+    expect(filter).not.toBeNull()
+    expect(chart).not.toBeNull()
+    if (filter !== null && chart !== null) {
+      expect(filter.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      )
+    }
+  })
+
+  test("價格序列和篩選的文字同為小字", () => {
+    const series = update(emptySeries(), [snapshot])
+    const doc = documentOf(renderPage(series, []))
+    const filter = sectionByHeading(doc, "篩選")
+    const chart = sectionByHeading(doc, "價格序列")
+
+    expect(filter?.classList.contains("text-sm")).toBe(true)
+    expect(chart?.classList.contains("text-sm")).toBe(true)
+  })
+
   test("篩選用 Tailwind 直向間距排在價格序列上方", () => {
     const series = update(emptySeries(), [snapshot])
     const doc = documentOf(renderPage(series, []))
