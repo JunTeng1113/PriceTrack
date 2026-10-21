@@ -59,6 +59,7 @@ describe("單日單卡頁面", () => {
 
     expect(doc.documentElement.lang).toBe("zh-Hant")
     expect(doc.body.textContent).toContain("關鍵字")
+    expect(doc.body.textContent).toContain("搜尋")
     expect(doc.body.textContent).toContain("已選")
     expect(doc.body.textContent).toContain("價格序列")
   })
@@ -226,9 +227,8 @@ describe("多日走勢", () => {
       ["2024-06-16", "20000"],
       ["2024-06-17", "30000"],
     ])
-    expect(first?.x).toBe(0)
-    expect(middle?.x).toBe(50)
-    expect(last?.x).toBe(100)
+    expect(middle?.x).toBeCloseTo(((first?.x ?? 0) + (last?.x ?? 0)) / 2)
+    expect(last?.x ?? 0).toBeGreaterThan(first?.x ?? 0)
     expect(middle?.y).toBeCloseTo(((first?.y ?? 0) + (last?.y ?? 0)) / 2)
     expect(last?.y ?? 0).toBeLessThan(first?.y ?? 0)
   })
@@ -508,8 +508,8 @@ describe("篩選候選", () => {
   })
 })
 
-describe("已選、金額軸與讀數", () => {
-  test("已選可以拿掉，圖上有金額軸與一筆讀數", () => {
+describe("已選與金額軸", () => {
+  test("已選可以拿掉，圖上有金額軸", () => {
     const series = update(emptySeries(), [{
       capturedAt: "2024-06-15T02:00:00.000Z",
       html: `
@@ -537,7 +537,6 @@ describe("已選、金額軸與讀數", () => {
     const removeLabels = [...doc.querySelectorAll('[aria-label="已選"] button')].map((button) => button.textContent)
     const bounds = [...(doc.querySelector('[aria-label="金額軸"]')?.querySelectorAll("span") ?? [])]
       .map((node) => Number(node.textContent))
-    const readout = doc.querySelector('[aria-label="讀數"]')
     const pressed = [...doc.querySelectorAll('[aria-label="候選"] button')]
       .map((button) => button.getAttribute("aria-pressed"))
 
@@ -546,9 +545,7 @@ describe("已選、金額軸與讀數", () => {
     expect(bounds[0]).toBeGreaterThan(0)
     expect(bounds[0]).toBeLessThan(9000)
     expect(bounds[1]).toBeGreaterThan(18990)
-    expect(readout?.textContent).toContain("2024-06-15")
-    expect(readout?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
-    expect(readout?.textContent).toContain("18990")
+    expect(doc.querySelector('[aria-label="讀數"]')).toBeNull()
     expect(pressed).toEqual(["true", "true"])
     expect(doc.body.textContent).not.toContain("登入")
     expect(doc.body.textContent).not.toContain("收藏")
@@ -585,7 +582,7 @@ describe("多條已選的折線圖", () => {
       { type: "select", code: secondCode },
     ]))
     const chart = doc.querySelector('[aria-label="折線圖"]')
-    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+    const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
     const lineCodes = [...(chart?.querySelectorAll("line") ?? [])].map((node) => node.getAttribute("data-code"))
 
@@ -623,7 +620,7 @@ describe("多條已選的折線圖", () => {
     expect(laterLeft?.x ?? 0).toBeGreaterThan(low?.x ?? 0)
   })
 
-  test("從已選拿掉一條，那條線和圖例一起消失", () => {
+  test("從已選拿掉一條，那條線和末端名稱一起消失", () => {
     const series = update(emptySeries(), [
       twoCardDay("2024-06-15T02:00:00.000Z", 18990, 19990),
       twoCardDay("2024-06-16T02:00:00.000Z", 17990, 20990),
@@ -633,7 +630,7 @@ describe("多條已選的折線圖", () => {
       { type: "select", code: secondCode },
       { type: "deselect", code: secondCode },
     ]))
-    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+    const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
     const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
       node.getAttribute("data-code"),
@@ -680,7 +677,7 @@ describe("多條已選的折線圖", () => {
       { type: "setChipGroup", name: "RTX 4060" },
       { type: "setKeyword", text: "不存在的關鍵字" },
     ]))
-    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+    const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
     const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
       node.getAttribute("data-code"),
@@ -710,7 +707,7 @@ describe("多條已選的折線圖", () => {
       day("2024-06-16T02:00:00.000Z", 100),
     ])
     const doc = documentOf(renderPage(series, codes.map((item) => ({ type: "select" as const, code: item }))))
-    const labels = [...(doc.querySelector('[aria-label="圖例"]')?.querySelectorAll("li") ?? [])]
+    const labels = [...doc.querySelectorAll('[aria-label="折線圖"] text[data-series-label]')]
       .map((item) => item.textContent)
     const lineCodes = [...doc.querySelectorAll('[aria-label="折線圖"] line')].map((node) =>
       node.getAttribute("data-code"),

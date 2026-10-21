@@ -42,25 +42,7 @@ test("點品牌按鈕後，圖上只留該品牌的線", () => {
   expect(new Set(codes)).toEqual(new Set([prime]))
 })
 
-test("在型號圖上指向缺日，讀出該線較近的售價", () => {
-  const series = update(emptySeries(), [
-    vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`, `${windforce}(2497MHz), $20000`]),
-    vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $13000`, `${windforce}(2497MHz), $22000`]),
-  ])
-  start(series)
-
-  const mark = document.querySelector<SVGElement>(
-    `[aria-label="${modelGroup}"] [data-day="2024-06-17"][data-code="${prime}"]`,
-  )
-  expect(mark).not.toBeNull()
-  mark?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
-
-  expect(document.querySelector(`[aria-label="${modelGroup}"] [aria-label="讀數"]`)?.textContent).toBe(
-    `2024-06-18 ${prime} 13000`,
-  )
-})
-
-test("滑鼠移到線上時，讀出日期、名稱與價錢", () => {
+test("滑鼠移到線上時，頁面不重畫", () => {
   const series = update(emptySeries(), [
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`]),
     vga("2024-06-16T02:00:00.000Z", [`${prime}(2505MHz), $11000`]),
@@ -69,9 +51,62 @@ test("滑鼠移到線上時，讀出日期、名稱與價錢", () => {
 
   const line = document.querySelector<SVGLineElement>(`[aria-label="${modelGroup}"] line[data-code="${prime}"]`)
   expect(line).not.toBeNull()
+  const marker = document.createElement("p")
+  marker.id = "keep"
+  document.body.append(marker)
   line?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
 
-  expect(document.querySelector(`[aria-label="${modelGroup}"] [aria-label="讀數"]`)?.textContent).toBe(
-    `2024-06-16 ${prime} 11000`,
-  )
+  expect(document.querySelector('[aria-label="讀數"]')).toBeNull()
+  expect(document.getElementById("keep")).not.toBeNull()
+})
+
+test("點線末端的名稱時其他線變半透明，再點一次恢復", () => {
+  const series = update(emptySeries(), [
+    vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
+  ])
+  start(series)
+
+  const name = (): Element | undefined =>
+    [...document.querySelectorAll(`[aria-label="${modelGroup}"] text[data-series-label]`)]
+      .find((node) => node.textContent === prime)
+  const opacity = (code: string): string | null =>
+    document.querySelector(`[aria-label="${modelGroup}"] circle[data-code="${code}"]`)?.getAttribute("opacity") ?? null
+  name()?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+
+  expect(opacity(prime)).toBe("1")
+  expect(opacity(windforce)).toBe("0.25")
+  expect(name()?.getAttribute("data-focused")).toBe("true")
+
+  name()?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  expect(opacity(prime)).toBe("1")
+  expect(opacity(windforce)).toBe("1")
+})
+
+test("滑鼠移到一條線上時其他線變半透明，移開就恢復", () => {
+  const series = update(emptySeries(), [
+    vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`, `${windforce}(2497MHz), $20000`]),
+    vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $13000`, `${windforce}(2497MHz), $22000`]),
+  ])
+  start(series)
+
+  const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
+  expect(svg).not.toBeNull()
+  if (svg === null) {
+    return
+  }
+  const opacity = (code: string): string | null =>
+    svg.querySelector(`line[data-code="${code}"]`)?.getAttribute("opacity") ?? null
+  const primeLine = svg.querySelector(`line[data-code="${prime}"]`)
+  const otherLine = svg.querySelector(`line[data-code="${windforce}"]`)
+  primeLine?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+  expect(opacity(prime)).toBe("1")
+  expect(opacity(windforce)).toBe("0.25")
+
+  otherLine?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+  expect(opacity(windforce)).toBe("1")
+  expect(opacity(prime)).toBe("0.25")
+
+  primeLine?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }))
+  expect(opacity(prime)).toBe("1")
+  expect(opacity(windforce)).toBe("1")
 })

@@ -1,5 +1,5 @@
 import { brandMarkup, buttonMarkup, chipGroupMarkup, keywordMarkup } from "./fields.tsx"
-import { present, type Action, type PriceSeries, type View } from "./present.ts"
+import { present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 
 function escapeHtml(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -70,28 +70,105 @@ function seriesColor(index: number): string {
   return `hsl(${hue} 70% 35%)`
 }
 
+const plotLeft = 36
+const plotRight = 278
+const plotTop = 4
+const plotBottom = 84
+
 function formatPrice(value: number): string {
   return String(Math.round(value))
 }
 
+function xAt(date: string, startDay: number, daySpan: number): number {
+  if (daySpan === 0) {
+    return (plotLeft + plotRight) / 2
+  }
+  return plotLeft + ((dayNumber(date) - startDay) / daySpan) * (plotRight - plotLeft)
+}
+
+function yAt(price: number, axis: { lower: number; upper: number }): number {
+  const span = axis.upper - axis.lower
+  if (span === 0) {
+    return (plotTop + plotBottom) / 2
+  }
+  return plotTop + (1 - (price - axis.lower) / span) * (plotBottom - plotTop)
+}
+
+function monthTicks(start: string, end: string): { date: string; label: string }[] {
+  const ticks: { date: string; label: string }[] = []
+  let year = Number(start.slice(0, 4))
+  let month = Number(start.slice(5, 7))
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return ticks
+  }
+  const endKey = end.slice(0, 7)
+  while (ticks.length < 240) {
+    const label = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`
+    if (label > endKey) {
+      break
+    }
+    const first = `${label}-01`
+    const date = first < start ? start : first > end ? end : first
+    ticks.push({ date, label })
+    month += 1
+    if (month === 13) {
+      month = 1
+      year += 1
+    }
+  }
+  return ticks
+}
+
+function priceTicks(lower: number, upper: number): number[] {
+  const intervals = 10
+  if (upper <= lower) {
+    return [lower]
+  }
+  const step = (upper - lower) / intervals
+  const ticks: number[] = []
+  for (let index = 0; index <= intervals; index += 1) {
+    ticks.push(index === intervals ? upper : lower + step * index)
+  }
+  return ticks
+}
+
 function chartFrame(start: string, end: string, axis: { lower: number; upper: number }): string {
-  const horizontal = [25, 50, 75].map((y) => `M0 ${y} H100`).join(" ")
-  const vertical = [25, 50, 75].map((x) => `M${x} 0 V100`).join(" ")
-  const xLabels = end === start
-    ? `<text data-axis="x" x="0" y="108" font-size="4" fill="#334155">${escapeHtml(start)}</text>`
-    : `<text data-axis="x" x="0" y="108" font-size="4" fill="#334155">${escapeHtml(start)}</text><text data-axis="x" x="100" y="108" font-size="4" fill="#334155" text-anchor="end">${escapeHtml(end)}</text>`
+  const startDay = dayNumber(start)
+  const daySpan = dayNumber(end) - startDay
+  const months = monthTicks(start, end)
+  const prices = priceTicks(axis.lower, axis.upper)
+  const horizontal = prices.map((price) => {
+    const y = yAt(price, axis)
+    return `M${plotLeft} ${y} H${plotRight}`
+  }).join(" ")
+  const vertical = months.map((tick) => {
+    const x = xAt(tick.date, startDay, daySpan)
+    return `M${x} ${plotTop} V${plotBottom}`
+  }).join(" ")
+  const xLabels = months.map((tick) => {
+    const x = xAt(tick.date, startDay, daySpan)
+    const anchor = x <= plotLeft + 8 ? "start" : x >= plotRight - 8 ? "end" : "middle"
+    return `<text data-axis="x" x="${x}" y="96" font-size="3.2" fill="#334155" text-anchor="${anchor}">${escapeHtml(tick.label)}</text>`
+  }).join("")
+  const yLabels = prices.map((price) =>
+    `<text data-axis="y" x="${plotLeft - 2}" y="${yAt(price, axis)}" font-size="3.2" fill="#334155" text-anchor="end" dominant-baseline="middle">${formatPrice(price)}</text>`,
+  ).join("")
   return [
-    `<rect data-axis="background" x="0" y="0" width="100" height="100" fill="#e8eef7" pointer-events="none" />`,
+    `<rect data-axis="background" x="${plotLeft}" y="${plotTop}" width="${plotRight - plotLeft}" height="${plotBottom - plotTop}" fill="#e8eef7" pointer-events="none" />`,
     `<path data-axis="grid" d="${horizontal} ${vertical}" fill="none" stroke="#c5d0de" stroke-width="0.35" pointer-events="none" />`,
-    `<path data-axis="x" d="M0 100 H100" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
-    `<path data-axis="y" d="M0 0 V100" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
+    `<path data-axis="x" d="M${plotLeft} ${plotBottom} H${plotRight}" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
+    `<path data-axis="y" d="M${plotLeft} ${plotTop} V${plotBottom}" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
     xLabels,
-    `<text data-axis="y" x="-1" y="3" font-size="4" fill="#334155" text-anchor="end">${formatPrice(axis.upper)}</text>`,
-    `<text data-axis="y" x="-1" y="100" font-size="4" fill="#334155" text-anchor="end">${formatPrice(axis.lower)}</text>`,
+    yLabels,
   ].join("")
 }
 
-function chartMarks(view: View, connectGaps = false): string {
+function chartSvg(marks: string, label = ""): string {
+  const named = label === "" ? "" : ` aria-label="${label}"`
+  return `<svg${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
+}
+
+function chartMarks(view: View, connectGaps = false, focus = ""): string {
   const dates = axisDates(view)
   const start = dates[0]
   const end = dates.at(-1)
@@ -102,35 +179,40 @@ function chartMarks(view: View, connectGaps = false): string {
   const startDay = dayNumber(start)
   const endDay = dayNumber(end)
   const daySpan = endDay - startDay
-  const priceSpan = axis.upper - axis.lower
   const marks: string[] = [chartFrame(start, end, axis)]
   const laneCount = view.series.length
+  const laneHeight = laneCount === 0 ? plotBottom - plotTop : (plotBottom - plotTop) / laneCount
   for (const [seriesIndex, item] of view.series.entries()) {
     const quoted = new Set(item.quotes.map((quote) => quote.date))
-    const band = 100 / laneCount
     for (const date of dates) {
       if (quoted.has(date)) {
         continue
       }
-      const x = daySpan === 0 ? 50 : ((dayNumber(date) - startDay) / daySpan) * 100
+      const x = xAt(date, startDay, daySpan)
       marks.push(
-        `<rect data-day="${escapeAttribute(date)}" data-code="${escapeAttribute(item.code)}" x="${x - 1}" y="${seriesIndex * band}" width="2" height="${band}" fill="transparent" />`,
+        `<rect data-day="${escapeAttribute(date)}" data-code="${escapeAttribute(item.code)}" x="${x - 1}" y="${plotTop + seriesIndex * laneHeight}" width="2" height="${laneHeight}" fill="transparent" />`,
       )
     }
-    const paint = connectGaps ? seriesColor(seriesIndex) : "currentColor"
+    const paint = connectGaps ? seriesColor(item.colorIndex ?? seriesIndex) : "currentColor"
+    const opacity = focus !== "" && focus !== item.code ? "0.25" : "1"
     let previous: { date: string; price: number; x: number; y: number } | null = null
     for (const quote of item.quotes) {
-      const x = daySpan === 0 ? 50 : ((dayNumber(quote.date) - startDay) / daySpan) * 100
-      const y = priceSpan === 0 ? 50 : 100 - ((quote.sellingPrice - axis.lower) / priceSpan) * 100
+      const x = xAt(quote.date, startDay, daySpan)
+      const y = yAt(quote.sellingPrice, axis)
       if (previous !== null && (connectGaps || addDays(previous.date, 1) === quote.date)) {
         marks.push(
-          `<line data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="${paint}" stroke-width="1.2" fill="none" />`,
+          `<line data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="${paint}" stroke-width="1.2" fill="none" opacity="${opacity}" />`,
         )
       }
       marks.push(
-        `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="${paint}" />`,
+        `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="${paint}" opacity="${opacity}" />`,
       )
       previous = { date: quote.date, price: quote.sellingPrice, x, y }
+    }
+    if (previous !== null) {
+      marks.push(
+        `<text data-series-label="true" data-code="${escapeAttribute(item.code)}" data-focused="${focus === item.code ? "true" : "false"}" x="${previous.x + 2}" y="${previous.y}" font-size="3.2" fill="${paint}" opacity="${opacity}" dominant-baseline="middle">${escapeHtml(item.code)}</text>`,
+      )
     }
   }
   return marks.join("")
@@ -188,9 +270,6 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   const priceAxis = view.axis === null
     ? ""
     : `<span>${view.axis.lower}</span><span>${view.axis.upper}</span>`
-  const readout = view.readout === null
-    ? ""
-    : `${escapeHtml(view.readout.date)} ${escapeHtml(view.readout.code)} ${view.readout.sellingPrice}`
   const axis = axisDates(view).map((date) => `<span>${escapeHtml(date)}</span>`).join("")
   const segments = lineSegments(view).map((segment) => `<span>${escapeHtml(segment)}</span>`).join("")
   return `<!DOCTYPE html>
@@ -202,6 +281,7 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
       <label>晶片分組 ${chipGroupMarkup(view.chipGroups, chipGroup)}</label>
       <label>關鍵字 ${keywordMarkup(keyword)}</label>
+      ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
       <ul aria-label="候選">${candidates}</ul>
       <p>已選</p>
       <ul aria-label="已選">${selected}</ul>
@@ -211,9 +291,7 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <div aria-label="日期軸">${axis}</div>
       <div aria-label="金額軸">${priceAxis}</div>
       <div aria-label="折線">${segments}</div>
-      <svg aria-label="折線圖" viewBox="-18 -6 136 116" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:136/116">${chartMarks(view)}</svg>
-      <ul aria-label="圖例">${view.series.map((item) => `<li>${escapeHtml(item.code)}</li>`).join("")}</ul>
-      <p aria-label="讀數">${readout}</p>
+      ${chartSvg(chartMarks(view), "折線圖")}
     </section>
     ${view.modelCharts.map((chart) => modelSection(view, chart)).join("")}
   </body>
@@ -221,9 +299,6 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
 }
 
 function modelSection(view: View, chart: View["modelCharts"][number]): string {
-  const legend = chart.series.map((item, index) =>
-    `<li><span style="background:${seriesColor(index)}"></span>${escapeHtml(item.code)}</li>`,
-  ).join("")
   const marks = chartMarks({
     queryRange: view.queryRange,
     chipGroups: [],
@@ -233,12 +308,9 @@ function modelSection(view: View, chart: View["modelCharts"][number]): string {
     axis: priceBounds(chart.series),
     readout: null,
     modelCharts: [],
-  }, true)
+  }, true, chart.focus)
   const brands = brandMarkup(chart.brands, chart.brand)
-  const readout = chart.readout === null
-    ? ""
-    : `${escapeHtml(chart.readout.date)} ${escapeHtml(chart.readout.code)} ${chart.readout.sellingPrice}`
-  return `<section aria-label="${escapeAttribute(chart.group)}"><div aria-label="品牌">${brands}</div><ul aria-label="圖例">${legend}</ul><svg viewBox="-18 -6 136 116" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:136/116">${marks}</svg><p aria-label="讀數">${readout}</p></section>`
+  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(chart.group)}"><h3 class="font-medium">${escapeHtml(chart.group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${chartSvg(marks)}</section>`
 }
 
 function priceBounds(
@@ -259,12 +331,5 @@ function priceBounds(
   if (min === null || max === null) {
     return null
   }
-  const span = max - min
-  const pad = span === 0 ? Math.max(1, Math.floor(min / 10)) : span / 10
-  let lower = min - pad
-  const upper = max + pad
-  if (min > 0 && lower <= 0) {
-    lower = min / 2
-  }
-  return { lower, upper }
+  return steppedPriceBounds(min, max)
 }

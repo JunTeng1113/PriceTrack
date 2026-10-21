@@ -248,6 +248,76 @@ describe("代號與排除", () => {
     ])
   })
 
+  test("方括號裡的銷售宣傳不是代號，品牌取後面的廠牌", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX5090">
+          <option>[限組裝] 華碩 TUF-RTX5090-O32G-GAMING(2520MHz), $99990</option>
+          <option>[限搭機] 技嘉 RTX5090 GAMING OC 32G(2520MHz), $98990</option>
+          <option>[合購省] 技嘉 GTX1660Ti OC 6G + 技嘉 GP-P650B(1770MHz), $6990</option>
+          <option>[2/24]Acer Nitro ARC B580 OC 12GB(2800MHz), $8990</option>
+          <option>[限任搭] ACER NITRO RX9070XT 16G OC(2497MHz), $18990</option>
+          <option>[加購省!] 買華擎 RX9060XT Challenger+加購 SL-750G(2497MHz), $7990</option>
+          <option>[帝版-5090散熱] ZOTAC RTX5070Ti AMP Extreme INFINITY(2617MHz), $28990</option>
+          <option>[無痛升級帝版AMP] ZOTAC RTX5080 SOLID CORE(2617MHz), $30990</option>
+          <option>[無痛升OC] ZOTAC RTX5070Ti SOLID CORE(2497MHz), $24990</option>
+          <option>[不零售]微星 RTX5070Ti 16G INSPIRE 3X OC(2497MHz), $28990</option>
+          <option>[缺貨無痛升5060TI 8GB月白三風扇-僅限量30片] ZOTAC RTX5060 AMP(2497MHz), $9990</option>
+          <option>[開學祭]ZOTAC RTX3060 TWIN EDGE 12G(1807MHz), $6990</option>
+          <option>[活動]ZOTAC RTX3060 TWIN EDGE 12G(1807MHz), $6890</option>
+          <option>[裝機價]華擎 RX9070XT Taichi White 16GB OC(2497MHz), $19990</option>
+          <option>[雙11任搭]藍寶石 脈動 PULSE RX9060XT GAMING OC 8GB(2497MHz), $8990</option>
+          <option>[任搭]藍寶石 脈動 PULSE RX9060XT GAMING OC 8GB(2497MHz), $9090</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [])
+    const chart = view.modelCharts[0]
+
+    expect(chart?.brands).toEqual(["華碩", "技嘉", "Acer", "ACER", "買華擎", "ZOTAC", "微星", "華擎", "藍寶石"])
+    expect(chart?.series.map((line) => line.code)).toEqual([
+      "華碩 TUF-RTX5090-O32G-GAMING",
+      "技嘉 RTX5090 GAMING OC 32G",
+      "技嘉 GTX1660Ti OC 6G + 技嘉 GP-P650B",
+      "Acer Nitro ARC B580 OC 12GB",
+      "ACER NITRO RX9070XT 16G OC",
+      "買華擎 RX9060XT Challenger+加購 SL-750G",
+      "ZOTAC RTX5070Ti AMP Extreme INFINITY",
+      "ZOTAC RTX5080 SOLID CORE",
+      "ZOTAC RTX5070Ti SOLID CORE",
+      "微星 RTX5070Ti 16G INSPIRE 3X OC",
+      "ZOTAC RTX5060 AMP",
+      "ZOTAC RTX3060 TWIN EDGE 12G",
+      "華擎 RX9070XT Taichi White 16GB OC",
+      "藍寶石 脈動 PULSE RX9060XT GAMING OC 8GB",
+    ])
+    expect(chart?.series.find((line) => line.code === "ZOTAC RTX3060 TWIN EDGE 12G")?.quotes).toEqual([
+      { date: "2024-06-15", sellingPrice: 6890 },
+    ])
+    expect(chart?.series.find((line) => line.code === "藍寶石 脈動 PULSE RX9060XT GAMING OC 8GB")?.quotes).toEqual([
+      { date: "2024-06-15", sellingPrice: 8990 },
+    ])
+  })
+
+  test("ROG-STRIX 沒有寫華碩時，品牌仍是華碩", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX5070Ti">
+          <option>｛ROG-STRIX-RTX5070TI-16G-GAMING｝2482MHz, $49990</option>
+          <option>｛華碩 ROG-STRIX-RTX5070TI-O16G-GAMING｝2580MHz, $52990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setBrand", group: "NVIDIA RTX5070Ti", name: "華碩" }])
+    const chart = view.modelCharts[0]
+
+    expect(chart?.brands).toEqual(["華碩"])
+    expect(chart?.series.map((line) => line.code)).toEqual([
+      "ROG-STRIX-RTX5070TI-16G-GAMING",
+      "華碩 ROG-STRIX-RTX5070TI-O16G-GAMING",
+    ])
+  })
+
   test("箭頭開頭的銷售優惠不是報價列", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`

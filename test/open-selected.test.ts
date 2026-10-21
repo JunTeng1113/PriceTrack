@@ -33,7 +33,7 @@ test("拿掉已選、取消候選勾選，並點圖上的點讀數", () => {
     return
   }
   input.value = "dual-rtx4070"
-  input.dispatchEvent(new Event("input", { bubbles: true }))
+  document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
   document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')?.click()
 
   expect(document.querySelector('[aria-label="已選"] li span')?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
@@ -49,15 +49,11 @@ test("拿掉已選、取消候選勾選，並點圖上的點讀數", () => {
 
   const point = document.querySelector<SVGElement>('[aria-label="折線圖"] [data-date="2024-06-15"]')
   point?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
-  const readout = document.querySelector('[aria-label="讀數"]')
-  expect(readout?.textContent).toContain("2024-06-15")
-  expect(readout?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
-  expect(readout?.textContent).toContain("18990")
+  expect(document.querySelector('[aria-label="讀數"]')).toBeNull()
 
   const checked = document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')
   expect(checked?.getAttribute("aria-pressed")).toBe("true")
   checked?.click()
   expect(document.querySelectorAll('[aria-label="已選"] li')).toHaveLength(0)
-  expect(document.querySelector('[aria-label="讀數"]')?.textContent).toBe("")
   expect(localStorage.length).toBe(0)
 })

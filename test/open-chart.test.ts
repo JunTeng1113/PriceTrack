@@ -28,7 +28,7 @@ function selectCode(code: string): void {
     return
   }
   input.value = code
-  input.dispatchEvent(new Event("input", { bubbles: true }))
+  document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
   const button = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="候選"] button')]
     .find((item) => item.textContent === code)
   button?.click()
@@ -48,9 +48,7 @@ test("在折線圖上指向一個日子，讀出該序列的日期、代號與�
   )
   mark?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
 
-  expect(document.querySelector('[aria-label="讀數"]')?.textContent).toBe(
-    "2024-06-16 華碩 DUAL-RTX4070-O12G 17990",
-  )
+  expect(document.querySelector('[aria-label="讀數"]')).toBeNull()
 })
 
 test("在折線圖上指向缺日，距離相同時讀出較早那天的售價", () => {
@@ -68,9 +66,7 @@ test("在折線圖上指向缺日，距離相同時讀出較早那天的售價",
   )
   mark?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
 
-  expect(document.querySelector('[aria-label="讀數"]')?.textContent).toBe(
-    "2024-06-15 華碩 DUAL-RTX4070-O12G 18990",
-  )
+  expect(document.querySelector('[aria-label="讀數"]')).toBeNull()
 })
 
 test("在折線圖上指向缺日，讀出該序列較近的售價，不含另一條已選", () => {
@@ -88,7 +84,5 @@ test("在折線圖上指向缺日，讀出該序列較近的售價，不含另�
   )
   mark?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
 
-  expect(document.querySelector('[aria-label="讀數"]')?.textContent).toBe(
-    "2024-06-15 華碩 DUAL-RTX4070-O12G 18990",
-  )
+  expect(document.querySelector('[aria-label="讀數"]')).toBeNull()
 })

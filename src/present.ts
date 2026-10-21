@@ -24,6 +24,7 @@ export type View = {
   selected: readonly string[]
   series: readonly {
     code: string
+    colorIndex?: number
     quotes: readonly { date: string; sellingPrice: number }[]
   }[]
   axis: { lower: number; upper: number } | null
@@ -31,9 +32,12 @@ export type View = {
   modelCharts: readonly {
     group: string
     brand: string
+    focus: string
     brands: readonly string[]
+    legend: readonly string[]
     series: readonly {
       code: string
+      colorIndex: number
       quotes: readonly { date: string; sellingPrice: number }[]
     }[]
     readout: { date: string; code: string; sellingPrice: number } | null
@@ -46,7 +50,8 @@ export type Action =
   | { type: "deselect"; code: string }
   | { type: "setRange"; start: string; end: string }
   | { type: "setChipGroup"; name: string }
-  | { type: "setBrand"; name: string }
+  | { type: "setBrand"; group: string; name: string }
+  | { type: "setFocus"; group: string; code: string }
   | { type: "point"; date: string; code: string }
 
 const EARLIEST_DATE = "2020-01-01"
@@ -147,7 +152,8 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
   const stored = normalizeQuotes(series.quotes)
   let keyword = ""
   let chipGroup = ""
-  let brand = ""
+  const brandByGroup = new Map<string, string>()
+  const focusByGroup = new Map<string, string>()
   const selected: string[] = []
   let rangeOverride: { start: string; end: string } | null = null
   let pointer: { date: string; code: string } | null = null
@@ -162,7 +168,12 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       continue
     }
     if (action.type === "setBrand") {
-      brand = action.name
+      brandByGroup.set(action.group, action.name)
+      focusByGroup.delete(action.group)
+      continue
+    }
+    if (action.type === "setFocus") {
+      focusByGroup.set(action.group, action.code)
       continue
     }
     if (action.type === "setRange") {
@@ -205,11 +216,16 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       .sort((left, right) => left.date.localeCompare(right.date))
       .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
   }))
-  const modelCharts = chipGroups.map((group) => {
+  const shownGroups = chipGroup === "" ? chipGroups : chipGroups.filter((group) => group === chipGroup)
+  const modelCharts = shownGroups.map((group) => {
     const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === group))
-    const modelCodes = groupCodes.filter((code) => brand === "" || brandOf(code) === brand)
-    const lines = modelCodes.map((code) => ({
+    const brand = brandByGroup.get(group) ?? ""
+    const focus = focusByGroup.get(group) ?? ""
+    const branded = groupCodes.filter((code) => brand === "" || brandOf(code) === brand)
+    const activeFocus = branded.includes(focus) ? focus : ""
+    const lines = branded.map((code) => ({
       code,
+      colorIndex: Math.max(0, branded.indexOf(code)),
       quotes: visibleQuotes
         .filter((quote) => quote.code === code)
         .sort((left, right) => left.date.localeCompare(right.date))
@@ -218,7 +234,9 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     return {
       group,
       brand,
+      focus: activeFocus,
       brands: brandsInOrder(groupCodes),
+      legend: branded,
       series: lines,
       readout: readoutFor(lines, pointer),
     }
@@ -300,14 +318,11 @@ function priceAxis(
   if (min === null || max === null) {
     return null
   }
-  const span = max - min
-  const pad = span === 0 ? Math.max(1, Math.floor(min / 10)) : span / 10
-  let lower = min - pad
-  const upper = max + pad
-  if (min > 0 && lower <= 0) {
-    lower = min / 2
-  }
-  return { lower, upper }
+  return steppedPriceBounds(min, max)
+}
+
+export function steppedPriceBounds(min: number, max: number): { lower: number; upper: number } {
+  return { lower: min * 0.95, upper: max * 1.05 }
 }
 
 function taipeiDate(capturedAt: string): string {
@@ -386,23 +401,18 @@ function extractCode(text: string): string | null {
   return promotionFree(code)
 }
 
-const PROMO_TAGS = ["[搭機優惠]", "[限期優惠]", "[搭機價]", "[不漲！限搭機]"]
-
 function promotionFree(code: string): string | null {
   const trimmed = code.trim()
   if (trimmed.startsWith("&#x21AA;") || trimmed.startsWith("↪")) {
     return null
   }
   let rest = trimmed
-  let removed = true
-  while (removed) {
-    removed = false
-    for (const tag of PROMO_TAGS) {
-      if (rest.startsWith(tag)) {
-        rest = rest.slice(tag.length).trim()
-        removed = true
-      }
+  while (rest.startsWith("[")) {
+    const close = rest.indexOf("]")
+    if (close < 0) {
+      break
     }
+    rest = rest.slice(close + 1).trim()
   }
   return rest === "" ? null : rest
 }
@@ -458,6 +468,9 @@ function quoteInRange(date: string, range: { start: string; end: string } | null
 }
 
 function brandOf(code: string): string {
+  if (code.startsWith("ROG-")) {
+    return "華碩"
+  }
   const space = code.indexOf(" ")
   if (space <= 0) {
     return code

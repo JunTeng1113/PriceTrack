@@ -19,6 +19,8 @@ test("選了晶片分組後候選出現代號，點下去圖上有售價", () =>
     .find((item) => item.textContent === "NVIDIA RTX4070")
   expect(group).not.toBeUndefined()
   group?.click()
+  expect(candidateTexts()).toEqual([])
+  document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   expect(candidateTexts()).toEqual(["華碩 DUAL-RTX4070-O12G"])
   expect(document.body.textContent).not.toContain("2535MHz")
@@ -36,7 +38,8 @@ test("選了晶片分組後候選出現代號，點下去圖上有售價", () =>
     return
   }
   input.value = "不存在"
-  input.dispatchEvent(new Event("input", { bubbles: true }))
+  expect(candidateTexts()).toEqual(["華碩 DUAL-RTX4070-O12G"])
+  document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   expect(candidateTexts()).toEqual([])
   const selected = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)

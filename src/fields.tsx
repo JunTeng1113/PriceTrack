@@ -8,7 +8,10 @@ export function keywordMarkup(value: string): string {
   return renderToStaticMarkup(createElement(Input, { "aria-label": "關鍵字", defaultValue: value }))
 }
 
-export function buttonMarkup(label: ReactNode, props: { "aria-pressed"?: "true" | "false"; "data-code"?: string }): string {
+export function buttonMarkup(
+  label: ReactNode,
+  props: { "aria-pressed"?: "true" | "false"; "data-code"?: string; "aria-label"?: string },
+): string {
   return renderToStaticMarkup(createElement(Button, props, label))
 }
 

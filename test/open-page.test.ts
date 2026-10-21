@@ -37,7 +37,8 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
     return
   }
   input.value = "dual-rtx4070"
-  input.dispatchEvent(new Event("input", { bubbles: true }))
+  expect(document.querySelector('[aria-label="候選"] button')).toBeNull()
+  document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   const button = document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')
   expect(button?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
@@ -58,7 +59,8 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   }
   start.value = "2023-01-01"
   end.value = "2023-02-01"
-  end.dispatchEvent(new Event("change", { bubbles: true }))
+  expect(document.querySelector('[aria-label="折線圖"] [data-date="2024-06-15"]')).not.toBeNull()
+  document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   const selectedAfter = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)
   expect(selectedAfter).toEqual(["華碩 DUAL-RTX4070-O12G"])
