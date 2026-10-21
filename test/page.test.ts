@@ -129,6 +129,56 @@ function regionTexts(doc: Document, label: string): string[] {
 }
 
 describe("多日走勢", () => {
+  test("等距的日期與售價，中間的日報價落在兩端正中間", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 10000),
+      pricedSnapshot("2024-06-16T02:00:00.000Z", 20000),
+      pricedSnapshot("2024-06-17T02:00:00.000Z", 30000),
+    ])
+    const doc = documentOf(renderPage(series, [{ type: "select", code }]))
+    const points = [...doc.querySelectorAll('[aria-label="折線圖"] [data-date]')].map((node) => ({
+      date: node.getAttribute("data-date"),
+      price: node.getAttribute("data-price"),
+      x: Number(node.getAttribute("cx")),
+      y: Number(node.getAttribute("cy")),
+    }))
+    const [first, middle, last] = points
+
+    expect(points.map((point) => [point.date, point.price])).toEqual([
+      ["2024-06-15", "10000"],
+      ["2024-06-16", "20000"],
+      ["2024-06-17", "30000"],
+    ])
+    expect(first?.x).toBe(0)
+    expect(middle?.x).toBe(50)
+    expect(last?.x).toBe(100)
+    expect(middle?.y).toBeCloseTo(((first?.y ?? 0) + (last?.y ?? 0)) / 2)
+    expect(last?.y ?? 0).toBeLessThan(first?.y ?? 0)
+  })
+
+  test("連續有日報價的日子在圖上以線相連", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 18990),
+      pricedSnapshot("2024-06-16T02:00:00.000Z", 17990),
+    ])
+    const doc = documentOf(renderPage(series, [{ type: "select", code }]))
+    const chart = doc.querySelector('[aria-label="折線圖"]')
+    const points = [...(chart?.querySelectorAll("[data-date]") ?? [])].map((node) => ({
+      x: Number(node.getAttribute("cx")),
+      y: Number(node.getAttribute("cy")),
+    }))
+    const lines = [...(chart?.querySelectorAll("line") ?? [])].map((node) => ({
+      x1: Number(node.getAttribute("x1")),
+      y1: Number(node.getAttribute("y1")),
+      x2: Number(node.getAttribute("x2")),
+      y2: Number(node.getAttribute("y2")),
+    }))
+
+    expect(lines).toEqual([
+      { x1: points[0]?.x, y1: points[0]?.y, x2: points[1]?.x, y2: points[1]?.y },
+    ])
+  })
+
   test("連續有日報價的日子以折線相連，日期軸照日曆順序排", () => {
     const series = update(emptySeries(), [
       pricedSnapshot("2024-06-16T02:00:00.000Z", 17990),
@@ -138,6 +188,34 @@ describe("多日走勢", () => {
 
     expect(regionTexts(doc, "日期軸")).toEqual(["2024-06-15", "2024-06-16"])
     expect(regionTexts(doc, "折線")).toEqual(["2024-06-15 2024-06-16"])
+  })
+
+  test("缺日仍佔時間軸，兩天的間隔是一天的兩倍", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 10000),
+      pricedSnapshot("2024-06-16T02:00:00.000Z", 10000),
+      pricedSnapshot("2024-06-18T02:00:00.000Z", 10000),
+    ])
+    const doc = documentOf(renderPage(series, [{ type: "select", code }]))
+    const xs = [...doc.querySelectorAll('[aria-label="折線圖"] [data-date]')].map((node) =>
+      Number(node.getAttribute("cx")),
+    )
+    const [first, second, third] = xs
+
+    expect(((second ?? 0) - (first ?? 0)) * 2).toBeCloseTo((third ?? 0) - (second ?? 0))
+  })
+
+  test("中間缺一天時圖上的線斷開，該日沒有售價", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 18990),
+      pricedSnapshot("2024-06-17T02:00:00.000Z", 16990),
+    ])
+    const doc = documentOf(renderPage(series, [{ type: "select", code }]))
+    const chart = doc.querySelector('[aria-label="折線圖"]')
+    const dates = [...(chart?.querySelectorAll("[data-date]") ?? [])].map((node) => node.getAttribute("data-date"))
+
+    expect(dates).toEqual(["2024-06-15", "2024-06-17"])
+    expect(chart?.querySelectorAll("line")).toHaveLength(0)
   })
 
   test("中間缺一天時線斷開，該日仍在日期軸上且沒有售價", () => {
@@ -153,6 +231,48 @@ describe("多日走勢", () => {
     expect(pointText).not.toContain("2024-06-16")
     expect(pointText).toContain("18990")
     expect(pointText).toContain("16990")
+  })
+
+  test("日報價落在金額軸兩端之內，不貼著軸的邊緣", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 10000),
+      pricedSnapshot("2024-06-16T02:00:00.000Z", 30000),
+    ])
+    const doc = documentOf(renderPage(series, [{ type: "select", code }]))
+    const ys = [...doc.querySelectorAll('[aria-label="折線圖"] [data-date]')].map((node) =>
+      Number(node.getAttribute("cy")),
+    )
+
+    expect(ys.every((y) => y > 0 && y < 100)).toBe(true)
+  })
+
+  test("沒有已選時折線圖沒有線也沒有點", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 18990),
+      pricedSnapshot("2024-06-16T02:00:00.000Z", 17990),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const chart = doc.querySelector('[aria-label="折線圖"]')
+
+    expect(chart?.querySelectorAll("line")).toHaveLength(0)
+    expect(chart?.querySelectorAll("[data-date]")).toHaveLength(0)
+  })
+
+  test("查詢區間改短後，折線圖只留區間內的日報價", () => {
+    const series = update(emptySeries(), [
+      pricedSnapshot("2024-06-15T02:00:00.000Z", 18990),
+      pricedSnapshot("2024-06-16T02:00:00.000Z", 17990),
+      pricedSnapshot("2024-06-17T02:00:00.000Z", 16990),
+    ])
+    const doc = documentOf(renderPage(series, [
+      { type: "select", code },
+      { type: "setRange", start: "2024-06-16", end: "2024-06-17" },
+    ]))
+    const dates = [...doc.querySelectorAll('[aria-label="折線圖"] [data-date]')].map((node) =>
+      node.getAttribute("data-date"),
+    )
+
+    expect(dates).toEqual(["2024-06-16", "2024-06-17"])
   })
 
   test("頁面上沒有重新抓取的按鈕", () => {

@@ -56,6 +56,46 @@ function axisDates(view: View): string[] {
   return calendarDays(start, end)
 }
 
+function dayNumber(isoDate: string): number {
+  const [yearText, monthText, dayText] = isoDate.split("-")
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const day = Number(dayText)
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000)
+}
+
+function chartMarks(view: View): string {
+  const dates = axisDates(view)
+  const start = dates[0]
+  const end = dates.at(-1)
+  const axis = view.axis
+  if (start === undefined || end === undefined || axis === null) {
+    return ""
+  }
+  const startDay = dayNumber(start)
+  const endDay = dayNumber(end)
+  const daySpan = endDay - startDay
+  const priceSpan = axis.upper - axis.lower
+  const marks: string[] = []
+  for (const item of view.series) {
+    let previous: { date: string; x: number; y: number } | null = null
+    for (const quote of item.quotes) {
+      const x = daySpan === 0 ? 50 : ((dayNumber(quote.date) - startDay) / daySpan) * 100
+      const y = priceSpan === 0 ? 50 : 100 - ((quote.sellingPrice - axis.lower) / priceSpan) * 100
+      if (previous !== null && addDays(previous.date, 1) === quote.date) {
+        marks.push(
+          `<line x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="0.6" fill="none" />`,
+        )
+      }
+      marks.push(
+        `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="currentColor" />`,
+      )
+      previous = { date: quote.date, x, y }
+    }
+  }
+  return marks.join("")
+}
+
 function lineSegments(view: View): string[] {
   const segments: string[] = []
   for (const item of view.series) {
@@ -140,6 +180,7 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <div aria-label="日期軸">${axis}</div>
       <div aria-label="金額軸">${priceAxis}</div>
       <div aria-label="折線">${segments}</div>
+      <svg aria-label="折線圖" viewBox="0 0 100 100" width="100%" height="240">${chartMarks(view)}</svg>
       <p aria-label="讀數">${readout}</p>
       <ul aria-label="價格點">${points}</ul>
     </section>
