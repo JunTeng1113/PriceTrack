@@ -17,7 +17,7 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   expect(document.body.textContent).toContain("關鍵字")
   expect(document.body.textContent).toContain("已選")
   expect(sectionByHeading("價格序列")?.textContent).not.toContain("18990")
-  expect(document.querySelector('[aria-label="NVIDIA RTX4070"]')?.textContent).toContain("18990")
+  expect(document.querySelector('[aria-label="NVIDIA RTX4070"] [data-price="18990"]')).not.toBeNull()
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("archive.org")
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("wayback")
 
@@ -43,10 +43,9 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   expect(button?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
   button?.click()
 
-  const point = document.querySelector('[aria-label="價格點"] li')
-  expect(point?.textContent).toContain("2024-06-15")
-  expect(point?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
-  expect(point?.textContent).toContain("18990")
+  const point = document.querySelector('[aria-label="折線圖"] [data-date="2024-06-15"]')
+  expect(point?.getAttribute("data-code")).toBe("華碩 DUAL-RTX4070-O12G")
+  expect(point?.getAttribute("data-price")).toBe("18990")
   const selected = [...document.querySelectorAll('[aria-label="已選"] li span')].map((item) => item.textContent)
   expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
 

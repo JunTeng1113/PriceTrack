@@ -96,13 +96,11 @@ describe("單日單卡頁面", () => {
     ]))
     const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li span") ?? [])]
       .map((item) => item.textContent)
-    const points = [...(doc.querySelector('[aria-label="價格點"]')?.querySelectorAll("li") ?? [])]
+    const point = doc.querySelector('[aria-label="折線圖"] [data-date="2024-06-15"]')
 
     expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
-    expect(points).toHaveLength(1)
-    expect(points[0]?.textContent).toContain("2024-06-15")
-    expect(points[0]?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
-    expect(points[0]?.textContent).toContain("18990")
+    expect(point?.getAttribute("data-code")).toBe("華碩 DUAL-RTX4070-O12G")
+    expect(point?.getAttribute("data-price")).toBe("18990")
   })
 
   test("起日和迄日仍是日期欄位", () => {
@@ -303,13 +301,14 @@ describe("多日走勢", () => {
       pricedSnapshot("2024-06-17T02:00:00.000Z", 16990),
     ])
     const doc = documentOf(renderPage(series, [{ type: "select", code }]))
-    const pointText = [...doc.querySelectorAll("li")].map((item) => item.textContent ?? "").join("\n")
+    const prices = [...doc.querySelectorAll('[aria-label="折線圖"] [data-price]')].map((node) =>
+      node.getAttribute("data-price"),
+    )
 
     expect(regionTexts(doc, "日期軸")).toEqual(["2024-06-15", "2024-06-16", "2024-06-17"])
     expect(regionTexts(doc, "折線")).toEqual([])
-    expect(pointText).not.toContain("2024-06-16")
-    expect(pointText).toContain("18990")
-    expect(pointText).toContain("16990")
+    expect(doc.querySelector('[aria-label="折線圖"] [data-date="2024-06-16"]')).toBeNull()
+    expect(prices).toEqual(["18990", "16990"])
   })
 
   test("日報價落在金額軸兩端之內，不貼著軸的邊緣", () => {
@@ -396,14 +395,13 @@ describe("查詢區間", () => {
       { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
       { type: "setRange", start: "2023-01-01", end: "2023-02-01" },
     ]))
-    const points = [...(doc.querySelector('[aria-label="價格點"]')?.querySelectorAll("li") ?? [])]
     const selected = [...(doc.querySelector('[aria-label="已選"]')?.querySelectorAll("li span") ?? [])]
       .map((item) => item.textContent)
 
     expect(inputValue(doc, "起日")).toBe("2023-01-01")
     expect(inputValue(doc, "迄日")).toBe("2023-02-01")
     expect(selected).toEqual(["華碩 DUAL-RTX4070-O12G"])
-    expect(points).toHaveLength(0)
+    expect(doc.querySelectorAll('[aria-label="折線圖"] [data-date]')).toHaveLength(0)
   })
 
   test("往前 12 個月若該月沒有這一天，起日是該月最後一天", () => {

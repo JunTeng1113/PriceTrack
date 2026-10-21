@@ -113,7 +113,38 @@ function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
   return order === 0 && next.sellingPrice < previous.sellingPrice
 }
 
+function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
+  const byKey = new Map<string, StoredQuote>()
+  const order: string[] = []
+  for (const quote of quotes) {
+    const code = promotionFree(quote.code)
+    if (code === null) {
+      continue
+    }
+    const next = code === quote.code ? quote : { ...quote, code }
+    const key = `${next.code}\0${next.date}`
+    const previous = byKey.get(key)
+    if (previous === undefined) {
+      byKey.set(key, next)
+      order.push(key)
+      continue
+    }
+    if (replacesDailyQuote(previous, next)) {
+      byKey.set(key, next)
+    }
+  }
+  const normalized: StoredQuote[] = []
+  for (const key of order) {
+    const quote = byKey.get(key)
+    if (quote !== undefined) {
+      normalized.push(quote)
+    }
+  }
+  return normalized
+}
+
 export function present(series: PriceSeries, actions: readonly Action[]): View {
+  const stored = normalizeQuotes(series.quotes)
   let keyword = ""
   let chipGroup = ""
   let brand = ""
@@ -150,14 +181,14 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       pointer = { date: action.date, code: action.code }
       continue
     }
-    const known = series.quotes.some((quote) => quote.code === action.code)
+    const known = stored.some((quote) => quote.code === action.code)
     if (known && !selected.includes(action.code) && selected.length < 8) {
       selected.push(action.code)
     }
   }
 
-  const queryRange = rangeOverride ?? queryRangeFor(series.quotes)
-  const visibleQuotes = series.quotes.filter((quote) => quoteInRange(quote.date, queryRange))
+  const queryRange = rangeOverride ?? queryRangeFor(stored)
+  const visibleQuotes = stored.filter((quote) => quoteInRange(quote.date, queryRange))
   const chipGroups = chipGroupsInOrder(visibleQuotes)
   const pool = uniqueCodes(visibleQuotes).filter((code) =>
     chipGroup === "" || visibleQuotes.some((quote) => quote.code === code && quote.group === chipGroup),
@@ -340,19 +371,40 @@ function extractCode(text: string): string | null {
       return null
     }
     const code = text.slice(0, paren).trim()
-    return code === "" ? null : code
+    return promotionFree(code)
   }
   const close = text.indexOf("｝", open + 1)
   if (close >= 0) {
     const code = text.slice(open + 1, close).trim()
-    return code === "" ? null : code
+    return promotionFree(code)
   }
   const paren = text.indexOf("(", open + 1)
   if (paren < 0) {
     return null
   }
   const code = text.slice(open + 1, paren).trim()
-  return code === "" ? null : code
+  return promotionFree(code)
+}
+
+const PROMO_TAGS = ["[搭機優惠]", "[限期優惠]", "[搭機價]", "[不漲！限搭機]"]
+
+function promotionFree(code: string): string | null {
+  const trimmed = code.trim()
+  if (trimmed.startsWith("&#x21AA;") || trimmed.startsWith("↪")) {
+    return null
+  }
+  let rest = trimmed
+  let removed = true
+  while (removed) {
+    removed = false
+    for (const tag of PROMO_TAGS) {
+      if (rest.startsWith(tag)) {
+        rest = rest.slice(tag.length).trim()
+        removed = true
+      }
+    }
+  }
+  return rest === "" ? null : rest
 }
 
 function parseSellingPrice(text: string): number | null {

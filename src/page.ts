@@ -70,6 +70,27 @@ function seriesColor(index: number): string {
   return `hsl(${hue} 70% 35%)`
 }
 
+function formatPrice(value: number): string {
+  return String(Math.round(value))
+}
+
+function chartFrame(start: string, end: string, axis: { lower: number; upper: number }): string {
+  const horizontal = [25, 50, 75].map((y) => `M0 ${y} H100`).join(" ")
+  const vertical = [25, 50, 75].map((x) => `M${x} 0 V100`).join(" ")
+  const xLabels = end === start
+    ? `<text data-axis="x" x="0" y="108" font-size="4" fill="#334155">${escapeHtml(start)}</text>`
+    : `<text data-axis="x" x="0" y="108" font-size="4" fill="#334155">${escapeHtml(start)}</text><text data-axis="x" x="100" y="108" font-size="4" fill="#334155" text-anchor="end">${escapeHtml(end)}</text>`
+  return [
+    `<rect data-axis="background" x="0" y="0" width="100" height="100" fill="#e8eef7" pointer-events="none" />`,
+    `<path data-axis="grid" d="${horizontal} ${vertical}" fill="none" stroke="#c5d0de" stroke-width="0.35" pointer-events="none" />`,
+    `<path data-axis="x" d="M0 100 H100" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
+    `<path data-axis="y" d="M0 0 V100" fill="none" stroke="#334155" stroke-width="0.6" pointer-events="none" />`,
+    xLabels,
+    `<text data-axis="y" x="-1" y="3" font-size="4" fill="#334155" text-anchor="end">${formatPrice(axis.upper)}</text>`,
+    `<text data-axis="y" x="-1" y="100" font-size="4" fill="#334155" text-anchor="end">${formatPrice(axis.lower)}</text>`,
+  ].join("")
+}
+
 function chartMarks(view: View, connectGaps = false): string {
   const dates = axisDates(view)
   const start = dates[0]
@@ -82,7 +103,7 @@ function chartMarks(view: View, connectGaps = false): string {
   const endDay = dayNumber(end)
   const daySpan = endDay - startDay
   const priceSpan = axis.upper - axis.lower
-  const marks: string[] = []
+  const marks: string[] = [chartFrame(start, end, axis)]
   const laneCount = view.series.length
   for (const [seriesIndex, item] of view.series.entries()) {
     const quoted = new Set(item.quotes.map((quote) => quote.date))
@@ -97,19 +118,19 @@ function chartMarks(view: View, connectGaps = false): string {
       )
     }
     const paint = connectGaps ? seriesColor(seriesIndex) : "currentColor"
-    let previous: { date: string; x: number; y: number } | null = null
+    let previous: { date: string; price: number; x: number; y: number } | null = null
     for (const quote of item.quotes) {
       const x = daySpan === 0 ? 50 : ((dayNumber(quote.date) - startDay) / daySpan) * 100
       const y = priceSpan === 0 ? 50 : 100 - ((quote.sellingPrice - axis.lower) / priceSpan) * 100
       if (previous !== null && (connectGaps || addDays(previous.date, 1) === quote.date)) {
         marks.push(
-          `<line data-code="${escapeAttribute(item.code)}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="${paint}" stroke-width="0.6" fill="none" />`,
+          `<line data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="${paint}" stroke-width="1.2" fill="none" />`,
         )
       }
       marks.push(
         `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="${paint}" />`,
       )
-      previous = { date: quote.date, x, y }
+      previous = { date: quote.date, price: quote.sellingPrice, x, y }
     }
   }
   return marks.join("")
@@ -164,11 +185,6 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
   const selected = view.selected
     .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
     .join("")
-  const points = view.series.flatMap((item) =>
-    item.quotes.map((quote) =>
-      `<li><button type="button" data-date="${escapeAttribute(quote.date)}" data-code="${escapeAttribute(item.code)}">${escapeHtml(quote.date)} ${escapeHtml(item.code)} ${quote.sellingPrice}</button></li>`,
-    ),
-  ).join("")
   const priceAxis = view.axis === null
     ? ""
     : `<span>${view.axis.lower}</span><span>${view.axis.upper}</span>`
@@ -195,10 +211,9 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <div aria-label="日期軸">${axis}</div>
       <div aria-label="金額軸">${priceAxis}</div>
       <div aria-label="折線">${segments}</div>
-      <svg aria-label="折線圖" viewBox="0 0 100 100" width="100%" height="240">${chartMarks(view)}</svg>
+      <svg aria-label="折線圖" viewBox="-18 -6 136 116" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:136/116">${chartMarks(view)}</svg>
       <ul aria-label="圖例">${view.series.map((item) => `<li>${escapeHtml(item.code)}</li>`).join("")}</ul>
       <p aria-label="讀數">${readout}</p>
-      <ul aria-label="價格點">${points}</ul>
     </section>
     ${view.modelCharts.map((chart) => modelSection(view, chart)).join("")}
   </body>
@@ -208,11 +223,6 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
 function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const legend = chart.series.map((item, index) =>
     `<li><span style="background:${seriesColor(index)}"></span>${escapeHtml(item.code)}</li>`,
-  ).join("")
-  const points = chart.series.flatMap((item) =>
-    item.quotes.map((quote) =>
-      `<li>${escapeHtml(quote.date)} ${escapeHtml(item.code)} ${quote.sellingPrice}</li>`,
-    ),
   ).join("")
   const marks = chartMarks({
     queryRange: view.queryRange,
@@ -228,7 +238,7 @@ function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const readout = chart.readout === null
     ? ""
     : `${escapeHtml(chart.readout.date)} ${escapeHtml(chart.readout.code)} ${chart.readout.sellingPrice}`
-  return `<section aria-label="${escapeAttribute(chart.group)}"><label>品牌 ${brands}</label><ul aria-label="圖例">${legend}</ul><ul>${points}</ul><svg>${marks}</svg><p aria-label="讀數">${readout}</p></section>`
+  return `<section aria-label="${escapeAttribute(chart.group)}"><div aria-label="品牌">${brands}</div><ul aria-label="圖例">${legend}</ul><svg viewBox="-18 -6 136 116" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:136/116">${marks}</svg><p aria-label="讀數">${readout}</p></section>`
 }
 
 function priceBounds(

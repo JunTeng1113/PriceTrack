@@ -37,7 +37,7 @@ test("拿掉已選、取消候選勾選，並點圖上的點讀數", () => {
   document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')?.click()
 
   expect(document.querySelector('[aria-label="已選"] li span')?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
-  expect(sectionByHeading("價格序列")?.textContent).toContain("18990")
+  expect(document.querySelector('[aria-label="折線圖"] [data-price="18990"]')).not.toBeNull()
 
   document.querySelector<HTMLButtonElement>('[aria-label="已選"] button')?.click()
   expect(document.querySelectorAll('[aria-label="已選"] li')).toHaveLength(0)
@@ -47,7 +47,7 @@ test("拿掉已選、取消候選勾選，並點圖上的點讀數", () => {
   expect(candidate?.getAttribute("aria-pressed")).toBe("false")
   candidate?.click()
 
-  const point = document.querySelector<HTMLButtonElement>('[aria-label="價格點"] button')
+  const point = document.querySelector<SVGElement>('[aria-label="折線圖"] [data-date="2024-06-15"]')
   point?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
   const readout = document.querySelector('[aria-label="讀數"]')
   expect(readout?.textContent).toContain("2024-06-15")

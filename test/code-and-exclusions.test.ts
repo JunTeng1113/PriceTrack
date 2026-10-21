@@ -207,4 +207,60 @@ describe("代號與排除", () => {
       "技嘉 AORUS RTX3080 Gaming Box",
     ])
   })
+
+  test("搭機優惠、限期優惠、搭機價、不漲限搭機不是代號的一部分", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX5060">
+          <option>[不漲！限搭機] 華碩 DUAL-RTX5060-O8G(2497MHz), $9990</option>
+          <option>[搭機優惠] 微星 RTX5060 8G VENTUS 2X(2497MHz), $8990</option>
+          <option>[限期優惠] 技嘉 RTX5060 WINDFORCE 8G(2497MHz), $8890</option>
+          <option>[搭機價] ZOTAC RTX5060 Twin Edge(2497MHz), $8790</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setKeyword", text: "RTX5060" }])
+
+    expect(view.candidates).toEqual([
+      "ZOTAC RTX5060 Twin Edge",
+      "微星 RTX5060 8G VENTUS 2X",
+      "技嘉 RTX5060 WINDFORCE 8G",
+      "華碩 DUAL-RTX5060-O8G",
+    ])
+  })
+
+  test("銷售優惠前綴不把同一代號拆成兩條", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX5060">
+          <option>[不漲！限搭機] 華碩 DUAL-RTX5060-O8G(2497MHz), $9990</option>
+          <option>華碩 DUAL-RTX5060-O8G(2497MHz), $10990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "select", code: "華碩 DUAL-RTX5060-O8G" }])
+
+    expect(view.series).toEqual([
+      {
+        code: "華碩 DUAL-RTX5060-O8G",
+        quotes: [{ date: "2024-06-15", sellingPrice: 9990 }],
+      },
+    ])
+  })
+
+  test("箭頭開頭的銷售優惠不是報價列", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX2080Ti">
+          <option>&#x21AA; 買INNO3D iChill SUPER系列顯卡,送 群光 850W(五年保), $1990</option>
+          <option>華碩 DUAL-RTX2080TI-O11G(1350MHz), $28990</option>
+        </optgroup>
+      `),
+    ])
+    const promo = present(series, [{ type: "setKeyword", text: "INNO3D" }])
+    const card = present(series, [{ type: "setKeyword", text: "2080TI" }])
+
+    expect(promo.candidates).toEqual([])
+    expect(card.candidates).toEqual(["華碩 DUAL-RTX2080TI-O11G"])
+  })
 })

@@ -1,6 +1,24 @@
 import { renderPage } from "./page.ts"
 import type { Action, PriceSeries } from "./present.ts"
 
+function dateOnLine(line: SVGLineElement, event: MouseEvent): string {
+  const fromDate = line.getAttribute("data-from-date") ?? ""
+  const toDate = line.getAttribute("data-to-date") ?? ""
+  const x1 = Number(line.getAttribute("x1"))
+  const x2 = Number(line.getAttribute("x2"))
+  const svg = line.ownerSVGElement
+  const bounds = svg === null ? null : svg.getBoundingClientRect()
+  if (svg === null || bounds === null || bounds.width <= 0) {
+    return toDate === "" ? fromDate : toDate
+  }
+  const viewBox = svg.viewBox.baseVal
+  const width = viewBox.width === 0 ? 100 : viewBox.width
+  const vx = ((event.clientX - bounds.left) / bounds.width) * width + viewBox.x
+  const span = x2 - x1
+  const ratio = span === 0 ? 0 : (vx - x1) / span
+  return ratio < 0.5 ? fromDate : toDate
+}
+
 export function start(series: PriceSeries): void {
   let actions: Action[] = []
 
@@ -35,13 +53,21 @@ export function start(series: PriceSeries): void {
       ]
       draw()
     })
-    bindSelect("品牌", (name) => {
-      actions = [
-        ...actions.filter((action) => action.type !== "setBrand"),
-        { type: "setBrand", name },
-      ]
-      draw()
-    })
+    const brandButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
+    for (const button of brandButtons) {
+      button.addEventListener("click", () => {
+        const name = button.textContent ?? ""
+        if (name === "") {
+          return
+        }
+        const next = button.getAttribute("aria-pressed") === "true" ? "" : name
+        actions = [
+          ...actions.filter((action) => action.type !== "setBrand"),
+          { type: "setBrand", name: next },
+        ]
+        draw()
+      })
+    }
 
     const input = document.querySelector<HTMLInputElement>('input[aria-label="關鍵字"]')
     if (input !== null) {
@@ -97,15 +123,6 @@ export function start(series: PriceSeries): void {
       draw()
     }
 
-    const pointButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="價格點"] button')
-    for (const button of pointButtons) {
-      const show = (): void => {
-        showPoint(button.dataset.date ?? "", button.dataset.code ?? "")
-      }
-      button.addEventListener("click", show)
-      button.addEventListener("mouseover", show)
-    }
-
     const chartMarks = document.querySelectorAll<SVGElement>("svg [data-date], svg [data-day]")
     for (const mark of chartMarks) {
       const show = (): void => {
@@ -114,6 +131,16 @@ export function start(series: PriceSeries): void {
       }
       mark.addEventListener("click", show)
       mark.addEventListener("mouseover", show)
+    }
+
+    const seriesLines = document.querySelectorAll<SVGLineElement>("svg line[data-code]")
+    for (const line of seriesLines) {
+      line.addEventListener("mouseover", (event) => {
+        if (!(event instanceof MouseEvent)) {
+          return
+        }
+        showPoint(dateOnLine(line, event), line.getAttribute("data-code") ?? "")
+      })
     }
 
     for (const label of ["起日", "迄日"]) {
