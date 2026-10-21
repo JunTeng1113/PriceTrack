@@ -155,7 +155,8 @@ describe("每個晶片分組一張圖", () => {
     ])
     const doc = documentOf(renderPage(series, []))
     const svg = doc.querySelector(`[aria-label="${twelveG}"] svg`)
-    const yLabels = [...(svg?.querySelectorAll('text[data-axis="y"]') ?? [])].map((node) => Number(node.textContent))
+    const yTexts = [...(svg?.querySelectorAll('text[data-axis="y"]') ?? [])].map((node) => node.textContent ?? "")
+    const yLabels = yTexts.map((text) => Number(text.replaceAll("$", "").replaceAll(",", "")))
     const prices = [...yLabels].sort((left, right) => left - right)
     const lastPoint = svg?.querySelector('[data-date="2024-06-16"]')
     const name = [...(svg?.querySelectorAll("text[data-series-label]") ?? [])].find((node) => node.textContent === code)
@@ -174,12 +175,54 @@ describe("每個晶片分組一張圖", () => {
     expect(Number(yLabel?.getAttribute("x"))).toBeGreaterThan(axisX)
     expect(Number(name?.getAttribute("x"))).toBeGreaterThan(Number(yLabel?.getAttribute("x")))
     expect(svg?.querySelector('[data-axis="grid"]')).not.toBeNull()
-    expect([...(svg?.querySelectorAll('text[data-axis="x"]') ?? [])].map((node) => node.textContent)).toEqual(["2024-06"])
+    expect([...(svg?.querySelectorAll('text[data-axis="x"]') ?? [])].map((node) => node.textContent)).toEqual([])
     expect(prices).toHaveLength(11)
     expect(prices[0]).toBe(Math.round(17990 * 0.95))
     expect(prices[10]).toBe(Math.round(18990 * 1.05))
+    expect(yTexts).toContain("$17,091")
+    expect(yTexts).toContain("$19,940")
     expect(Number(name?.getAttribute("x"))).toBeGreaterThan(Number(lastPoint?.getAttribute("cx")))
     expect(svg?.querySelector('[aria-label="圖例"]')).toBeNull()
+  })
+
+  test("第一個月份不完整時不標該月，從月初開始的月份仍會標", () => {
+    const group = "NVIDIA RTX5070-12GB"
+    const code = "華碩 DUAL-RTX4070-O12G"
+    const row = (price: number): string => `${code}(2535MHz), $${price}`
+    const partial = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
+      snapshot("2024-08-02T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
+    ])
+    const partialLabels = [...documentOf(renderPage(partial, [])).querySelectorAll(`[aria-label="${group}"] text[data-axis="x"]`)]
+      .map((node) => node.textContent)
+    expect(partialLabels).toEqual(["2024-07"])
+
+    const full = update(emptySeries(), [
+      snapshot("2024-06-01T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
+      snapshot("2024-07-31T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
+    ])
+    const fullNodes = [...documentOf(renderPage(full, [])).querySelectorAll(`[aria-label="${group}"] text[data-axis="x"]`)]
+    expect(fullNodes.map((node) => node.textContent)).toEqual(["2024-06", "2024-07"])
+    expect(fullNodes.map((node) => node.getAttribute("text-anchor"))).toEqual(["middle", "middle"])
+  })
+
+  test("首月至少 14 日才標下個月，末月至少 14 日才標末月", () => {
+    const group = "NVIDIA RTX5070-12GB"
+    const code = "華碩 DUAL-RTX4070-O12G"
+    const row = (price: number): string => `${code}(2535MHz), $${price}`
+    const labels = (start: string, end: string): (string | null)[] => {
+      const series = update(emptySeries(), [
+        snapshot(`${start}T02:00:00.000Z`, [{ label: group, rows: [row(18990)] }]),
+        snapshot(`${end}T02:00:00.000Z`, [{ label: group, rows: [row(17990)] }]),
+      ])
+      return [...documentOf(renderPage(series, [])).querySelectorAll(`[aria-label="${group}"] text[data-axis="x"]`)]
+        .map((node) => node.textContent)
+    }
+
+    expect(labels("2024-06-17", "2024-09-30")).toEqual(["2024-07", "2024-08", "2024-09"])
+    expect(labels("2024-06-18", "2024-09-30")).toEqual(["2024-08", "2024-09"])
+    expect(labels("2024-06-01", "2024-09-14")).toEqual(["2024-06", "2024-07", "2024-08", "2024-09"])
+    expect(labels("2024-06-01", "2024-09-13")).toEqual(["2024-06", "2024-07", "2024-08"])
   })
 })
 
@@ -307,6 +350,52 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     expect(swatch(modelGroup, "技嘉")).toContain(strokeOf(modelGroup, gigabyte) ?? "")
     expect(swatch(onlyGigabyte, "技嘉")).toBe(swatch(modelGroup, "技嘉"))
     expect(swatch(modelGroup, "華碩")).not.toBe(swatch(modelGroup, "技嘉"))
+  })
+
+  test("五個主要品牌各一色，其餘品牌合併為其他", () => {
+    const cards = [
+      ["華碩 CARD", "#58c65b"],
+      ["技嘉 CARD", "#5b58c6"],
+      ["微星 CARD", "#c65b58"],
+      ["INNO3D CARD", "#42bdbb"],
+      ["ZOTAC CARD", "#bb42bd"],
+      ["藍寶石 CARD", "#bdbb42"],
+      ["華擎 CARD", "#bdbb42"],
+    ] as const
+    const row = (code: string, price: number): string => `${code}(2497MHz), $${price}`
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [{
+        label: modelGroup,
+        rows: cards.map(([code], index) => row(code, 10000 + index)),
+      }]),
+      snapshot("2024-06-16T02:00:00.000Z", [{
+        label: modelGroup,
+        rows: cards.map(([code], index) => row(code, 11000 + index)),
+      }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const chart = doc.querySelector(`[aria-label="${modelGroup}"]`)
+    const strokeOf = (code: string): string | null =>
+      chart?.querySelector(`line[data-code="${code}"]`)?.getAttribute("stroke") ?? null
+    const swatch = (name: string): string => {
+      const button = [...(chart?.querySelectorAll('[aria-label="品牌"] button') ?? [])]
+        .find((node) => node.textContent === name)
+      return button?.querySelector("span[aria-hidden]")?.getAttribute("style") ?? ""
+    }
+    const names = [...(chart?.querySelectorAll('[aria-label="品牌"] button') ?? [])].map((node) => node.textContent)
+
+    expect(names).toEqual(["華碩", "技嘉", "微星", "INNO3D", "ZOTAC", "其他"])
+    for (const [code, color] of cards) {
+      expect(strokeOf(code)).toBe(color)
+    }
+    expect(swatch("華碩")).toContain("#58c65b")
+    expect(swatch("其他")).toContain("#bdbb42")
+    expect(strokeOf("藍寶石 CARD")).toBe(strokeOf("華擎 CARD"))
+
+    const filtered = documentOf(renderPage(series, [{ type: "setBrand", group: modelGroup, name: "其他" }]))
+    const codes = [...(filtered.querySelector(`[aria-label="${modelGroup}"]`)?.querySelectorAll("line:not([data-hit])") ?? [])]
+      .map((node) => node.getAttribute("data-code"))
+    expect(codes).toEqual(["藍寶石 CARD", "華擎 CARD"])
   })
 
   test("線末端用和該線相同的顏色標出代號", () => {

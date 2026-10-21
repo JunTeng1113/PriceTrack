@@ -404,7 +404,7 @@ describe("代號與排除", () => {
     ])
   })
 
-  test("品牌按鈕依華碩、技嘉、微星、INNO3D、ZOTAC，其餘在後", () => {
+  test("品牌按鈕依華碩、技嘉、微星、INNO3D、ZOTAC，其餘合併為其他", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`
         <optgroup label="NVIDIA RTX5090">
@@ -419,7 +419,7 @@ describe("代號與排除", () => {
     ])
     const view = present(series, [])
 
-    expect(view.modelCharts[0]?.brands).toEqual(["華碩", "技嘉", "微星", "INNO3D", "ZOTAC", "藍寶石"])
+    expect(view.modelCharts[0]?.brands).toEqual(["華碩", "技嘉", "微星", "INNO3D", "ZOTAC", "其他"])
   })
 
   test("方括號裡的銷售宣傳不是代號，品牌取後面的廠牌", () => {
@@ -448,7 +448,7 @@ describe("代號與排除", () => {
     const view = present(series, [])
     const chart = view.modelCharts[0]
 
-    expect(chart?.brands).toEqual(["華碩", "技嘉", "微星", "ZOTAC", "Acer", "ACER", "華擎", "藍寶石"])
+    expect(chart?.brands).toEqual(["華碩", "技嘉", "微星", "ZOTAC", "其他"])
     expect(chart?.series.map((line) => line.code)).toEqual([
       "華碩 TUF-RTX5090-O32G-GAMING",
       "技嘉 RTX5090 GAMING OC 32G",

@@ -32,7 +32,7 @@ export type View = {
   readout: { date: string; code: string; sellingPrice: number } | null
   modelCharts: readonly {
     group: string
-    brand: string
+    selectedBrands: readonly string[]
     focus: string
     brands: readonly string[]
     legend: readonly string[]
@@ -212,7 +212,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
   const stored = normalizeQuotes(series.quotes)
   let keyword = ""
   const chosenGroups: string[] = []
-  const brandByGroup = new Map<string, string>()
+  const brandsByGroup = new Map<string, string[]>()
   const focusByGroup = new Map<string, string>()
   const selected: string[] = []
   let rangeOverride: { start: string; end: string } | null = null
@@ -230,7 +230,11 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       continue
     }
     if (action.type === "setBrand") {
-      brandByGroup.set(action.group, action.name)
+      const chosen = action.name === "" ? [] : brandsByGroup.get(action.group) ?? []
+      if (action.name !== "" && !chosen.includes(action.name)) {
+        chosen.push(action.name)
+      }
+      brandsByGroup.set(action.group, chosen)
       focusByGroup.delete(action.group)
       continue
     }
@@ -287,7 +291,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     : chipGroups.filter((group) => chosenGroups.includes(group))
   const modelCharts = shownGroups.map((group) => {
     const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === group))
-    const brand = brandByGroup.get(group) ?? ""
+    const selectedBrands = brandsByGroup.get(group) ?? []
     const focus = focusByGroup.get(group) ?? ""
     const allSeries = groupCodes.map((code) => ({
       code,
@@ -297,7 +301,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
         .sort((left, right) => left.date.localeCompare(right.date))
         .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
     }))
-    const branded = allSeries.filter((line) => brand === "" || line.brand === brand)
+    const branded = allSeries.filter((line) => selectedBrands.length === 0 || selectedBrands.includes(brandGroup(line.brand)))
     const activeFocus = branded.some((line) => line.code === focus) ? focus : ""
     const lines = branded.map((line, index) => ({
       code: line.code,
@@ -306,7 +310,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     }))
     return {
       group,
-      brand,
+      selectedBrands,
       focus: activeFocus,
       brands: brandsInOrder(groupCodes),
       legend: branded.map((line) => line.code),
@@ -567,28 +571,38 @@ function brandOf(code: string): string {
 }
 
 const BRAND_ORDER = ["華碩", "技嘉", "微星", "INNO3D", "ZOTAC"]
+const BRAND_COLORS = ["#58c65b", "#5b58c6", "#c65b58", "#42bdbb", "#bb42bd", "#bdbb42"]
+const OTHER_BRAND = "其他"
+
+export function brandGroup(brand: string): string {
+  if (BRAND_ORDER.includes(brand)) {
+    return brand
+  }
+  return OTHER_BRAND
+}
 
 export function brandColorIndex(brand: string): number {
   const ranked = BRAND_ORDER.indexOf(brand)
   if (ranked >= 0) {
     return ranked
   }
-  let hash = 0
-  for (const char of brand) {
-    hash = (hash * 33 + (char.codePointAt(0) ?? 0)) % 353
-  }
-  return BRAND_ORDER.length + hash
+  return BRAND_COLORS.length - 1
+}
+
+export function brandPaint(index: number): string {
+  const last = BRAND_COLORS.length - 1
+  const slot = index >= 0 && index <= last ? index : last
+  return BRAND_COLORS[slot] ?? "#bdbb42"
 }
 
 export function brandColor(brand: string): string {
-  const hue = (brandColorIndex(brand) * 47) % 360
-  return `hsl(${hue} 70% 35%)`
+  return brandPaint(brandColorIndex(brand))
 }
 
 function brandsInOrder(codes: readonly string[]): string[] {
   const seen: string[] = []
   for (const code of codes) {
-    const brand = brandOf(code)
+    const brand = brandGroup(brandOf(code))
     if (!seen.includes(brand)) {
       seen.push(brand)
     }
@@ -599,10 +613,8 @@ function brandsInOrder(codes: readonly string[]): string[] {
       ranked.push(name)
     }
   }
-  for (const name of seen) {
-    if (!ranked.includes(name)) {
-      ranked.push(name)
-    }
+  if (seen.includes(OTHER_BRAND)) {
+    ranked.push(OTHER_BRAND)
   }
   return ranked
 }

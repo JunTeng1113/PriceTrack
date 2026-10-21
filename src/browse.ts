@@ -1,4 +1,4 @@
-import { clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, visibleChart } from "./page.ts"
+import { brandCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, visibleChart } from "./page.ts"
 import { present, type Action, type PriceSeries, type View } from "./present.ts"
 
 function dayNumber(isoDate: string): number | null {
@@ -117,10 +117,14 @@ function nearestByDate(circles: readonly Element[], date: string): Element | nul
 }
 
 function paintFocus(svg: Element, code: string | null): void {
+  const active = code !== null && code !== ""
   const marks = svg.querySelectorAll("[data-code]")
   for (const mark of marks) {
-    const faded = code !== null && code !== "" && mark.getAttribute("data-code") !== code
-    mark.setAttribute("opacity", faded ? "0.25" : "1")
+    const same = mark.getAttribute("data-code") === code
+    mark.setAttribute("opacity", active && !same ? "0.25" : "1")
+    if (mark.getAttribute("data-series-label") === "true") {
+      mark.setAttribute("data-focused", active && same ? "true" : "false")
+    }
   }
 }
 
@@ -137,6 +141,9 @@ function isOnLine(node: Element): boolean {
   const code = node.getAttribute("data-code") ?? ""
   if (code === "") {
     return false
+  }
+  if (node.getAttribute("data-series-label") === "true") {
+    return true
   }
   const tag = node.tagName.toLowerCase()
   return tag === "line" || tag === "circle"
@@ -499,6 +506,16 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
         })
       }
 
+      const seriesLabels = svg.querySelectorAll<SVGTextElement>("text[data-series-label]")
+      for (const label of seriesLabels) {
+        label.addEventListener("mouseover", () => {
+          followLine(label)
+        })
+        label.addEventListener("mouseout", (event) => {
+          leaveLine(label, event)
+        })
+      }
+
       svg.addEventListener("mousemove", (event) => {
         if (!(event instanceof MouseEvent) || lockedSvg !== svg || lockedCode === null) {
           return
@@ -511,9 +528,10 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
       })
     }
 
-    const showPreparedBrand = (section: Element, brand: string): boolean => {
+    const showPreparedBrand = (section: Element, brands: readonly string[]): boolean => {
       const group = section.getAttribute("aria-label") ?? ""
-      const markup = preparedBrandChart(group, brand) ?? (latestView === null ? null : renderBrandSvg(latestView, group, brand))
+      const key = brandCacheKey(brands)
+      const markup = preparedBrandChart(group, key) ?? (latestView === null ? null : renderBrandSvg(latestView, group, brands))
       if (markup === null) {
         return false
       }
@@ -528,10 +546,6 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
         lockedSvg = null
       }
       current.replaceWith(nextSvg)
-      const peers = section.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
-      for (const peer of peers) {
-        peer.setAttribute("aria-pressed", brand !== "" && peer.textContent === brand ? "true" : "false")
-      }
       bindChart(nextSvg)
       return true
     }
@@ -546,15 +560,23 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
             return
           }
           const group = section.getAttribute("aria-label") ?? ""
-          const next = button.getAttribute("aria-pressed") === "true" ? "" : name
-          if (!showPreparedBrand(section, next)) {
+          const wasPressed = button.getAttribute("aria-pressed") === "true"
+          const selected = [...section.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+            .filter((peer) => peer !== button && peer.getAttribute("aria-pressed") === "true")
+            .map((peer) => peer.textContent ?? "")
+            .filter((text) => text !== "")
+          if (!wasPressed) {
+            selected.push(name)
+          }
+          if (!showPreparedBrand(section, selected)) {
             return
           }
+          button.setAttribute("aria-pressed", wasPressed ? "false" : "true")
           actions = [
             ...actions.filter((action) =>
               (action.type !== "setBrand" && action.type !== "setFocus") || action.group !== group,
             ),
-            { type: "setBrand", group, name: next },
+            ...selected.map((brand) => ({ type: "setBrand" as const, group, name: brand })),
           ]
         })
       }
@@ -696,7 +718,7 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
             setTimeout(() => pump(offset + markBatch), 0)
             return
           }
-          rememberChart(chart.group, chart.brand, svg)
+          rememberChart(chart.group, brandCacheKey(chart.selectedBrands), svg)
           bindChart(svg)
           setTimeout(() => appendChart(index + 1), 0)
         }

@@ -65,7 +65,7 @@ export function listingTableMarkup(
   )
 }
 
-export function brandMarkup(brands: readonly string[], selected: string): string {
+export function brandMarkup(brands: readonly string[], selected: readonly string[]): string {
   return brands
     .map((name) => {
       const color = brandColor(name)
@@ -79,7 +79,7 @@ export function brandMarkup(brands: readonly string[], selected: string): string
         }),
         name,
       )
-      return buttonMarkup(label, { "aria-pressed": name === selected ? "true" : "false" })
+      return buttonMarkup(label, { "aria-pressed": selected.includes(name) ? "true" : "false" })
     })
     .join("")
 }

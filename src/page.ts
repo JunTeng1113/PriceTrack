@@ -1,5 +1,5 @@
 import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, listingTableMarkup } from "./fields.tsx"
-import { brandColorIndex, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
+import { brandColorIndex, brandGroup, brandPaint, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 
 function escapeHtml(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -66,8 +66,7 @@ function dayNumber(isoDate: string): number {
 }
 
 function seriesColor(index: number): string {
-  const hue = (index * 47) % 360
-  return `hsl(${hue} 70% 35%)`
+  return brandPaint(index)
 }
 
 const plotLeft = 4
@@ -82,7 +81,7 @@ const plotTop = 4
 const plotBottom = 84
 
 function formatPrice(value: number): string {
-  return String(Math.round(value))
+  return formatSellingPrice(value)
 }
 
 function xAt(date: string, startDay: number, daySpan: number): number {
@@ -98,6 +97,37 @@ function yAt(price: number, axis: { lower: number; upper: number }): number {
     return (plotTop + plotBottom) / 2
   }
   return plotTop + (1 - (price - axis.lower) / span) * (plotBottom - plotTop)
+}
+
+function monthLastDay(year: number, month: number): string {
+  const day = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+function completeMonth(start: string, end: string, label: string): boolean {
+  const year = Number(label.slice(0, 4))
+  const month = Number(label.slice(5, 7))
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return false
+  }
+  const first = `${label}-01`
+  return start <= first && end >= monthLastDay(year, month)
+}
+
+function monthDayCount(start: string, end: string, label: string): number {
+  const year = Number(label.slice(0, 4))
+  const month = Number(label.slice(5, 7))
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return 0
+  }
+  const first = `${label}-01`
+  const last = monthLastDay(year, month)
+  const from = start > first ? start : first
+  const to = end < last ? end : last
+  if (from > to) {
+    return 0
+  }
+  return dayNumber(to) - dayNumber(from) + 1
 }
 
 function monthTicks(start: string, end: string): { date: string; label: string }[] {
@@ -151,10 +181,22 @@ function chartFrame(start: string, end: string, axis: { lower: number; upper: nu
     const x = xAt(tick.date, startDay, daySpan)
     return `M${x} ${plotTop} V${plotBottom}`
   }).join(" ")
-  const xLabels = months.map((tick) => {
+  const firstLabel = months[0]?.label ?? ""
+  const lastLabel = months[months.length - 1]?.label ?? ""
+  const firstDays = firstLabel === "" ? 0 : monthDayCount(start, end, firstLabel)
+  const lastDays = lastLabel === "" ? 0 : monthDayCount(start, end, lastLabel)
+  const xLabels = months.map((tick, index) => {
+    if (index === 0 && !completeMonth(start, end, tick.label)) {
+      return ""
+    }
+    if (index === 1 && firstDays < 14) {
+      return ""
+    }
+    if (index === months.length - 1 && lastDays < 14) {
+      return ""
+    }
     const x = xAt(tick.date, startDay, daySpan)
-    const anchor = x <= plotLeft + 8 ? "start" : x >= plotRight - 8 ? "end" : "middle"
-    return `<text data-axis="x" x="${x}" y="96" font-size="3.2" fill="#334155" text-anchor="${anchor}">${escapeHtml(tick.label)}</text>`
+    return `<text data-axis="x" x="${x}" y="96" font-size="3.2" fill="#334155" text-anchor="middle">${escapeHtml(tick.label)}</text>`
   }).join("")
   const yLabels = prices.map((price) =>
     `<text data-axis="y" x="${priceAxisX + 2}" y="${yAt(price, axis)}" font-size="3.2" fill="#334155" text-anchor="start" dominant-baseline="middle">${formatPrice(price)}</text>`,
@@ -262,7 +304,7 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
       }
       const x = xAt(date, startDay, daySpan)
       marks.push(
-        `<rect data-day="${escapeAttribute(date)}" data-code="${escapeAttribute(item.code)}" x="${x - 1}" y="${plotTop + seriesIndex * laneHeight}" width="2" height="${laneHeight}" fill="transparent" />`,
+        `<rect data-day="${escapeAttribute(date)}" data-code="${escapeAttribute(item.code)}" x="${x - 1}" y="${plotTop + seriesIndex * laneHeight}" width="2" height="${laneHeight}" fill="transparent" pointer-events="none" />`,
       )
     }
     const paint = connectGaps ? seriesColor(item.colorIndex ?? seriesIndex) : "currentColor"
@@ -300,7 +342,7 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
   for (const [index, label] of labels.entries()) {
     const y = labelYs[index] ?? label.y
     marks.push(
-      `<text data-series-label="true" data-code="${escapeAttribute(label.code)}" data-focused="${label.focused}" x="${seriesNameX}" y="${y}" font-size="${style.fontSize}" fill="${label.paint}" opacity="${label.opacity}" dominant-baseline="middle">${escapeHtml(label.code)}</text>`,
+      `<text data-series-label="true" data-code="${escapeAttribute(label.code)}" data-focused="${label.focused}" x="${seriesNameX}" y="${y}" font-size="${style.fontSize}" fill="${label.paint}" opacity="${label.opacity}" dominant-baseline="middle" style="cursor:pointer">${escapeHtml(label.code)}</text>`,
     )
   }
   return marks
@@ -408,22 +450,28 @@ function chartSection(group: string, brands: string, svg: string): string {
   return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${svg}</section>`
 }
 
+export function brandCacheKey(names: readonly string[]): string {
+  return [...names].sort().join("\0")
+}
+
 function visibleLines(chart: View["modelCharts"][number]): View["modelCharts"][number]["allSeries"] {
-  if (chart.brand === "") {
+  if (chart.selectedBrands.length === 0) {
     return chart.allSeries
   }
-  return chart.allSeries.filter((line) => line.brand === chart.brand)
+  return chart.allSeries.filter((line) => chart.selectedBrands.includes(brandGroup(line.brand)))
 }
 
 function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const stored = new Map<string, string>()
   stored.set("", modelSvg(view, chart.allSeries, ""))
   for (const name of chart.brands) {
-    stored.set(name, modelSvg(view, chart.allSeries.filter((line) => line.brand === name), ""))
+    stored.set(name, modelSvg(view, chart.allSeries.filter((line) => brandGroup(line.brand) === name), ""))
   }
   preparedBrandSvgs.set(chart.group, stored)
-  const brands = brandMarkup(chart.brands, chart.brand)
-  return chartSection(chart.group, brands, modelSvg(view, visibleLines(chart), chart.focus))
+  const brands = brandMarkup(chart.brands, chart.selectedBrands)
+  const visible = modelSvg(view, visibleLines(chart), chart.focus)
+  stored.set(brandCacheKey(chart.selectedBrands), visible)
+  return chartSection(chart.group, brands, visible)
 }
 
 export function clearPreparedCharts(): void {
@@ -436,8 +484,9 @@ export function storeBrandChart(group: string, brand: string, markup: string): v
   preparedBrandSvgs.set(group, stored)
 }
 
-export function renderBrandSvg(view: View, group: string, brand: string): string | null {
-  const cached = preparedBrandChart(group, brand)
+export function renderBrandSvg(view: View, group: string, brands: readonly string[]): string | null {
+  const key = brandCacheKey(brands)
+  const cached = preparedBrandChart(group, key)
   if (cached !== null) {
     return cached
   }
@@ -445,9 +494,11 @@ export function renderBrandSvg(view: View, group: string, brand: string): string
   if (chart === undefined) {
     return null
   }
-  const lines = brand === "" ? chart.allSeries : chart.allSeries.filter((line) => line.brand === brand)
+  const lines = brands.length === 0
+    ? chart.allSeries
+    : chart.allSeries.filter((line) => brands.includes(brandGroup(line.brand)))
   const markup = modelSvg(view, lines, "")
-  storeBrandChart(group, brand, markup)
+  storeBrandChart(group, key, markup)
   return markup
 }
 
@@ -472,7 +523,7 @@ export function visibleChart(
     modelCharts: [],
   }, true, chart.focus)
   const frame = marks[0] ?? ""
-  const brands = brandMarkup(chart.brands, chart.brand)
+  const brands = brandMarkup(chart.brands, chart.selectedBrands)
   return { section: chartSection(chart.group, brands, chartSvg(frame)), marks: marks.slice(1) }
 }
 

@@ -53,6 +53,31 @@ test("點品牌按鈕後，圖上只留該品牌的線", () => {
   expect(document.getElementById("keep")).not.toBeNull()
 })
 
+test("品牌可以複選，再點一次就取消", () => {
+  const series = update(emptySeries(), [
+    vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
+  ])
+  start(series)
+
+  const button = (name: string): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+      .find((node) => node.textContent === name)
+  const codes = (): string[] =>
+    [...document.querySelectorAll(`[aria-label="${modelGroup}"] [data-code]`)]
+      .map((node) => node.getAttribute("data-code") ?? "")
+
+  button("華碩")?.click()
+  button("技嘉")?.click()
+  expect(button("華碩")?.getAttribute("aria-pressed")).toBe("true")
+  expect(button("技嘉")?.getAttribute("aria-pressed")).toBe("true")
+  expect(new Set(codes())).toEqual(new Set([prime, windforce]))
+
+  button("華碩")?.click()
+  expect(button("華碩")?.getAttribute("aria-pressed")).toBe("false")
+  expect(button("技嘉")?.getAttribute("aria-pressed")).toBe("true")
+  expect(new Set(codes())).toEqual(new Set([windforce]))
+})
+
 test("滑鼠移到線上時，頁面不重畫", () => {
   const series = update(emptySeries(), [
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`]),
@@ -91,15 +116,52 @@ test("滑鼠沒停在折線上時，不 focus 任何一條線", () => {
   expect(opacity(windforce)).toBe("0.25")
 
   line?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: name() ?? null }))
+  expect(opacity(windforce)).toBe("0.25")
+  expect(name()?.getAttribute("data-focused")).toBe("true")
+
+  name()?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }))
   expect(opacity(prime)).toBe("1")
   expect(opacity(windforce)).toBe("1")
   expect(name()?.getAttribute("data-focused")).toBe("false")
 
-  name()?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
   name()?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
   gap?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
   expect(opacity(prime)).toBe("1")
   expect(opacity(windforce)).toBe("1")
+})
+
+test("滑鼠停在型號名稱上時 focus 該折線", () => {
+  const series = update(emptySeries(), [
+    vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
+    vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`]),
+  ])
+  start(series)
+
+  const marker = document.createElement("p")
+  marker.id = "keep"
+  document.body.append(marker)
+  const name = (code: string): Element | undefined =>
+    [...document.querySelectorAll(`[aria-label="${modelGroup}"] text[data-series-label]`)]
+      .find((node) => node.textContent === code)
+  const opacity = (code: string): string | null =>
+    document.querySelector(`[aria-label="${modelGroup}"] circle[data-code="${code}"]`)?.getAttribute("opacity") ?? null
+
+  name(prime)?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+  expect(name(prime)?.getAttribute("data-focused")).toBe("true")
+  expect(name(windforce)?.getAttribute("data-focused")).toBe("false")
+  expect(opacity(prime)).toBe("1")
+  expect(opacity(windforce)).toBe("0.25")
+
+  name(windforce)?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+  expect(name(windforce)?.getAttribute("data-focused")).toBe("true")
+  expect(opacity(prime)).toBe("0.25")
+  expect(opacity(windforce)).toBe("1")
+
+  name(windforce)?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }))
+  expect(name(windforce)?.getAttribute("data-focused")).toBe("false")
+  expect(opacity(prime)).toBe("1")
+  expect(opacity(windforce)).toBe("1")
+  expect(document.getElementById("keep")).not.toBeNull()
 })
 
 test("滑鼠移到一條線上時其他線變半透明，移開就恢復", () => {
@@ -129,6 +191,31 @@ test("滑鼠移到一條線上時其他線變半透明，移開就恢復", () =>
   primeLine?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }))
   expect(opacity(prime)).toBe("1")
   expect(opacity(windforce)).toBe("1")
+})
+
+test("每一條折線懸停都會出現 Tooltip", () => {
+  const series = update(emptySeries(), [
+    vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`, `${windforce}(2497MHz), $20000`]),
+    vga("2024-06-16T02:00:00.000Z", [`${prime}(2505MHz), $11000`]),
+    vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $13000`, `${windforce}(2497MHz), $22000`]),
+  ])
+  start(series)
+
+  const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
+  const gaps = [...(svg?.querySelectorAll("[data-day]") ?? [])]
+  expect(gaps.length).toBeGreaterThan(0)
+  for (const gap of gaps) {
+    expect(gap.getAttribute("pointer-events")).toBe("none")
+  }
+
+  for (const code of [prime, windforce]) {
+    const line = svg?.querySelector(`line[data-hit="true"][data-code="${code}"]`)
+    expect(line).not.toBeNull()
+    line?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 40, clientY: 40 }))
+    const rows = [...document.querySelectorAll('[role="tooltip"] p')].map((node) => node.textContent ?? "")
+    expect(document.querySelector('[role="tooltip"]')?.classList.contains("hidden")).toBe(false)
+    expect(rows[1]).toBe(code)
+  }
 })
 
 test("滑鼠停在折線上時，Tooltip 顯示日期、型號名稱與價格", () => {
