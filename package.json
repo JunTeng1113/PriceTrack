@@ -5,6 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "dev": "vite",
+    "build": "vite build",
     "update": "vite-node src/update-wayback.ts"
   },
   "devDependencies": {

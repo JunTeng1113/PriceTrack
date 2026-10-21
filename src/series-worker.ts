@@ -3,7 +3,7 @@ import type { PriceSeries } from "./present.ts"
 
 const batchSize = 2500
 
-const response = await fetch("/data/series.json", { cache: "no-store" })
+const response = await fetch(`${import.meta.env.BASE_URL}data/series.json`, { cache: "no-store" })
 if (!response.ok) {
   postMessage({ type: "empty" })
 } else {
