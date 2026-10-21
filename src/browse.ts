@@ -4,28 +4,44 @@ import type { Action, PriceSeries } from "./present.ts"
 export function start(series: PriceSeries): void {
   let actions: Action[] = []
 
+  const bindSelect = (label: string, apply: (name: string) => void): void => {
+    const trigger = document.querySelector(`[aria-label="${label}"]`)
+    const root = trigger?.closest("[data-slot=\"select\"]") ?? null
+    if (root === null) {
+      return
+    }
+    const content = root.querySelector("[data-slot=\"select-content\"]")
+    trigger?.addEventListener("click", () => {
+      content?.classList.toggle("hidden")
+    })
+    const items = root.querySelectorAll<HTMLElement>("[data-slot=\"select-item\"]")
+    for (const item of items) {
+      item.addEventListener("click", () => {
+        apply(item.dataset.value ?? "")
+      })
+    }
+  }
+
   const draw = (): void => {
     const html = renderPage(series, actions)
     const parsed = new DOMParser().parseFromString(html, "text/html")
     document.documentElement.lang = parsed.documentElement.lang
     document.body.replaceChildren(...parsed.body.childNodes)
 
-    const trigger = document.querySelector<HTMLElement>('[data-slot="select-trigger"]')
-    trigger?.addEventListener("click", () => {
-      document.querySelector('[data-slot="select-content"]')?.classList.toggle("hidden")
+    bindSelect("晶片分組", (name) => {
+      actions = [
+        ...actions.filter((action) => action.type !== "setChipGroup"),
+        { type: "setChipGroup", name },
+      ]
+      draw()
     })
-
-    const groupItems = document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')
-    for (const item of groupItems) {
-      item.addEventListener("click", () => {
-        const name = item.dataset.value ?? ""
-        actions = [
-          ...actions.filter((action) => action.type !== "setChipGroup"),
-          { type: "setChipGroup", name },
-        ]
-        draw()
-      })
-    }
+    bindSelect("品牌", (name) => {
+      actions = [
+        ...actions.filter((action) => action.type !== "setBrand"),
+        { type: "setBrand", name },
+      ]
+      draw()
+    })
 
     const input = document.querySelector<HTMLInputElement>('input[aria-label="關鍵字"]')
     if (input !== null) {
@@ -90,7 +106,7 @@ export function start(series: PriceSeries): void {
       button.addEventListener("mouseover", show)
     }
 
-    const chartMarks = document.querySelectorAll<SVGElement>('[aria-label="折線圖"] [data-date], [aria-label="折線圖"] [data-day]')
+    const chartMarks = document.querySelectorAll<SVGElement>("svg [data-date], svg [data-day]")
     for (const mark of chartMarks) {
       const show = (): void => {
         const date = mark.getAttribute("data-date") ?? mark.getAttribute("data-day") ?? ""

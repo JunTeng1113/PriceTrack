@@ -40,10 +40,18 @@ function SelectItem({ className, ...props }: ComponentProps<"div">) {
   )
 }
 
-function ChipGroupSelect({ groups, selected }: { groups: readonly string[]; selected: string }): ReactNode {
+function ChipGroupSelect({
+  groups,
+  selected,
+  label = "晶片分組",
+}: {
+  groups: readonly string[]
+  selected: string
+  label?: string
+}): ReactNode {
   return (
     <Select>
-      <SelectTrigger aria-label="晶片分組">{selected}</SelectTrigger>
+      <SelectTrigger aria-label={label}>{selected}</SelectTrigger>
       <SelectContent>
         {groups.map((name) => (
           <SelectItem key={name} data-value={name}>{name}</SelectItem>

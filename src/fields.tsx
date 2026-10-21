@@ -15,3 +15,7 @@ export function buttonMarkup(label: ReactNode, props: { "aria-pressed"?: "true" 
 export function chipGroupMarkup(groups: readonly string[], selected: string): string {
   return renderToStaticMarkup(createElement(ChipGroupSelect, { groups, selected }))
 }
+
+export function brandMarkup(brands: readonly string[], selected: string): string {
+  return renderToStaticMarkup(createElement(ChipGroupSelect, { groups: brands, selected, label: "品牌" }))
+}

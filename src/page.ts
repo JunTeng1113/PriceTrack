@@ -1,4 +1,4 @@
-import { buttonMarkup, chipGroupMarkup, keywordMarkup } from "./fields.tsx"
+import { brandMarkup, buttonMarkup, chipGroupMarkup, keywordMarkup } from "./fields.tsx"
 import { present, type Action, type PriceSeries, type View } from "./present.ts"
 
 function escapeHtml(text: string): string {
@@ -65,7 +65,12 @@ function dayNumber(isoDate: string): number {
   return Math.floor(Date.UTC(year, month - 1, day) / 86400000)
 }
 
-function chartMarks(view: View): string {
+function seriesColor(index: number): string {
+  const hue = (index * 47) % 360
+  return `hsl(${hue} 70% 35%)`
+}
+
+function chartMarks(view: View, connectGaps = false): string {
   const dates = axisDates(view)
   const start = dates[0]
   const end = dates.at(-1)
@@ -91,17 +96,18 @@ function chartMarks(view: View): string {
         `<rect data-day="${escapeAttribute(date)}" data-code="${escapeAttribute(item.code)}" x="${x - 1}" y="${seriesIndex * band}" width="2" height="${band}" fill="transparent" />`,
       )
     }
+    const paint = connectGaps ? seriesColor(seriesIndex) : "currentColor"
     let previous: { date: string; x: number; y: number } | null = null
     for (const quote of item.quotes) {
       const x = daySpan === 0 ? 50 : ((dayNumber(quote.date) - startDay) / daySpan) * 100
       const y = priceSpan === 0 ? 50 : 100 - ((quote.sellingPrice - axis.lower) / priceSpan) * 100
-      if (previous !== null && addDays(previous.date, 1) === quote.date) {
+      if (previous !== null && (connectGaps || addDays(previous.date, 1) === quote.date)) {
         marks.push(
-          `<line data-code="${escapeAttribute(item.code)}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="0.6" fill="none" />`,
+          `<line data-code="${escapeAttribute(item.code)}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}" stroke="${paint}" stroke-width="0.6" fill="none" />`,
         )
       }
       marks.push(
-        `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="currentColor" />`,
+        `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="${paint}" />`,
       )
       previous = { date: quote.date, x, y }
     }
@@ -194,6 +200,65 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <p aria-label="讀數">${readout}</p>
       <ul aria-label="價格點">${points}</ul>
     </section>
+    ${modelSection(view)}
   </body>
 </html>`
+}
+
+function modelSection(view: View): string {
+  const chart = view.modelChart
+  if (chart === null) {
+    return ""
+  }
+  const legend = chart.series.map((item, index) =>
+    `<li><span style="background:${seriesColor(index)}"></span>${escapeHtml(item.code)}</li>`,
+  ).join("")
+  const points = chart.series.flatMap((item) =>
+    item.quotes.map((quote) =>
+      `<li>${escapeHtml(quote.date)} ${escapeHtml(item.code)} ${quote.sellingPrice}</li>`,
+    ),
+  ).join("")
+  const marks = chartMarks({
+    queryRange: view.queryRange,
+    chipGroups: [],
+    candidates: [],
+    selected: [],
+    series: chart.series,
+    axis: priceBounds(chart.series),
+    readout: null,
+    modelChart: null,
+  }, true)
+  const brands = brandMarkup(chart.brands, chart.brand)
+  const readout = chart.readout === null
+    ? ""
+    : `${escapeHtml(chart.readout.date)} ${escapeHtml(chart.readout.code)} ${chart.readout.sellingPrice}`
+  return `<section aria-label="${escapeAttribute(chart.group)}"><label>品牌 ${brands}</label><ul aria-label="圖例">${legend}</ul><ul>${points}</ul><svg>${marks}</svg><p aria-label="讀數">${readout}</p></section>`
+}
+
+function priceBounds(
+  series: readonly { quotes: readonly { sellingPrice: number }[] }[],
+): { lower: number; upper: number } | null {
+  let min: number | null = null
+  let max: number | null = null
+  for (const item of series) {
+    for (const quote of item.quotes) {
+      if (min === null || quote.sellingPrice < min) {
+        min = quote.sellingPrice
+      }
+      if (max === null || quote.sellingPrice > max) {
+        max = quote.sellingPrice
+      }
+    }
+  }
+  if (min === null || max === null) {
+    return null
+  }
+  const span = max - min
+  const pad = span === 0 ? Math.max(1, Math.floor(min / 10)) : span / 10
+  let lower = min - pad
+  const upper = max + pad
+  if (min > 0 && lower <= 0) {
+    lower = min / 2
+  }
+  return { lower, upper }
 }

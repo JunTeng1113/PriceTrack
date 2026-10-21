@@ -28,6 +28,16 @@ export type View = {
   }[]
   axis: { lower: number; upper: number } | null
   readout: { date: string; code: string; sellingPrice: number } | null
+  modelChart: {
+    group: string
+    brand: string
+    brands: readonly string[]
+    series: readonly {
+      code: string
+      quotes: readonly { date: string; sellingPrice: number }[]
+    }[]
+    readout: { date: string; code: string; sellingPrice: number } | null
+  } | null
 }
 
 export type Action =
@@ -36,10 +46,12 @@ export type Action =
   | { type: "deselect"; code: string }
   | { type: "setRange"; start: string; end: string }
   | { type: "setChipGroup"; name: string }
+  | { type: "setBrand"; name: string }
   | { type: "point"; date: string; code: string }
 
 const EARLIEST_DATE = "2020-01-01"
 const VGA_LABEL = "顯示卡VGA"
+const MODEL_GROUP = "NVIDIA RTX5060Ti-8GB(GDDR7)"
 
 export function emptySeries(): PriceSeries {
   return { quotes: [] }
@@ -105,6 +117,7 @@ function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
 export function present(series: PriceSeries, actions: readonly Action[]): View {
   let keyword = ""
   let chipGroup = ""
+  let brand = ""
   const selected: string[] = []
   let rangeOverride: { start: string; end: string } | null = null
   let pointer: { date: string; code: string } | null = null
@@ -116,6 +129,10 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     }
     if (action.type === "setChipGroup") {
       chipGroup = action.name
+      continue
+    }
+    if (action.type === "setBrand") {
+      brand = action.name
       continue
     }
     if (action.type === "setRange") {
@@ -157,6 +174,15 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       .sort((left, right) => left.date.localeCompare(right.date))
       .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
   }))
+  const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === MODEL_GROUP))
+  const modelCodes = groupCodes.filter((code) => brand === "" || brandOf(code) === brand)
+  const modelSeries = modelCodes.map((code) => ({
+    code,
+    quotes: visibleQuotes
+      .filter((quote) => quote.code === code)
+      .sort((left, right) => left.date.localeCompare(right.date))
+      .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
+  }))
 
   return {
     queryRange,
@@ -166,6 +192,15 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     series: plotted,
     axis: priceAxis(plotted),
     readout: readoutFor(plotted, pointer),
+    modelChart: groupCodes.length === 0
+      ? null
+      : {
+        group: MODEL_GROUP,
+        brand,
+        brands: brandsInOrder(groupCodes),
+        series: modelSeries,
+        readout: readoutFor(modelSeries, pointer),
+      },
   }
 }
 
@@ -367,6 +402,25 @@ function quoteInRange(date: string, range: { start: string; end: string } | null
     return false
   }
   return date >= range.start && date <= range.end
+}
+
+function brandOf(code: string): string {
+  const space = code.indexOf(" ")
+  if (space <= 0) {
+    return code
+  }
+  return code.slice(0, space)
+}
+
+function brandsInOrder(codes: readonly string[]): string[] {
+  const brands: string[] = []
+  for (const code of codes) {
+    const brand = brandOf(code)
+    if (!brands.includes(brand)) {
+      brands.push(brand)
+    }
+  }
+  return brands
 }
 
 function uniqueCodes(quotes: readonly StoredQuote[]): string[] {
