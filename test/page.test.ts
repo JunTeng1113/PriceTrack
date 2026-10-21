@@ -470,7 +470,8 @@ describe("篩選候選", () => {
     }])
     const doc = documentOf(renderPage(series, [{ type: "setChipGroup", name: "RTX 4070" }]))
     const trigger = doc.querySelector('[aria-label="晶片分組"]')
-    const items = [...doc.querySelectorAll('[data-slot="select-item"]')].map((item) => item.textContent)
+    const items = [...(trigger?.closest('[data-slot="select"]')?.querySelectorAll('[data-slot="select-item"]') ?? [])]
+      .map((item) => item.textContent)
 
     expect(trigger?.getAttribute("data-slot")).toBe("select-trigger")
     expect(trigger?.textContent).toBe("RTX 4070")
@@ -497,7 +498,9 @@ describe("篩選候選", () => {
       `,
     }])
     const doc = documentOf(renderPage(series, [{ type: "setChipGroup", name: "RTX 4070" }]))
-    const groups = [...doc.querySelectorAll('[data-slot="select-item"]')]
+    const groups = [...(doc.querySelector('[aria-label="晶片分組"]')
+      ?.closest('[data-slot="select"]')
+      ?.querySelectorAll('[data-slot="select-item"]') ?? [])]
       .map((item) => item.textContent ?? "")
     const candidates = [...doc.querySelectorAll('[aria-label="候選"] li')]
       .map((item) => item.textContent)

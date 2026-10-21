@@ -200,16 +200,12 @@ export function renderPage(series: PriceSeries, actions: readonly Action[]): str
       <p aria-label="讀數">${readout}</p>
       <ul aria-label="價格點">${points}</ul>
     </section>
-    ${modelSection(view)}
+    ${view.modelCharts.map((chart) => modelSection(view, chart)).join("")}
   </body>
 </html>`
 }
 
-function modelSection(view: View): string {
-  const chart = view.modelChart
-  if (chart === null) {
-    return ""
-  }
+function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const legend = chart.series.map((item, index) =>
     `<li><span style="background:${seriesColor(index)}"></span>${escapeHtml(item.code)}</li>`,
   ).join("")
@@ -226,7 +222,7 @@ function modelSection(view: View): string {
     series: chart.series,
     axis: priceBounds(chart.series),
     readout: null,
-    modelChart: null,
+    modelCharts: [],
   }, true)
   const brands = brandMarkup(chart.brands, chart.brand)
   const readout = chart.readout === null

@@ -30,6 +30,75 @@ function documentOf(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html")
 }
 
+describe("每個晶片分組一張圖", () => {
+  test("分組原文不同就各有一張圖", () => {
+    const twelveG = "NVIDIA RTX4070-12G"
+    const twelveGb = "NVIDIA RTX4070-12GB"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [
+        { label: twelveG, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
+        { label: twelveGb, rows: ["華碩 TUF-RTX4070-O12G(2565MHz), $20990"] },
+      ]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const narrow = doc.querySelector(`[aria-label="${twelveG}"]`)
+    const wide = doc.querySelector(`[aria-label="${twelveGb}"]`)
+
+    expect(narrow?.textContent).toContain("華碩 DUAL-RTX4070-O12G")
+    expect(narrow?.textContent).toContain("18990")
+    expect(narrow?.textContent).not.toContain("20990")
+    expect(wide?.textContent).toContain("華碩 TUF-RTX4070-O12G")
+    expect(wide?.textContent).toContain("20990")
+    expect(wide?.textContent).not.toContain("18990")
+  })
+
+  test("選一個品牌後每一張圖都只留該品牌", () => {
+    const twelveG = "NVIDIA RTX4070-12G"
+    const twelveGb = "NVIDIA RTX4070-12GB"
+    const asusNarrow = "華碩 DUAL-RTX4070-O12G"
+    const gigabyteNarrow = "技嘉 RTX4070 WINDFORCE OC 12G"
+    const asusWide = "華碩 TUF-RTX4070-O12G"
+    const gigabyteWide = "技嘉 RTX4070 GAMING OC 12G"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [
+        {
+          label: twelveG,
+          rows: [`${asusNarrow}(2535MHz), $18990`, `${gigabyteNarrow}(2520MHz), $17990`],
+        },
+        {
+          label: twelveGb,
+          rows: [`${asusWide}(2565MHz), $20990`, `${gigabyteWide}(2535MHz), $19990`],
+        },
+      ]),
+    ])
+    const open = documentOf(renderPage(series, []))
+    const codesOf = (doc: Document, label: string): string[] =>
+      [...(doc.querySelector(`[aria-label="${label}"]`)?.querySelectorAll("[data-code]") ?? [])]
+        .map((node) => node.getAttribute("data-code") ?? "")
+    expect(new Set(codesOf(open, twelveG))).toEqual(new Set([asusNarrow, gigabyteNarrow]))
+    expect(new Set(codesOf(open, twelveGb))).toEqual(new Set([asusWide, gigabyteWide]))
+
+    const filtered = documentOf(renderPage(series, [{ type: "setBrand", name: "華碩" }]))
+    expect(new Set(codesOf(filtered, twelveG))).toEqual(new Set([asusNarrow]))
+    expect(new Set(codesOf(filtered, twelveGb))).toEqual(new Set([asusWide]))
+  })
+
+  test("另一張分組圖也把缺日前後的日報價連起來", () => {
+    const twelveG = "NVIDIA RTX4070-12G"
+    const code = "華碩 DUAL-RTX4070-O12G"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [{ label: twelveG, rows: [`${code}(2535MHz), $18990`] }]),
+      snapshot("2024-06-17T02:00:00.000Z", [{ label: twelveG, rows: [`${code}(2535MHz), $17990`] }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const chart = doc.querySelector(`[aria-label="${twelveG}"]`)
+
+    expect(chart?.querySelectorAll("line")).toHaveLength(1)
+    expect(chart?.querySelector("[data-date='2024-06-16']")).toBeNull()
+    expect(chart?.textContent).not.toContain("2024-06-16")
+  })
+})
+
 describe("RTX5060Ti-8GB 型號圖", () => {
   test("打開頁面就看得到這個分組的售價，不用先勾選代號", () => {
     const series = update(emptySeries(), [

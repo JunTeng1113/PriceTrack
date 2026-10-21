@@ -16,7 +16,8 @@ test("訪客打開頁面、用關鍵字加入已選", () => {
   expect(document.documentElement.lang).toBe("zh-Hant")
   expect(document.body.textContent).toContain("關鍵字")
   expect(document.body.textContent).toContain("已選")
-  expect(document.body.textContent).not.toContain("18990")
+  expect(sectionByHeading("價格序列")?.textContent).not.toContain("18990")
+  expect(document.querySelector('[aria-label="NVIDIA RTX4070"]')?.textContent).toContain("18990")
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("archive.org")
   expect(document.documentElement.innerHTML.toLowerCase()).not.toContain("wayback")
 

@@ -28,7 +28,7 @@ export type View = {
   }[]
   axis: { lower: number; upper: number } | null
   readout: { date: string; code: string; sellingPrice: number } | null
-  modelChart: {
+  modelCharts: readonly {
     group: string
     brand: string
     brands: readonly string[]
@@ -37,7 +37,7 @@ export type View = {
       quotes: readonly { date: string; sellingPrice: number }[]
     }[]
     readout: { date: string; code: string; sellingPrice: number } | null
-  } | null
+  }[]
 }
 
 export type Action =
@@ -51,7 +51,6 @@ export type Action =
 
 const EARLIEST_DATE = "2020-01-01"
 const VGA_LABEL = "顯示卡VGA"
-const MODEL_GROUP = "NVIDIA RTX5060Ti-8GB(GDDR7)"
 
 export function emptySeries(): PriceSeries {
   return { quotes: [] }
@@ -159,6 +158,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
 
   const queryRange = rangeOverride ?? queryRangeFor(series.quotes)
   const visibleQuotes = series.quotes.filter((quote) => quoteInRange(quote.date, queryRange))
+  const chipGroups = chipGroupsInOrder(visibleQuotes)
   const pool = uniqueCodes(visibleQuotes).filter((code) =>
     chipGroup === "" || visibleQuotes.some((quote) => quote.code === code && quote.group === chipGroup),
   )
@@ -174,33 +174,34 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       .sort((left, right) => left.date.localeCompare(right.date))
       .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
   }))
-  const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === MODEL_GROUP))
-  const modelCodes = groupCodes.filter((code) => brand === "" || brandOf(code) === brand)
-  const modelSeries = modelCodes.map((code) => ({
-    code,
-    quotes: visibleQuotes
-      .filter((quote) => quote.code === code)
-      .sort((left, right) => left.date.localeCompare(right.date))
-      .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
-  }))
+  const modelCharts = chipGroups.map((group) => {
+    const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === group))
+    const modelCodes = groupCodes.filter((code) => brand === "" || brandOf(code) === brand)
+    const lines = modelCodes.map((code) => ({
+      code,
+      quotes: visibleQuotes
+        .filter((quote) => quote.code === code)
+        .sort((left, right) => left.date.localeCompare(right.date))
+        .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
+    }))
+    return {
+      group,
+      brand,
+      brands: brandsInOrder(groupCodes),
+      series: lines,
+      readout: readoutFor(lines, pointer),
+    }
+  })
 
   return {
     queryRange,
-    chipGroups: chipGroupsInOrder(visibleQuotes),
+    chipGroups,
     candidates,
     selected,
     series: plotted,
     axis: priceAxis(plotted),
     readout: readoutFor(plotted, pointer),
-    modelChart: groupCodes.length === 0
-      ? null
-      : {
-        group: MODEL_GROUP,
-        brand,
-        brands: brandsInOrder(groupCodes),
-        series: modelSeries,
-        readout: readoutFor(modelSeries, pointer),
-      },
+    modelCharts,
   }
 }
 
