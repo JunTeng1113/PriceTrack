@@ -77,7 +77,19 @@ function chartMarks(view: View): string {
   const daySpan = endDay - startDay
   const priceSpan = axis.upper - axis.lower
   const marks: string[] = []
-  for (const item of view.series) {
+  const laneCount = view.series.length
+  for (const [seriesIndex, item] of view.series.entries()) {
+    const quoted = new Set(item.quotes.map((quote) => quote.date))
+    const band = 100 / laneCount
+    for (const date of dates) {
+      if (quoted.has(date)) {
+        continue
+      }
+      const x = daySpan === 0 ? 50 : ((dayNumber(date) - startDay) / daySpan) * 100
+      marks.push(
+        `<rect data-day="${escapeAttribute(date)}" data-code="${escapeAttribute(item.code)}" x="${x - 1}" y="${seriesIndex * band}" width="2" height="${band}" fill="transparent" />`,
+      )
+    }
     let previous: { date: string; x: number; y: number } | null = null
     for (const quote of item.quotes) {
       const x = daySpan === 0 ? 50 : ((dayNumber(quote.date) - startDay) / daySpan) * 100

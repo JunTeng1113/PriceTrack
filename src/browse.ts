@@ -65,22 +65,34 @@ export function start(series: PriceSeries): void {
       })
     }
 
+    const showPoint = (date: string, code: string): void => {
+      if (date === "" || code === "") {
+        return
+      }
+      actions = [
+        ...actions.filter((action) => action.type !== "point"),
+        { type: "point", date, code },
+      ]
+      draw()
+    }
+
     const pointButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="價格點"] button')
     for (const button of pointButtons) {
       const show = (): void => {
-        const date = button.dataset.date ?? ""
-        const code = button.dataset.code ?? ""
-        if (date === "" || code === "") {
-          return
-        }
-        actions = [
-          ...actions.filter((action) => action.type !== "point"),
-          { type: "point", date, code },
-        ]
-        draw()
+        showPoint(button.dataset.date ?? "", button.dataset.code ?? "")
       }
       button.addEventListener("click", show)
       button.addEventListener("mouseover", show)
+    }
+
+    const chartMarks = document.querySelectorAll<SVGElement>('[aria-label="折線圖"] [data-date], [aria-label="折線圖"] [data-day]')
+    for (const mark of chartMarks) {
+      const show = (): void => {
+        const date = mark.getAttribute("data-date") ?? mark.getAttribute("data-day") ?? ""
+        showPoint(date, mark.getAttribute("data-code") ?? "")
+      }
+      mark.addEventListener("click", show)
+      mark.addEventListener("mouseover", show)
     }
 
     for (const label of ["起日", "迄日"]) {
