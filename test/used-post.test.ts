@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { taipeiToday } from "../src/present.ts"
-import { addUsedPost, matchCodes, pickCode, usedBoxes, usedPostFromFields, usedPostsFrom, type UsedPost } from "../src/used-post.ts"
+import { addUsedPost, matchCodes, pickCode, sellerListings, usedBoxes, usedPostFromFields, usedPostsFrom, type UsedPost } from "../src/used-post.ts"
 
 const fields = {
   code: "華碩 TUF-RTX4070-O12G",
@@ -216,6 +216,20 @@ describe("二手行情", () => {
     expect(card?.posts).toEqual([low, another, unnamed])
     expect(card).toMatchObject({ min: 9000, max: 12000 })
     expect(boxes.find((box) => box.code === "B")?.posts).toEqual([otherCode])
+  })
+
+  test("同一個賣家的同一代號會被找出來", () => {
+    const seller = "https://example.com/seller/same"
+    const matched = { ...post("A", "2024-06-15", 10000), seller }
+    const otherPrice = { ...post("A", "2024-06-16", 12000), seller }
+    const otherCode = { ...post("B", "2024-06-15", 8000), seller }
+    const otherSeller = post("A", "2024-06-15", 9000)
+
+    expect(sellerListings([matched, otherPrice, otherCode, otherSeller], ` ${seller} `, "A")).toEqual([
+      matched,
+      otherPrice,
+    ])
+    expect(sellerListings([matched], "", "A")).toEqual([])
   })
 
   test("讀檔時略過不完整的紀錄", () => {

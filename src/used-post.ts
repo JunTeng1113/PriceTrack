@@ -20,7 +20,7 @@ export function usedPostFromFields(fields: UsedFields): UsedPost | null {
   const priceText = fields.price.trim()
   const link = fields.link.trim()
   const seller = fields.seller.trim()
-  if (code === "" || date === null || !isLink(link) || !isLink(seller) || !/^[1-9]\d*$/.test(priceText)) {
+  if (code === "" || date === null || !isHttpLink(link) || !isHttpLink(seller) || !/^[1-9]\d*$/.test(priceText)) {
     return null
   }
   return { code, date, price: Number(priceText), link, seller }
@@ -97,6 +97,21 @@ export function pickCode(options: readonly string[], entry: string): string | nu
     return null
   }
   return options[Number(entry.trim()) - 1] ?? null
+}
+
+export function sellerListings(posts: readonly UsedPost[], seller: string, code: string): UsedPost[] {
+  const sellerPage = seller.trim()
+  const listing = code.trim()
+  const found: UsedPost[] = []
+  if (sellerPage === "" || listing === "") {
+    return found
+  }
+  for (const post of posts) {
+    if (post.seller.trim() === sellerPage && post.code === listing) {
+      found.push(post)
+    }
+  }
+  return found
 }
 
 export function addUsedPost(posts: readonly UsedPost[], post: UsedPost): UsedPost[] | null {
@@ -286,7 +301,7 @@ function taipeiToday(): string {
   }).format(new Date())
 }
 
-function isLink(value: string): boolean {
+export function isHttpLink(value: string): boolean {
   const marker = "://"
   const scheme = value.startsWith("https://") ? "https" : value.startsWith("http://") ? "http" : ""
   if (scheme === "") {
