@@ -3,6 +3,7 @@ import { start } from "./browse.ts"
 import { demoSeries } from "./main.ts"
 import { emptySeries, type PriceSeries } from "./present.ts"
 import { isQuote } from "./quote.ts"
+import { usedPostsFrom } from "./used-post.ts"
 
 const session = start(emptySeries())
 const quotes: PriceSeries["quotes"][number][] = []
@@ -54,3 +55,18 @@ worker.addEventListener("message", (event: MessageEvent<unknown>) => {
 worker.addEventListener("error", () => {
   session.setSeries(demoSeries())
 })
+
+function loadUsedPosts(): void {
+  void fetch(`${import.meta.env.BASE_URL}data/used.json`, { cache: "no-store" }).then(async (response) => {
+    if (!response.ok) {
+      return
+    }
+    const text = await response.text()
+    if (!text.startsWith("{")) {
+      return
+    }
+    session.setUsedPosts(usedPostsFrom(JSON.parse(text)))
+  })
+}
+
+loadUsedPosts()

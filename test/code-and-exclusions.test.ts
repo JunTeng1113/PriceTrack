@@ -542,6 +542,46 @@ describe("代號與排除", () => {
     ])
   })
 
+  test("WHITE 後面多寫的白是同一個代號，白龍仍分開", () => {
+    const white = "微星 RTX5060Ti 8G GAMING TRIO OC WHITE"
+    const dragon = "微星 RTX5080 16G GAMING TRIO OC WHITE白龍"
+    const series = update(emptySeries(), [
+      {
+        capturedAt: "2024-06-15T02:00:00.000Z",
+        html: `
+          <tr><td>顯示卡VGA</td><td><select name="n12">
+            <optgroup label="NVIDIA RTX5060Ti-8GB">
+              <option>${white} 白(2662MHz), $16990</option>
+            </optgroup>
+            <optgroup label="NVIDIA RTX5080-16GB">
+              <option>${dragon}(2715MHz), $42990</option>
+            </optgroup>
+          </select></td></tr>
+        `,
+      },
+      {
+        capturedAt: "2024-06-16T02:00:00.000Z",
+        html: `
+          <tr><td>顯示卡VGA</td><td><select name="n12">
+            <optgroup label="NVIDIA RTX5060Ti-8GB">
+              <option>｛${white}｝2662MHz/白, $21590</option>
+            </optgroup>
+          </select></td></tr>
+        `,
+      },
+    ])
+    const view = present(series, [])
+    const eight = view.modelCharts.find((chart) => chart.group === "NVIDIA RTX5060Ti-8GB")
+    const dragonChart = view.modelCharts.find((chart) => chart.group === "NVIDIA RTX5080-16GB")
+
+    expect(eight?.series.map((line) => line.code)).toEqual([white])
+    expect(eight?.series[0]?.quotes).toEqual([
+      { date: "2024-06-15", sellingPrice: 16990 },
+      { date: "2024-06-16", sellingPrice: 21590 },
+    ])
+    expect(dragonChart?.series.map((line) => line.code)).toEqual([dragon])
+  })
+
   test("愛心和列首的振興方案不是代號，型號裡的版本名仍在", () => {
     const card = "技嘉 RTX3060 GAMING OC 8G"
     const series = update(emptySeries(), [

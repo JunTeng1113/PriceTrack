@@ -1,5 +1,6 @@
 import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, listingTableMarkup } from "./fields.tsx"
 import { brandColorIndex, brandGroup, brandPaint, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
+import type { UsedBox, UsedPost } from "./used-post.ts"
 
 function escapeHtml(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -278,7 +279,7 @@ function spreadLabelYs(preferred: readonly number[], gap: number): number[] {
 
 function chartSvg(marks: string, label = ""): string {
   const named = label === "" ? "" : ` aria-label="${label}"`
-  return `<svg${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
+  return `<svg data-price-chart${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
 }
 
 function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
@@ -401,9 +402,9 @@ export function renderShell(view: View, actions: readonly Action[]): string {
   return documentHtml(filterSection(view, actions))
 }
 
-export function renderPage(series: PriceSeries, actions: readonly Action[]): string {
+export function renderPage(series: PriceSeries, actions: readonly Action[], usedPosts: readonly UsedPost[] = []): string {
   preparedBrandSvgs.clear()
-  const view = present(series, actions)
+  const view = present(series, actions, usedPosts)
   const charts = view.modelCharts.map((chart) => modelSection(view, chart)).join("")
   return documentHtml(`${filterSection(view, actions)}${charts}`)
 }
@@ -427,6 +428,7 @@ function modelSvg(
   view: View,
   lines: readonly { code: string; brand: string; quotes: readonly { date: string; sellingPrice: number }[] }[],
   focus: string,
+  used: readonly UsedBox[],
 ): string {
   const series = lines.map((line) => ({
     code: line.code,
@@ -440,14 +442,14 @@ function modelSvg(
     listings: [],
     selected: [],
     series,
-    axis: priceBounds(series),
+    axis: priceBounds(series, extraPrices(lines, used)),
     readout: null,
     modelCharts: [],
   }, true, focus))
 }
 
-function chartSection(group: string, brands: string, svg: string): string {
-  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${svg}</section>`
+function chartSection(group: string, brands: string, svg: string, used: string): string {
+  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${svg}${used}</section>`
 }
 
 export function brandCacheKey(names: readonly string[]): string {
@@ -463,15 +465,17 @@ function visibleLines(chart: View["modelCharts"][number]): View["modelCharts"][n
 
 function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const stored = new Map<string, string>()
-  stored.set("", modelSvg(view, chart.allSeries, ""))
+  stored.set("", modelSvg(view, chart.allSeries, "", chart.used))
   for (const name of chart.brands) {
-    stored.set(name, modelSvg(view, chart.allSeries.filter((line) => brandGroup(line.brand) === name), ""))
+    const lines = chart.allSeries.filter((line) => brandGroup(line.brand) === name)
+    stored.set(name, modelSvg(view, lines, "", chart.used))
   }
   preparedBrandSvgs.set(chart.group, stored)
   const brands = brandMarkup(chart.brands, chart.selectedBrands)
-  const visible = modelSvg(view, visibleLines(chart), chart.focus)
+  const lines = visibleLines(chart)
+  const visible = modelSvg(view, lines, chart.focus, chart.used)
   stored.set(brandCacheKey(chart.selectedBrands), visible)
-  return chartSection(chart.group, brands, visible)
+  return chartSection(chart.group, brands, visible, usedStrip(lines, chart.used))
 }
 
 export function clearPreparedCharts(): void {
@@ -497,16 +501,28 @@ export function renderBrandSvg(view: View, group: string, brands: readonly strin
   const lines = brands.length === 0
     ? chart.allSeries
     : chart.allSeries.filter((line) => brands.includes(brandGroup(line.brand)))
-  const markup = modelSvg(view, lines, "")
+  const markup = modelSvg(view, lines, "", chart.used)
   storeBrandChart(group, key, markup)
   return markup
+}
+
+export function usedMarkup(view: View, group: string, brands: readonly string[]): string {
+  const chart = view.modelCharts.find((item) => item.group === group)
+  if (chart === undefined) {
+    return ""
+  }
+  const lines = brands.length === 0
+    ? chart.allSeries
+    : chart.allSeries.filter((line) => brands.includes(brandGroup(line.brand)))
+  return usedStrip(lines, chart.used)
 }
 
 export function visibleChart(
   view: View,
   chart: View["modelCharts"][number],
 ): { section: string; marks: string[] } {
-  const series = visibleLines(chart).map((line) => ({
+  const lines = visibleLines(chart)
+  const series = lines.map((line) => ({
     code: line.code,
     colorIndex: brandColorIndex(line.brand),
     quotes: line.quotes,
@@ -518,17 +534,80 @@ export function visibleChart(
     listings: [],
     selected: [],
     series,
-    axis: priceBounds(series),
+    axis: priceBounds(series, extraPrices(lines, chart.used)),
     readout: null,
     modelCharts: [],
   }, true, chart.focus)
   const frame = marks[0] ?? ""
   const brands = brandMarkup(chart.brands, chart.selectedBrands)
-  return { section: chartSection(chart.group, brands, chartSvg(frame)), marks: marks.slice(1) }
+  return { section: chartSection(chart.group, brands, chartSvg(frame), usedStrip(lines, chart.used)), marks: marks.slice(1) }
+}
+
+function extraPrices(lines: readonly { code: string }[], used: readonly UsedBox[]): number[] {
+  const codes = new Set(lines.map((line) => line.code))
+  const prices: number[] = []
+  for (const box of used) {
+    if (!codes.has(box.code)) {
+      continue
+    }
+    prices.push(box.min, box.max)
+  }
+  return prices
+}
+
+function usedStrip(
+  lines: readonly { code: string; brand: string; quotes: readonly { date: string; sellingPrice: number }[] }[],
+  used: readonly UsedBox[],
+): string {
+  const codes = new Set(lines.map((line) => line.code))
+  const boxes = used.filter((box) => codes.has(box.code))
+  if (boxes.length === 0) {
+    return ""
+  }
+  const axis = priceBounds(lines, extraPrices(lines, boxes))
+  if (axis === null) {
+    return ""
+  }
+  const ticks = priceTicks(axis.lower, axis.upper).filter((price, index, all) => index % 2 === 0 || price === all.at(-1))
+  const labels = ticks.map((price) =>
+    `<text data-used-axis="y" x="34" y="${yAt(price, axis).toFixed(2)}" font-size="3.2" fill="#334155" text-anchor="end" dominant-baseline="middle">${formatPrice(price)}</text>`,
+  ).join("")
+  const axisSvg = `<svg aria-hidden="true" viewBox="0 0 36 100" width="72" height="200"><path d="M35 ${plotTop} V${plotBottom}" fill="none" stroke="#334155" stroke-width="0.6" />${labels}</svg>`
+  const figures = boxes.map((box) => {
+    const posts = [...box.posts].sort((left, right) => left.date.localeCompare(right.date) || left.price - right.price)
+    const links = posts.map((post) =>
+      `<a class="block underline" href="${escapeAttribute(post.link)}" target="_blank" rel="noreferrer">${escapeHtml(post.date)} ${formatSellingPrice(post.price)}</a>`,
+    ).join("")
+    return `<figure class="flex w-36 flex-col items-center gap-1"><svg viewBox="0 0 28 100" width="56" height="200" aria-label="盒鬚圖">${boxMarks(box, axis)}</svg><figcaption class="w-full text-xs"><div class="font-medium">${escapeHtml(box.code)}</div>${links}</figcaption></figure>`
+  }).join("")
+  return `<div data-used aria-label="二手行情" class="flex flex-col gap-2"><p class="font-medium">二手行情</p><div class="flex items-start gap-3 overflow-x-auto">${axisSvg}${figures}</div></div>`
+}
+
+function boxMarks(box: UsedBox, axis: { lower: number; upper: number }): string {
+  const yMin = yAt(box.min, axis)
+  const yMax = yAt(box.max, axis)
+  const yQ1 = yAt(box.q1, axis)
+  const yQ3 = yAt(box.q3, axis)
+  const yMedian = yAt(box.median, axis)
+  const rawHeight = Math.abs(yQ1 - yQ3)
+  const height = rawHeight < 0.8 ? 0.8 : rawHeight
+  const top = rawHeight < 0.8 ? yMedian - 0.4 : Math.min(yQ1, yQ3)
+  const left = 6
+  const right = 22
+  const mid = 14
+  const cap = 4
+  return [
+    `<g data-box data-code="${escapeAttribute(box.code)}" data-min="${box.min}" data-q1="${box.q1}" data-median="${box.median}" data-q3="${box.q3}" data-max="${box.max}">`,
+    `<path d="M${mid - cap} ${yMax.toFixed(2)} H${mid + cap} M${mid} ${yMax.toFixed(2)} V${yMin.toFixed(2)} M${mid - cap} ${yMin.toFixed(2)} H${mid + cap}" fill="none" stroke="#334155" stroke-width="0.6" />`,
+    `<rect x="${left}" y="${top.toFixed(2)}" width="${right - left}" height="${height.toFixed(2)}" fill="#e8eef7" stroke="#334155" stroke-width="0.6" />`,
+    `<path data-median d="M${left} ${yMedian.toFixed(2)} H${right}" fill="none" stroke="#334155" stroke-width="1.2" />`,
+    "</g>",
+  ].join("")
 }
 
 function priceBounds(
   series: readonly { quotes: readonly { sellingPrice: number }[] }[],
+  extras: readonly number[] = [],
 ): { lower: number; upper: number } | null {
   let min: number | null = null
   let max: number | null = null
@@ -540,6 +619,14 @@ function priceBounds(
       if (max === null || quote.sellingPrice > max) {
         max = quote.sellingPrice
       }
+    }
+  }
+  for (const price of extras) {
+    if (min === null || price < min) {
+      min = price
+    }
+    if (max === null || price > max) {
+      max = price
     }
   }
   if (min === null || max === null) {

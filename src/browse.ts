@@ -1,5 +1,6 @@
-import { brandCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, visibleChart } from "./page.ts"
+import { brandCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
 import { present, type Action, type PriceSeries, type View } from "./present.ts"
+import type { UsedPost } from "./used-post.ts"
 
 function dayNumber(isoDate: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
@@ -349,8 +350,12 @@ function writeFilterDraft(draft: FilterDraft): void {
 const chartQuoteLimit = 2000
 const markBatch = 1200
 
-export function start(series: PriceSeries): { setSeries(next: PriceSeries): void } {
+export function start(series: PriceSeries): {
+  setSeries(next: PriceSeries): void
+  setUsedPosts(next: readonly UsedPost[]): void
+} {
   let latestView: View | null = null
+  let usedPosts: readonly UsedPost[] = []
   let renderToken = 0
   let actions: Action[] = []
   let lockedCode: string | null = null
@@ -537,7 +542,7 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
       }
       const parsed = new DOMParser().parseFromString(markup, "text/html")
       const nextSvg = parsed.querySelector("svg")
-      const current = section.querySelector("svg")
+      const current = section.querySelector("svg[data-price-chart]")
       if (!isSvg(nextSvg) || !isSvg(current)) {
         return false
       }
@@ -547,7 +552,28 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
       }
       current.replaceWith(nextSvg)
       bindChart(nextSvg)
+      if (latestView !== null) {
+        paintUsed(section, usedMarkup(latestView, group, brands))
+      }
       return true
+    }
+
+    const paintUsed = (section: Element, markup: string): void => {
+      const existing = section.querySelector("[data-used]")
+      if (markup === "") {
+        existing?.remove()
+        return
+      }
+      const parsed = new DOMParser().parseFromString(markup, "text/html")
+      const next = parsed.querySelector("[data-used]")
+      if (next === null) {
+        return
+      }
+      if (existing === null) {
+        section.append(next)
+      } else {
+        existing.replaceWith(next)
+      }
     }
 
     const bindBrands = (scope: ParentNode): void => {
@@ -657,7 +683,7 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
     }
 
     const bindDrawnCharts = (): void => {
-      const charts = document.querySelectorAll("svg")
+      const charts = document.querySelectorAll("svg[data-price-chart]")
       for (const chart of charts) {
         const svg = svgOf(chart)
         if (svg === null) {
@@ -690,7 +716,7 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
         const piece = visibleChart(view, chart)
         const parsed = new DOMParser().parseFromString(piece.section, "text/html")
         const section = parsed.querySelector("section")
-        const svg = section?.querySelector("svg") ?? null
+        const svg = section?.querySelector("svg[data-price-chart]") ?? null
         if (section === null || !isSvg(svg)) {
           setTimeout(() => appendChart(index + 1), 0)
           return
@@ -738,7 +764,7 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
         if (generation !== renderToken) {
           return
         }
-        const view = present(series, actions)
+        const view = present(series, actions, usedPosts)
         latestView = view
         clearPreparedCharts()
         paint(renderShell(view, actions))
@@ -757,8 +783,8 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
     }
 
     renderToken += 1
-    latestView = present(series, actions)
-    paint(renderPage(series, actions))
+    latestView = present(series, actions, usedPosts)
+    paint(renderPage(series, actions, usedPosts))
     bindShell()
     bindDrawnCharts()
 
@@ -772,6 +798,12 @@ export function start(series: PriceSeries): { setSeries(next: PriceSeries): void
     setSeries(next: PriceSeries): void {
       series = next
       draw(true)
+    },
+    setUsedPosts(next: readonly UsedPost[]): void {
+      usedPosts = next
+      if (series.quotes.length > 0) {
+        draw(true)
+      }
     },
   }
 }

@@ -1,3 +1,5 @@
+import { usedBoxes, type UsedBox, type UsedPost } from "./used-post.ts"
+
 export type Snapshot = {
   capturedAt: string
   html: string
@@ -47,6 +49,7 @@ export type View = {
       quotes: readonly { date: string; sellingPrice: number }[]
     }[]
     readout: { date: string; code: string; sellingPrice: number } | null
+    used: readonly UsedBox[]
   }[]
 }
 
@@ -208,7 +211,7 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
   return normalized
 }
 
-export function present(series: PriceSeries, actions: readonly Action[]): View {
+export function present(series: PriceSeries, actions: readonly Action[], usedPosts: readonly UsedPost[] = []): View {
   const stored = normalizeQuotes(series.quotes)
   let keyword = ""
   const chosenGroups: string[] = []
@@ -317,6 +320,7 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
       series: lines,
       allSeries,
       readout: readoutFor(lines, pointer),
+      used: usedBoxes(usedPosts.map(recordedCode), groupCodes, queryRange),
     }
   })
 
@@ -331,6 +335,14 @@ export function present(series: PriceSeries, actions: readonly Action[]): View {
     readout: readoutFor(plotted, pointer),
     modelCharts,
   }
+}
+
+function recordedCode(post: UsedPost): UsedPost {
+  const code = promotionFree(post.code)
+  if (code === null || code === post.code) {
+    return post
+  }
+  return { ...post, code }
 }
 
 function readoutFor(
@@ -525,7 +537,13 @@ function promotionFree(code: string): string | null {
       }
     }
   }
-  return rest === "" ? null : rest
+  if (rest === "") {
+    return null
+  }
+  if (rest.endsWith(" WHITE 白")) {
+    return rest.slice(0, -2)
+  }
+  return rest
 }
 
 function parseSellingPrice(text: string): number | null {

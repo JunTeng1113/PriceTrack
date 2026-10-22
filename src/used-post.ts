@@ -14,35 +14,142 @@ export type UsedFields = {
 
 export function usedPostFromFields(fields: UsedFields): UsedPost | null {
   const code = fields.code.trim()
-  const date = fields.date.trim()
+  const date = canonicalDate(fields.date)
   const priceText = fields.price.trim()
   const link = fields.link.trim()
-  if (code === "" || !isIsoDate(date) || !isLink(link) || !/^[1-9]\d*$/.test(priceText)) {
+  if (code === "" || date === null || !isLink(link) || !/^[1-9]\d*$/.test(priceText)) {
     return null
   }
   return { code, date, price: Number(priceText), link }
 }
 
 export function addUsedPost(posts: readonly UsedPost[], post: UsedPost): UsedPost[] | null {
-  if (posts.some((item) => item.link === post.link)) {
+  if (posts.some((item) => item.link === post.link && item.code === post.code && item.price === post.price)) {
     return null
   }
   return [...posts, post]
 }
 
-function isIsoDate(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (match === null) {
+export type UsedBox = {
+  code: string
+  min: number
+  q1: number
+  median: number
+  q3: number
+  max: number
+  posts: readonly UsedPost[]
+}
+
+export function usedPostsFrom(value: unknown): UsedPost[] {
+  if (typeof value !== "object" || value === null || !("posts" in value) || !Array.isArray(value.posts)) {
+    return []
+  }
+  const posts: UsedPost[] = []
+  for (const item of value.posts) {
+    if (!isStoredPost(item)) {
+      continue
+    }
+    posts.push(item)
+  }
+  return posts
+}
+
+export function usedBoxes(
+  posts: readonly UsedPost[],
+  codes: readonly string[],
+  range: { start: string; end: string } | null,
+): UsedBox[] {
+  if (range === null) {
+    return []
+  }
+  const grouped = new Map<string, UsedPost[]>()
+  for (const post of posts) {
+    if (!codes.includes(post.code) || post.date < range.start || post.date > range.end) {
+      continue
+    }
+    const list = grouped.get(post.code) ?? []
+    list.push(post)
+    grouped.set(post.code, list)
+  }
+  const boxes: UsedBox[] = []
+  for (const code of codes) {
+    const list = grouped.get(code)
+    if (list === undefined) {
+      continue
+    }
+    const box = boxOf(code, list)
+    if (box !== null) {
+      boxes.push(box)
+    }
+  }
+  return boxes
+}
+
+function boxOf(code: string, posts: readonly UsedPost[]): UsedBox | null {
+  if (posts.length === 0) {
+    return null
+  }
+  const prices = posts.map((post) => post.price).sort((left, right) => left - right)
+  const count = prices.length
+  const min = prices[0] ?? 0
+  const max = prices[count - 1] ?? min
+  if (count === 1) {
+    return { code, min, q1: min, median: min, q3: min, max, posts }
+  }
+  const lowerEnd = Math.floor(count / 2)
+  const upperStart = count % 2 === 1 ? lowerEnd + 1 : lowerEnd
+  return {
+    code,
+    min,
+    q1: medianOf(prices, 0, lowerEnd),
+    median: medianOf(prices, 0, count),
+    q3: medianOf(prices, upperStart, count),
+    max,
+    posts,
+  }
+}
+
+function medianOf(sorted: readonly number[], start: number, end: number): number {
+  const count = end - start
+  if (count <= 0) {
+    return sorted[start] ?? 0
+  }
+  const mid = start + Math.floor(count / 2)
+  if (count % 2 === 1) {
+    return sorted[mid] ?? 0
+  }
+  const left = sorted[mid - 1] ?? 0
+  const right = sorted[mid] ?? 0
+  return (left + right) / 2
+}
+
+function isStoredPost(value: unknown): value is UsedPost {
+  if (typeof value !== "object" || value === null) {
     return false
+  }
+  return "code" in value && typeof value.code === "string"
+    && "date" in value && typeof value.date === "string"
+    && "price" in value && typeof value.price === "number"
+    && "link" in value && typeof value.link === "string"
+}
+
+function canonicalDate(value: string): string | null {
+  const compact = value.trim().replaceAll(/\s/g, "")
+  const match = /^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})日?$/.exec(compact)
+  if (match === null) {
+    return null
   }
   const year = Number(match[1])
   const month = Number(match[2])
   const day = Number(match[3])
   if (month < 1 || month > 12 || day < 1) {
-    return false
+    return null
   }
   const date = new Date(Date.UTC(year, month - 1, day))
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null
+  }
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
 function isLink(value: string): boolean {
