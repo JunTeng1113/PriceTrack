@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { emptySeries, present, update, type Snapshot } from "../src/present.ts"
+import { emptySeries, present, taipeiToday, update, type Snapshot } from "../src/present.ts"
 
 function vgaSnapshot(capturedAt: string): Snapshot {
   return {
@@ -21,11 +21,11 @@ function vgaSnapshot(capturedAt: string): Snapshot {
 }
 
 describe("查詢區間", () => {
-  test("打開頁面時起日是 2020-01-01，迄日是最新日報價", () => {
+  test("打開頁面時起日是 2020-01-01，迄日是台北今天", () => {
     const series = update(emptySeries(), [vgaSnapshot("2024-02-29T02:00:00.000Z")])
     const view = present(series, [])
 
-    expect(view.queryRange).toEqual({ start: "2020-01-01", end: "2024-02-29" })
+    expect(view.queryRange).toEqual({ start: "2020-01-01", end: taipeiToday() })
   })
 
   test("改了查詢區間之後已選還在", () => {

@@ -23,6 +23,64 @@ export function usedPostFromFields(fields: UsedFields): UsedPost | null {
   return { code, date, price: Number(priceText), link }
 }
 
+export type CodeMatch =
+  | { status: "choose"; options: readonly string[] }
+  | { status: "none" }
+  | { status: "narrow"; options: readonly string[] }
+
+const brandAliases: Readonly<Record<string, string>> = {
+  asus: "華碩",
+  gigabyte: "技嘉",
+  msi: "微星",
+}
+
+function listingBrand(code: string): string {
+  if (code.startsWith("ROG-")) {
+    return "華碩"
+  }
+  const space = code.indexOf(" ")
+  if (space <= 0) {
+    return code
+  }
+  return code.slice(0, space)
+}
+
+function tokenMatches(token: string, code: string): boolean {
+  const folded = code.toLowerCase().replaceAll("-", "")
+  if (folded.includes(token.replaceAll("-", ""))) {
+    return true
+  }
+  const alias = brandAliases[token]
+  return alias !== undefined && listingBrand(code) === alias
+}
+
+export function matchCodes(query: string, codes: readonly string[]): CodeMatch {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter((token) => token !== "")
+  if (tokens.length === 0) {
+    return { status: "none" }
+  }
+  const options: string[] = []
+  for (const code of codes) {
+    if (tokens.every((token) => tokenMatches(token, code)) && !options.includes(code)) {
+      options.push(code)
+    }
+  }
+  if (options.length === 0) {
+    return { status: "none" }
+  }
+  if (options.length > 20) {
+    return { status: "narrow", options: options.slice(0, 20) }
+  }
+  return { status: "choose", options }
+}
+
+export function pickCode(options: readonly string[], entry: string): string | null {
+  if (!/^[1-9]\d*$/.test(entry.trim())) {
+    return null
+  }
+  return options[Number(entry.trim()) - 1] ?? null
+}
+
 export function addUsedPost(posts: readonly UsedPost[], post: UsedPost): UsedPost[] | null {
   if (posts.some((item) => item.link === post.link && item.code === post.code && item.price === post.price)) {
     return null

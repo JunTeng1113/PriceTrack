@@ -57,13 +57,14 @@ function documentOf(html: string): Document {
 }
 
 test("區間內同一代號合成一個盒鬚圖，畫在該晶片分組折線下方", () => {
-  const doc = documentOf(renderPage(series(), [], posts))
+  const doc = documentOf(renderPage(series(), [{ type: "setRange", start: "2020-01-01", end: "2024-06-16" }], posts))
   const section = doc.querySelector(`[aria-label="${group}"]`)
   const boxes = [...(section?.querySelectorAll('[aria-label="盒鬚圖"]') ?? [])]
   const asusBox = section?.querySelector(`[data-used] [data-code="${asus}"]`)
   const other = doc.querySelector('[aria-label="NVIDIA RTX5070"]')
 
   expect(section?.querySelector("[data-used]")?.getAttribute("aria-label")).toBe("二手行情")
+  expect(section?.querySelector("[data-used-axis='y']")?.getAttribute("font-size")).toBe("8")
   expect(section?.querySelector("svg")?.getAttribute("data-price-chart")).toBe("")
   expect(boxes).toHaveLength(2)
   expect(asusBox?.getAttribute("data-min")).toBe("10000")

@@ -570,9 +570,9 @@ function usedStrip(
   }
   const ticks = priceTicks(axis.lower, axis.upper).filter((price, index, all) => index % 2 === 0 || price === all.at(-1))
   const labels = ticks.map((price) =>
-    `<text data-used-axis="y" x="34" y="${yAt(price, axis).toFixed(2)}" font-size="3.2" fill="#334155" text-anchor="end" dominant-baseline="middle">${formatPrice(price)}</text>`,
+    `<text data-used-axis="y" x="62" y="${yAt(price, axis).toFixed(2)}" font-size="8" fill="#334155" text-anchor="end" dominant-baseline="middle">${formatPrice(price)}</text>`,
   ).join("")
-  const axisSvg = `<svg aria-hidden="true" viewBox="0 0 36 100" width="72" height="200"><path d="M35 ${plotTop} V${plotBottom}" fill="none" stroke="#334155" stroke-width="0.6" />${labels}</svg>`
+  const axisSvg = `<svg aria-hidden="true" viewBox="0 0 64 100" width="128" height="200"><path d="M63 ${plotTop} V${plotBottom}" fill="none" stroke="#334155" stroke-width="0.6" />${labels}</svg>`
   const figures = boxes.map((box) => {
     const posts = [...box.posts].sort((left, right) => left.date.localeCompare(right.date) || left.price - right.price)
     const links = posts.map((post) =>

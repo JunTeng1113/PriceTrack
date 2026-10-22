@@ -2,6 +2,7 @@
 
 import { expect, test } from "vitest"
 import "../src/main.ts"
+import { taipeiToday } from "../src/present.ts"
 
 function sectionByHeading(heading: string): HTMLElement | null {
   const headings = [...document.querySelectorAll("h2")]
@@ -39,7 +40,7 @@ test("訪客打開頁面、用晶片分組加入已選", () => {
   const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
   const end = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')
   expect(start?.value).toBe("2020-01-01")
-  expect(end?.value).toBe("2024-06-15")
+  expect(end?.value).toBe(taipeiToday())
   if (start === null || end === null) {
     return
   }

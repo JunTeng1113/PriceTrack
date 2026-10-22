@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { addUsedPost, usedBoxes, usedPostFromFields, usedPostsFrom, type UsedPost } from "../src/used-post.ts"
+import { addUsedPost, matchCodes, pickCode, usedBoxes, usedPostFromFields, usedPostsFrom, type UsedPost } from "../src/used-post.ts"
 
 const fields = {
   code: "華碩 TUF-RTX4070-O12G",
@@ -7,6 +7,77 @@ const fields = {
   price: "12000",
   link: "https://example.com/post/1",
 }
+
+const knownCodes = [
+  "華碩 DUAL-RTX5060-O8G",
+  "華碩 DUAL-RTX5060TI-O8G",
+  "技嘉 RTX5060 WINDFORCE 8G",
+  "華碩 TUF-RTX4070-O12G",
+]
+
+describe("代號片段", () => {
+  test("dual 5060 對上同時含這兩個片段的代號", () => {
+    expect(matchCodes("dual 5060", knownCodes)).toEqual({
+      status: "choose",
+      options: ["華碩 DUAL-RTX5060-O8G", "華碩 DUAL-RTX5060TI-O8G"],
+    })
+  })
+
+  test("沒有符合的代號時不給選項", () => {
+    expect(matchCodes("sapphire", knownCodes)).toEqual({ status: "none" })
+    expect(matchCodes("   ", knownCodes)).toEqual({ status: "none" })
+  })
+
+  test("超過 20 筆時只列出前 20 筆並要求縮小", () => {
+    const codes = Array.from({ length: 21 }, (_, index) => `華碩 DUAL-RTX5060-${index}`)
+    expect(matchCodes("dual 5060", codes)).toEqual({
+      status: "narrow",
+      options: codes.slice(0, 20),
+    })
+    expect(matchCodes("dual 5060", codes.slice(0, 20)).status).toBe("choose")
+  })
+
+  test("華碩、技嘉、微星可以用英文別名對上", () => {
+    const codes = [
+      "華碩 DUAL-RTX5060-O8G",
+      "技嘉 RTX5060 WINDFORCE 8G",
+      "微星 RTX5060 8G VENTUS 2X",
+      "ROG-STRIX-RTX5070TI-16G-GAMING",
+    ]
+    expect(matchCodes("ASUS dual 5060", codes)).toEqual({
+      status: "choose",
+      options: ["華碩 DUAL-RTX5060-O8G"],
+    })
+    expect(matchCodes("gigabyte 5060", codes)).toEqual({
+      status: "choose",
+      options: ["技嘉 RTX5060 WINDFORCE 8G"],
+    })
+    expect(matchCodes("msi 5060", codes)).toEqual({
+      status: "choose",
+      options: ["微星 RTX5060 8G VENTUS 2X"],
+    })
+    expect(matchCodes("asus", codes)).toEqual({
+      status: "choose",
+      options: ["華碩 DUAL-RTX5060-O8G", "ROG-STRIX-RTX5070TI-16G-GAMING"],
+    })
+  })
+
+  test("連字號不使片段對不到，選項仍是代號原文", () => {
+    expect(matchCodes("rtx5060", ["ZOTAC RTX-5060"])).toEqual({
+      status: "choose",
+      options: ["ZOTAC RTX-5060"],
+    })
+  })
+
+  test("編號確認後才是要記的代號", () => {
+    const options = ["華碩 DUAL-RTX5060-O8G", "華碩 DUAL-RTX5060TI-O8G"]
+    expect(pickCode(options, "1")).toBe("華碩 DUAL-RTX5060-O8G")
+    expect(pickCode(options, "2")).toBe("華碩 DUAL-RTX5060TI-O8G")
+    expect(pickCode(options, "0")).toBeNull()
+    expect(pickCode(options, "3")).toBeNull()
+    expect(pickCode(["華碩 DUAL-RTX5060-O8G"], "")).toBeNull()
+  })
+})
 
 describe("二手貼文", () => {
   test("四個欄位都有效時記成一筆", () => {

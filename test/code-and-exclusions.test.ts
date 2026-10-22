@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { emptySeries, present, update, type Snapshot } from "../src/present.ts"
+import { emptySeries, present, update, visibleCodes, type Snapshot } from "../src/present.ts"
 
 const capturedAt = "2024-06-15T02:00:00.000Z"
 
@@ -492,6 +492,10 @@ describe("代號與排除", () => {
       "華碩 TUF-RTX4070-O12G-GAMING",
     ])
     expect(view.candidates).toEqual([
+      "華碩 DUAL-RTX4070-O12G",
+      "華碩 TUF-RTX4070-O12G-GAMING",
+    ])
+    expect(visibleCodes(series)).toEqual([
       "華碩 DUAL-RTX4070-O12G",
       "華碩 TUF-RTX4070-O12G-GAMING",
     ])

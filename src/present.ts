@@ -177,6 +177,16 @@ function sameCapacitySpelling(name: string): string {
   return spelled
 }
 
+export function visibleCodes(series: PriceSeries): string[] {
+  const codes: string[] = []
+  for (const quote of normalizeQuotes(series.quotes)) {
+    if (!codes.includes(quote.code)) {
+      codes.push(quote.code)
+    }
+  }
+  return codes
+}
+
 function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
   const byKey = new Map<string, StoredQuote>()
   const order: string[] = []
@@ -562,12 +572,18 @@ function parseSellingPrice(text: string): number | null {
 }
 
 function queryRangeFor(quotes: readonly StoredQuote[]): { start: string; end: string } | null {
-  const dates = quotes.map((quote) => quote.date).sort()
-  const end = dates.at(-1)
-  if (end === undefined) {
+  if (quotes.length === 0) {
+    return null
+  }
+  const end = taipeiToday()
+  if (end === "") {
     return null
   }
   return { start: EARLIEST_DATE, end }
+}
+
+export function taipeiToday(): string {
+  return taipeiDate(new Date().toISOString())
 }
 
 function quoteInRange(date: string, range: { start: string; end: string } | null): boolean {

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "vitest"
 import { renderPage } from "../src/page.ts"
-import { emptySeries, update, type Snapshot } from "../src/present.ts"
+import { emptySeries, taipeiToday, update, type Snapshot } from "../src/present.ts"
 
 const snapshot: Snapshot = {
   capturedAt: "2024-06-15T02:00:00.000Z",
@@ -198,11 +198,11 @@ function inputValue(doc: Document, label: string): string | null {
 }
 
 describe("查詢區間", () => {
-  test("打開頁面時迄日是最新日報價，起日是 2020-01-01", () => {
+  test("打開頁面時迄日是台北今天，起日是 2020-01-01", () => {
     const series = update(emptySeries(), [snapshot])
     const doc = documentOf(renderPage(series, []))
 
-    expect(inputValue(doc, "迄日")).toBe("2024-06-15")
+    expect(inputValue(doc, "迄日")).toBe(taipeiToday())
     expect(inputValue(doc, "起日")).toBe("2020-01-01")
   })
 
@@ -237,7 +237,7 @@ describe("查詢區間", () => {
     ])
     const doc = documentOf(renderPage(series, []))
 
-    expect(inputValue(doc, "迄日")).toBe("2024-02-29")
+    expect(inputValue(doc, "迄日")).toBe(taipeiToday())
     expect(inputValue(doc, "起日")).toBe("2020-01-01")
   })
 
@@ -247,18 +247,18 @@ describe("查詢區間", () => {
     ])
     const doc = documentOf(renderPage(series, []))
 
-    expect(inputValue(doc, "迄日")).toBe("2020-06-15")
+    expect(inputValue(doc, "迄日")).toBe(taipeiToday())
     expect(inputValue(doc, "起日")).toBe("2020-01-01")
   })
 
-  test("迄日是多筆日報價裡最新的一天", () => {
+  test("多筆日報價時迄日仍是台北今天", () => {
     const series = update(emptySeries(), [
       pricedSnapshot("2024-06-15T02:00:00.000Z", 18990),
       pricedSnapshot("2024-08-01T02:00:00.000Z", 17990),
     ])
     const doc = documentOf(renderPage(series, []))
 
-    expect(inputValue(doc, "迄日")).toBe("2024-08-01")
+    expect(inputValue(doc, "迄日")).toBe(taipeiToday())
     expect(inputValue(doc, "起日")).toBe("2020-01-01")
   })
 
