@@ -315,6 +315,7 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
       const x = xAt(quote.date, startDay, daySpan)
       const y = yAt(quote.sellingPrice, axis)
       const dashed = quote.dashed === true
+      const delisted = quote.delisted === true
       if (previous !== null && (connectGaps || addDays(previous.date, 1) === quote.date)) {
         const segment = `data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}"`
         const dash = dashed || previous.dashed ? ` stroke-dasharray="2 1.2"` : ""
@@ -325,8 +326,10 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
           `<line data-hit="true" ${segment} stroke="transparent" stroke-width="6" fill="none" pointer-events="stroke" />`,
         )
       }
+      const ring = delisted ? ` fill="none" stroke="${paint}" stroke-width="0.6"` : ` fill="${paint}"`
+      const flagged = delisted ? ` data-delisted="true"` : ""
       marks.push(
-        `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="${paint}" opacity="${opacity}" />`,
+        `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}"${flagged} cx="${x}" cy="${y}" r="${delisted ? "1.6" : "1.2"}"${ring} opacity="${opacity}" />`,
       )
       previous = { date: quote.date, price: quote.sellingPrice, x, y, dashed }
     }

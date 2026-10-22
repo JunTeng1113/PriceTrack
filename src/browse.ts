@@ -212,13 +212,17 @@ function formatTooltipPrice(price: string): string {
   return negative ? `-$${grouped}` : `$${grouped}`
 }
 
-function showTooltip(date: string, code: string, price: string, event: MouseEvent): void {
+function showTooltip(date: string, code: string, price: string, event: MouseEvent, delisted = false): void {
   if (date === "" || code === "" || price === "") {
     return
   }
   const tip = ensureTooltip()
   tip.replaceChildren()
-  for (const text of [date, code, formatTooltipPrice(price)]) {
+  const rows = [date, code, formatTooltipPrice(price)]
+  if (delisted) {
+    rows.push("下架")
+  }
+  for (const text of rows) {
     const row = document.createElement("p")
     row.textContent = text
     tip.append(row)
@@ -234,18 +238,18 @@ function hideTooltip(): void {
   }
 }
 
-function endpointQuote(line: SVGLineElement): { date: string; price: string } | null {
+function endpointQuote(line: SVGLineElement): { date: string; price: string; delisted: boolean } | null {
   const toDate = line.getAttribute("data-to-date") ?? ""
   const toPrice = line.getAttribute("data-to-price") ?? ""
   if (toDate !== "" && toPrice !== "") {
-    return { date: toDate, price: toPrice }
+    return { date: toDate, price: toPrice, delisted: false }
   }
   const fromDate = line.getAttribute("data-from-date") ?? ""
   const fromPrice = line.getAttribute("data-from-price") ?? ""
   if (fromDate === "" || fromPrice === "") {
     return null
   }
-  return { date: fromDate, price: fromPrice }
+  return { date: fromDate, price: fromPrice, delisted: false }
 }
 
 function quoteAt(
@@ -253,7 +257,7 @@ function quoteAt(
   code: string,
   event: MouseEvent,
   line: SVGLineElement | null,
-): { date: string; price: string } | null {
+): { date: string; price: string; delisted: boolean } | null {
   const x = pointerX(svg, event)
   const circle = x === null
     ? line === null ? laterCircle(circlesFor(svg, code)) : null
@@ -261,7 +265,10 @@ function quoteAt(
   if (circle !== null) {
     const date = circle.getAttribute("data-date") ?? ""
     const price = circle.getAttribute("data-price") ?? ""
-    return date === "" || price === "" ? null : { date, price }
+    if (date === "" || price === "") {
+      return null
+    }
+    return { date, price, delisted: circle.getAttribute("data-delisted") === "true" }
   }
   return line === null ? null : endpointQuote(line)
 }
@@ -429,7 +436,7 @@ export function start(series: PriceSeries): {
               writeReadout(readoutOf(svg), explicitDate, code, price)
             }
             if (event instanceof MouseEvent) {
-              showTooltip(explicitDate, code, price, event)
+              showTooltip(explicitDate, code, price, event, mark.getAttribute("data-delisted") === "true")
             }
             return
           }
@@ -490,7 +497,7 @@ export function start(series: PriceSeries): {
           if (!held(code)) {
             writeReadout(readoutOf(svg), quote.date, code, quote.price)
           }
-          showTooltip(quote.date, code, quote.price, event)
+          showTooltip(quote.date, code, quote.price, event, quote.delisted)
         })
         line.addEventListener("mousemove", (event) => {
           if (!(event instanceof MouseEvent)) {
@@ -504,7 +511,7 @@ export function start(series: PriceSeries): {
           if (quote === null) {
             return
           }
-          showTooltip(quote.date, code, quote.price, event)
+          showTooltip(quote.date, code, quote.price, event, quote.delisted)
         })
         line.addEventListener("mouseout", (event) => {
           leaveLine(line, event)

@@ -242,6 +242,25 @@ test("滑鼠停在折線上時，Tooltip 顯示日期、型號名稱與價格", 
   expect(document.querySelector('[role="tooltip"]')?.classList.contains("hidden")).toBe(true)
 })
 
+test("下架的最後一筆在 Tooltip 標明下架", () => {
+  const series = update(emptySeries(), [
+    vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`, `${windforce}(2497MHz), $20000`]),
+    vga("2024-06-16T02:00:00.000Z", [`${prime}(2505MHz), $11000`]),
+  ])
+  start(series)
+
+  const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
+  const removed = svg?.querySelector(`circle[data-code="${windforce}"][data-delisted="true"]`)
+  removed?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 40, clientY: 40 }))
+  const removedRows = [...document.querySelectorAll('[role="tooltip"] p')].map((node) => node.textContent ?? "")
+  expect(removedRows).toEqual(["2024-06-15", windforce, "$20,000", "下架"])
+
+  const kept = svg?.querySelector(`circle[data-code="${prime}"][data-date="2024-06-16"]`)
+  kept?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 80, clientY: 40 }))
+  const keptRows = [...document.querySelectorAll('[role="tooltip"] p')].map((node) => node.textContent ?? "")
+  expect(keptRows).toEqual(["2024-06-16", prime, "$11,000"])
+})
+
 test("晶片分組可以複選，搜尋後留下勾選的圖", () => {
   const fifty = "NVIDIA RTX5090"
   const older = "NVIDIA RTX4070"

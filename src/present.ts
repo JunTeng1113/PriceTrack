@@ -28,7 +28,7 @@ export type View = {
   series: readonly {
     code: string
     colorIndex?: number
-    quotes: readonly { date: string; sellingPrice: number; dashed?: boolean }[]
+    quotes: readonly { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean }[]
   }[]
   axis: { lower: number; upper: number } | null
   readout: { date: string; code: string; sellingPrice: number } | null
@@ -41,12 +41,12 @@ export type View = {
     series: readonly {
       code: string
       colorIndex: number
-      quotes: readonly { date: string; sellingPrice: number; dashed?: boolean }[]
+      quotes: readonly { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean }[]
     }[]
     allSeries: readonly {
       code: string
       brand: string
-      quotes: readonly { date: string; sellingPrice: number; dashed?: boolean }[]
+      quotes: readonly { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean }[]
     }[]
     readout: { date: string; code: string; sellingPrice: number } | null
     used: readonly UsedBox[]
@@ -139,11 +139,47 @@ function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
   return next.sellingPrice < previous.sellingPrice
 }
 
-function quoteMark(quote: { date: string; sellingPrice: number; rowText: string }): { date: string; sellingPrice: number; dashed?: boolean } {
-  if (quote.rowText.includes("裝機價") || quote.rowText.includes("售罄")) {
-    return { date: quote.date, sellingPrice: quote.sellingPrice, dashed: true }
+function quoteMark(
+  quote: { code: string; date: string; sellingPrice: number; rowText: string },
+  delistedOn: ReadonlyMap<string, string>,
+): { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean } {
+  const dashed = quote.rowText.includes("裝機價") || quote.rowText.includes("售罄")
+  const delisted = delistedOn.get(quote.code) === quote.date
+  if (!dashed && !delisted) {
+    return { date: quote.date, sellingPrice: quote.sellingPrice }
   }
-  return { date: quote.date, sellingPrice: quote.sellingPrice }
+  return {
+    date: quote.date,
+    sellingPrice: quote.sellingPrice,
+    dashed: true,
+    ...(delisted ? { delisted: true } : {}),
+  }
+}
+
+function delistedDates(quotes: readonly StoredQuote[]): Map<string, string> {
+  let latestCapturedAt = ""
+  for (const quote of quotes) {
+    if (quote.capturedAt > latestCapturedAt) {
+      latestCapturedAt = quote.capturedAt
+    }
+  }
+  const listed = new Set<string>()
+  for (const quote of quotes) {
+    if (quote.capturedAt === latestCapturedAt) {
+      listed.add(quote.code)
+    }
+  }
+  const lastDate = new Map<string, string>()
+  for (const quote of quotes) {
+    if (listed.has(quote.code)) {
+      continue
+    }
+    const current = lastDate.get(quote.code) ?? ""
+    if (quote.date > current) {
+      lastDate.set(quote.code, quote.date)
+    }
+  }
+  return lastDate
 }
 
 function chipModelName(group: string): string | null {
@@ -294,6 +330,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
 
   const queryRange = rangeOverride ?? queryRangeFor(stored)
   const visibleQuotes = stored.filter((quote) => quoteInRange(quote.date, queryRange))
+  const delistedOn = delistedDates(stored)
   const chipGroups = chipGroupsInOrder(stored)
   const pool = uniqueCodes(visibleQuotes).filter((code) =>
     chosenGroups.length === 0 || visibleQuotes.some((quote) => quote.code === code && chosenGroups.includes(quote.group)),
@@ -312,7 +349,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     quotes: visibleQuotes
       .filter((quote) => quote.code === code)
       .sort((left, right) => left.date.localeCompare(right.date))
-      .map((quote) => quoteMark(quote)),
+      .map((quote) => quoteMark(quote, delistedOn)),
   }))
   const shownGroups = chosenGroups.length === 0
     ? chipGroups.filter(isRtx50Group)
@@ -327,7 +364,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       quotes: visibleQuotes
         .filter((quote) => quote.code === code)
         .sort((left, right) => left.date.localeCompare(right.date))
-        .map((quote) => quoteMark(quote)),
+        .map((quote) => quoteMark(quote, delistedOn)),
     }))
     const branded = allSeries.filter((line) => selectedBrands.length === 0 || selectedBrands.includes(brandGroup(line.brand)))
     const activeFocus = branded.some((line) => line.code === focus) ? focus : ""
