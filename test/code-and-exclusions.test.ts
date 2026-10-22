@@ -586,6 +586,43 @@ describe("代號與排除", () => {
     expect(dragonChart?.series.map((line) => line.code)).toEqual([dragon])
   })
 
+  test("萬圖師娘限量版併入萬圖師娘版，其他限量版仍分開", () => {
+    const limited = "微星 RTX4060 VENTUS 2X WHITE 8G OC[萬圖師娘限量版]"
+    const edition = "微星 RTX4060 VENTUS 2X WHITE 8G OC[萬圖師娘版]"
+    const owl = "華碩 RTX4080-O16G-NOCTUA[貓頭鷹限量版]"
+    const series = update(emptySeries(), [
+      {
+        capturedAt: "2024-04-22T02:00:00.000Z",
+        html: `
+          <tr><td>顯示卡VGA</td><td><select name="n12">
+            <optgroup label="NVIDIA RTX4060-8GB">
+              <option>${limited}(2490MHz), $10990</option>
+              <option>${owl}(2595MHz), $40990</option>
+            </optgroup>
+          </select></td></tr>
+        `,
+      },
+      {
+        capturedAt: "2024-04-28T02:00:00.000Z",
+        html: `
+          <tr><td>顯示卡VGA</td><td><select name="n12">
+            <optgroup label="NVIDIA RTX4060-8GB">
+              <option>｛${edition}｝2490MHz, $9990</option>
+            </optgroup>
+          </select></td></tr>
+        `,
+      },
+    ])
+    const view = present(series, [{ type: "setChipGroup", name: "NVIDIA RTX4060-8GB" }])
+    const chart = view.modelCharts[0]
+
+    expect(chart?.series.map((line) => line.code)).toEqual([edition, owl])
+    expect(chart?.series[0]?.quotes).toEqual([
+      { date: "2024-04-22", sellingPrice: 10990 },
+      { date: "2024-04-28", sellingPrice: 9990 },
+    ])
+  })
+
   test("愛心和列首的振興方案不是代號，型號裡的版本名仍在", () => {
     const card = "技嘉 RTX3060 GAMING OC 8G"
     const series = update(emptySeries(), [

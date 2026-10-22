@@ -551,7 +551,11 @@ function promotionFree(code: string): string | null {
     return null
   }
   if (rest.endsWith(" WHITE 白")) {
-    return rest.slice(0, -2)
+    rest = rest.slice(0, -2)
+  }
+  const shiniangLimited = "[萬圖師娘限量版]"
+  if (rest.endsWith(shiniangLimited)) {
+    return `${rest.slice(0, -shiniangLimited.length)}[萬圖師娘版]`
   }
   return rest
 }

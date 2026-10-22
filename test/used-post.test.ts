@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { taipeiToday } from "../src/present.ts"
 import { addUsedPost, matchCodes, pickCode, usedBoxes, usedPostFromFields, usedPostsFrom, type UsedPost } from "../src/used-post.ts"
 
 const fields = {
@@ -62,6 +63,23 @@ describe("代號片段", () => {
     })
   })
 
+  test("片段不必都寫在代號裡，對上最多字的才列出", () => {
+    const codes = [
+      "微星 RTX4060Ti VENTUS 2X BLACK 8G OC",
+      "微星 RTX4060 VENTUS 2X BLACK 8G OC",
+      "微星 RTX4060 VENTUS 3X 8G OC",
+      "NVIDIA GeForce RTX5070 Founders Edition",
+      "華碩 DUAL-RTX5060-O8G",
+    ]
+    expect(matchCodes("GeForce RTX 4060 VENTUS 2X", codes)).toEqual({
+      status: "choose",
+      options: [
+        "微星 RTX4060Ti VENTUS 2X BLACK 8G OC",
+        "微星 RTX4060 VENTUS 2X BLACK 8G OC",
+      ],
+    })
+  })
+
   test("連字號不使片段對不到，選項仍是代號原文", () => {
     expect(matchCodes("rtx5060", ["ZOTAC RTX-5060"])).toEqual({
       status: "choose",
@@ -97,8 +115,18 @@ describe("二手貼文", () => {
     expect(dated("2024年6月5日")?.date).toBe("2024-06-05")
     expect(dated("2024 年 06 月 15 日")?.date).toBe("2024-06-15")
     expect(dated(" 2024 / 6 / 5 ")?.date).toBe("2024-06-05")
+    expect(dated("20240615")?.date).toBe("2024-06-15")
+    expect(dated("20240605")?.date).toBe("2024-06-05")
     expect(dated("2024/02/31")).toBeNull()
+    expect(dated("20240231")).toBeNull()
+    expect(dated("2024615")).toBeNull()
     expect(dated("10/22/2024")).toBeNull()
+  })
+
+  test("日期空白時記成台北今天", () => {
+    const today = taipeiToday()
+    expect(usedPostFromFields({ ...fields, date: "" })?.date).toBe(today)
+    expect(usedPostFromFields({ ...fields, date: "   " })?.date).toBe(today)
   })
 
   test("日期、金額或連結無效時不記", () => {

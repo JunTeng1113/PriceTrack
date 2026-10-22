@@ -59,12 +59,27 @@ export function matchCodes(query: string, codes: readonly string[]): CodeMatch {
   if (tokens.length === 0) {
     return { status: "none" }
   }
-  const options: string[] = []
+  const ranked: { code: string; score: number }[] = []
+  let best = 0
   for (const code of codes) {
-    if (tokens.every((token) => tokenMatches(token, code)) && !options.includes(code)) {
-      options.push(code)
+    if (ranked.some((item) => item.code === code)) {
+      continue
+    }
+    let score = 0
+    for (const token of tokens) {
+      if (tokenMatches(token, code)) {
+        score += 1
+      }
+    }
+    if (score === 0) {
+      continue
+    }
+    ranked.push({ code, score })
+    if (score > best) {
+      best = score
     }
   }
+  const options = ranked.filter((item) => item.score === best).map((item) => item.code)
   if (options.length === 0) {
     return { status: "none" }
   }
@@ -193,7 +208,13 @@ function isStoredPost(value: unknown): value is UsedPost {
 
 function canonicalDate(value: string): string | null {
   const compact = value.trim().replaceAll(/\s/g, "")
-  const match = /^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})日?$/.exec(compact)
+  if (compact === "") {
+    const today = taipeiToday()
+    return today === "" ? null : today
+  }
+  const separated = /^(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})日?$/.exec(compact)
+  const plain = /^(\d{4})(\d{2})(\d{2})$/.exec(compact)
+  const match = separated ?? plain
   if (match === null) {
     return null
   }
@@ -208,6 +229,15 @@ function canonicalDate(value: string): string | null {
     return null
   }
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+function taipeiToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
 }
 
 function isLink(value: string): boolean {

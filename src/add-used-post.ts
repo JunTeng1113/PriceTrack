@@ -126,7 +126,7 @@ input.close()
 
 const post = usedPostFromFields(fields)
 if (post === null) {
-  console.error("這一筆不能記。要有代號、日期（YYYY-MM-DD、YYYY/M/D 或 YYYY年M月D日）、正整數金額，以及 http 或 https 連結。")
+  console.error("這一筆不能記。要有代號、日期（YYYYMMDD、YYYY-MM-DD、YYYY/M/D 或 YYYY年M月D日）、正整數金額，以及 http 或 https 連結。")
   process.exitCode = 1
 } else {
   const posts = await readPosts()
