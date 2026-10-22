@@ -3,6 +3,7 @@ export type UsedPost = {
   date: string
   price: number
   link: string
+  seller: string
 }
 
 export type UsedFields = {
@@ -10,6 +11,7 @@ export type UsedFields = {
   date: string
   price: string
   link: string
+  seller: string
 }
 
 export function usedPostFromFields(fields: UsedFields): UsedPost | null {
@@ -17,10 +19,11 @@ export function usedPostFromFields(fields: UsedFields): UsedPost | null {
   const date = canonicalDate(fields.date)
   const priceText = fields.price.trim()
   const link = fields.link.trim()
-  if (code === "" || date === null || !isLink(link) || !/^[1-9]\d*$/.test(priceText)) {
+  const seller = fields.seller.trim()
+  if (code === "" || date === null || !isLink(link) || !isLink(seller) || !/^[1-9]\d*$/.test(priceText)) {
     return null
   }
-  return { code, date, price: Number(priceText), link }
+  return { code, date, price: Number(priceText), link, seller }
 }
 
 export type CodeMatch =
@@ -119,10 +122,11 @@ export function usedPostsFrom(value: unknown): UsedPost[] {
   }
   const posts: UsedPost[] = []
   for (const item of value.posts) {
-    if (!isStoredPost(item)) {
+    const post = storedPost(item)
+    if (post === null) {
       continue
     }
-    posts.push(item)
+    posts.push(post)
   }
   return posts
 }
@@ -150,12 +154,44 @@ export function usedBoxes(
     if (list === undefined) {
       continue
     }
-    const box = boxOf(code, list)
+    const box = boxOf(code, lowestPerSeller(list))
     if (box !== null) {
       boxes.push(box)
     }
   }
   return boxes
+}
+
+function lowestPerSeller(posts: readonly UsedPost[]): UsedPost[] {
+  const cheapest = new Map<string, UsedPost>()
+  for (const post of posts) {
+    const seller = post.seller.trim()
+    if (seller === "") {
+      continue
+    }
+    const previous = cheapest.get(seller)
+    if (previous === undefined || post.price < previous.price) {
+      cheapest.set(seller, post)
+    }
+  }
+  const kept: UsedPost[] = []
+  const seen = new Set<string>()
+  for (const post of posts) {
+    const seller = post.seller.trim()
+    if (seller === "") {
+      kept.push(post)
+      continue
+    }
+    if (seen.has(seller)) {
+      continue
+    }
+    seen.add(seller)
+    const chosen = cheapest.get(seller)
+    if (chosen !== undefined) {
+      kept.push(chosen)
+    }
+  }
+  return kept
 }
 
 function boxOf(code: string, posts: readonly UsedPost[]): UsedBox | null {
@@ -196,14 +232,24 @@ function medianOf(sorted: readonly number[], start: number, end: number): number
   return (left + right) / 2
 }
 
-function isStoredPost(value: unknown): value is UsedPost {
+function storedPost(value: unknown): UsedPost | null {
   if (typeof value !== "object" || value === null) {
-    return false
+    return null
   }
-  return "code" in value && typeof value.code === "string"
-    && "date" in value && typeof value.date === "string"
-    && "price" in value && typeof value.price === "number"
-    && "link" in value && typeof value.link === "string"
+  if (!("code" in value) || typeof value.code !== "string") {
+    return null
+  }
+  if (!("date" in value) || typeof value.date !== "string") {
+    return null
+  }
+  if (!("price" in value) || typeof value.price !== "number") {
+    return null
+  }
+  if (!("link" in value) || typeof value.link !== "string") {
+    return null
+  }
+  const seller = "seller" in value && typeof value.seller === "string" ? value.seller : ""
+  return { code: value.code, date: value.date, price: value.price, link: value.link, seller }
 }
 
 function canonicalDate(value: string): string | null {

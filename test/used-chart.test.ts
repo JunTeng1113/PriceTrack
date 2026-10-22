@@ -38,7 +38,7 @@ function series() {
 }
 
 function post(code: string, date: string, price: number): UsedPost {
-  return { code, date, price, link: `https://example.com/${price}` }
+  return { code, date, price, link: `https://example.com/${price}`, seller: `https://example.com/seller/${price}` }
 }
 
 const posts = [

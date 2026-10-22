@@ -28,7 +28,7 @@ export type View = {
   series: readonly {
     code: string
     colorIndex?: number
-    quotes: readonly { date: string; sellingPrice: number }[]
+    quotes: readonly { date: string; sellingPrice: number; dashed?: boolean }[]
   }[]
   axis: { lower: number; upper: number } | null
   readout: { date: string; code: string; sellingPrice: number } | null
@@ -41,12 +41,12 @@ export type View = {
     series: readonly {
       code: string
       colorIndex: number
-      quotes: readonly { date: string; sellingPrice: number }[]
+      quotes: readonly { date: string; sellingPrice: number; dashed?: boolean }[]
     }[]
     allSeries: readonly {
       code: string
       brand: string
-      quotes: readonly { date: string; sellingPrice: number }[]
+      quotes: readonly { date: string; sellingPrice: number; dashed?: boolean }[]
     }[]
     readout: { date: string; code: string; sellingPrice: number } | null
     used: readonly UsedBox[]
@@ -128,7 +128,22 @@ function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
   if (order < 0) {
     return true
   }
-  return order === 0 && next.sellingPrice < previous.sellingPrice
+  if (order > 0) {
+    return false
+  }
+  const previousInstall = previous.rowText.includes("裝機價")
+  const nextInstall = next.rowText.includes("裝機價")
+  if (previousInstall !== nextInstall) {
+    return previousInstall
+  }
+  return next.sellingPrice < previous.sellingPrice
+}
+
+function quoteMark(quote: { date: string; sellingPrice: number; rowText: string }): { date: string; sellingPrice: number; dashed?: boolean } {
+  if (quote.rowText.includes("裝機價") || quote.rowText.includes("售罄")) {
+    return { date: quote.date, sellingPrice: quote.sellingPrice, dashed: true }
+  }
+  return { date: quote.date, sellingPrice: quote.sellingPrice }
 }
 
 function chipModelName(group: string): string | null {
@@ -297,7 +312,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     quotes: visibleQuotes
       .filter((quote) => quote.code === code)
       .sort((left, right) => left.date.localeCompare(right.date))
-      .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
+      .map((quote) => quoteMark(quote)),
   }))
   const shownGroups = chosenGroups.length === 0
     ? chipGroups.filter(isRtx50Group)
@@ -312,7 +327,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       quotes: visibleQuotes
         .filter((quote) => quote.code === code)
         .sort((left, right) => left.date.localeCompare(right.date))
-        .map((quote) => ({ date: quote.date, sellingPrice: quote.sellingPrice })),
+        .map((quote) => quoteMark(quote)),
     }))
     const branded = allSeries.filter((line) => selectedBrands.length === 0 || selectedBrands.includes(brandGroup(line.brand)))
     const activeFocus = branded.some((line) => line.code === focus) ? focus : ""

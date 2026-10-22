@@ -7,6 +7,7 @@ const fields = {
   date: "2024-06-15",
   price: "12000",
   link: "https://example.com/post/1",
+  seller: "https://example.com/seller/1",
 }
 
 const knownCodes = [
@@ -104,6 +105,7 @@ describe("二手貼文", () => {
       date: "2024-06-15",
       price: 12000,
       link: "https://example.com/post/1",
+      seller: "https://example.com/seller/1",
     })
   })
 
@@ -134,6 +136,8 @@ describe("二手貼文", () => {
     expect(usedPostFromFields({ ...fields, price: "0" })).toBeNull()
     expect(usedPostFromFields({ ...fields, price: "12,000" })).toBeNull()
     expect(usedPostFromFields({ ...fields, link: "example.com/post" })).toBeNull()
+    expect(usedPostFromFields({ ...fields, seller: "example.com/seller" })).toBeNull()
+    expect(usedPostFromFields({ ...fields, seller: "  " })).toBeNull()
     expect(usedPostFromFields({ ...fields, code: "  " })).toBeNull()
   })
 
@@ -153,7 +157,13 @@ describe("二手貼文", () => {
 })
 
 function post(code: string, date: string, price: number): UsedPost {
-  return { code, date, price, link: `https://example.com/${code}/${date}/${price}` }
+  return {
+    code,
+    date,
+    price,
+    link: `https://example.com/${code}/${date}/${price}`,
+    seller: `https://example.com/seller/${code}/${date}/${price}`,
+  }
 }
 
 describe("二手行情", () => {
@@ -188,9 +198,34 @@ describe("二手行情", () => {
     expect(boxes[1]).toMatchObject({ min: 1, q1: 4, median: 8, q3: 12, max: 15, posts })
   })
 
+  test("同一個賣家的同一代號只計最低價", () => {
+    const seller = "https://example.com/seller/same"
+    const low = { ...post("A", "2024-06-15", 10000), seller, link: "https://example.com/low" }
+    const high = { ...post("A", "2024-06-20", 14000), seller, link: "https://example.com/high" }
+    const tied = { ...post("A", "2024-06-21", 10000), seller, link: "https://example.com/tied" }
+    const another = post("A", "2024-06-18", 12000)
+    const unnamed = { ...post("A", "2024-06-19", 9000), seller: "" }
+    const otherCode = { ...post("B", "2024-06-18", 8000), seller }
+    const boxes = usedBoxes(
+      [high, low, tied, another, unnamed, otherCode],
+      ["A", "B"],
+      { start: "2024-06-01", end: "2024-06-30" },
+    )
+    const card = boxes.find((box) => box.code === "A")
+
+    expect(card?.posts).toEqual([low, another, unnamed])
+    expect(card).toMatchObject({ min: 9000, max: 12000 })
+    expect(boxes.find((box) => box.code === "B")?.posts).toEqual([otherCode])
+  })
+
   test("讀檔時略過不完整的紀錄", () => {
     expect(usedPostsFrom({ posts: [post("A", "2024-06-15", 12000), { code: "B" }] })).toEqual([
       post("A", "2024-06-15", 12000),
+    ])
+    expect(usedPostsFrom({
+      posts: [{ code: "A", date: "2024-06-15", price: 12000, link: "https://example.com/a" }],
+    })).toEqual([
+      { code: "A", date: "2024-06-15", price: 12000, link: "https://example.com/a", seller: "" },
     ])
     expect(usedPostsFrom(null)).toEqual([])
   })

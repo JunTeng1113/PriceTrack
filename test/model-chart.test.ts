@@ -31,6 +31,37 @@ function documentOf(html: string): Document {
 }
 
 describe("每個晶片分組一張圖", () => {
+  test("裝機價和售罄的連線是虛線，一般價是實線", () => {
+    const install = "華碩 DUAL-RTX5060-O8G"
+    const sold = "技嘉 RTX5060 WINDFORCE OC 8G"
+    const regular = "微星 RTX5060 8G VENTUS 2X"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [{
+        label: "NVIDIA RTX5060-8GB",
+        rows: [
+          `裝機價｛${install}｝2497MHz, $9000`,
+          `｛${sold}｝2497MHz 售罄！, $8000`,
+          `｛${regular}｝2497MHz, $9500`,
+        ],
+      }]),
+      snapshot("2024-06-16T02:00:00.000Z", [{
+        label: "NVIDIA RTX5060-8GB",
+        rows: [
+          `裝機價｛${install}｝2497MHz, $9100`,
+          `｛${sold}｝2497MHz 售罄！, $8100`,
+          `｛${regular}｝2497MHz, $9600`,
+        ],
+      }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const lines = [...doc.querySelectorAll("svg[data-price-chart] line:not([data-hit])")]
+    const dashOf = (code: string) => lines.find((line) => line.getAttribute("data-code") === code)?.getAttribute("stroke-dasharray") ?? ""
+
+    expect(dashOf(install)).toBe("2 1.2")
+    expect(dashOf(sold)).toBe("2 1.2")
+    expect(dashOf(regular)).toBe("")
+  })
+
   test("容量寫成 8G 或 8GB 是同一張圖，容量不同仍分開", () => {
     const eight = "NVIDIA RTX5060-8G"
     const eightGb = "NVIDIA RTX5060-8GB"

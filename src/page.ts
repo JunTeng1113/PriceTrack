@@ -310,14 +310,16 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
     }
     const paint = connectGaps ? seriesColor(item.colorIndex ?? seriesIndex) : "currentColor"
     const opacity = focus !== "" && focus !== item.code ? "0.25" : "1"
-    let previous: { date: string; price: number; x: number; y: number } | null = null
+    let previous: { date: string; price: number; x: number; y: number; dashed: boolean } | null = null
     for (const quote of item.quotes) {
       const x = xAt(quote.date, startDay, daySpan)
       const y = yAt(quote.sellingPrice, axis)
+      const dashed = quote.dashed === true
       if (previous !== null && (connectGaps || addDays(previous.date, 1) === quote.date)) {
         const segment = `data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}"`
+        const dash = dashed || previous.dashed ? ` stroke-dasharray="2 1.2"` : ""
         marks.push(
-          `<line ${segment} stroke="${paint}" stroke-width="1.2" fill="none" opacity="${opacity}" pointer-events="none" />`,
+          `<line ${segment} stroke="${paint}" stroke-width="1.2"${dash} fill="none" opacity="${opacity}" pointer-events="none" />`,
         )
         marks.push(
           `<line data-hit="true" ${segment} stroke="transparent" stroke-width="6" fill="none" pointer-events="stroke" />`,
@@ -326,7 +328,7 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
       marks.push(
         `<circle data-date="${escapeAttribute(quote.date)}" data-price="${quote.sellingPrice}" data-code="${escapeAttribute(item.code)}" cx="${x}" cy="${y}" r="1.2" fill="${paint}" opacity="${opacity}" />`,
       )
-      previous = { date: quote.date, price: quote.sellingPrice, x, y }
+      previous = { date: quote.date, price: quote.sellingPrice, x, y, dashed }
     }
     if (previous !== null) {
       labels.push({

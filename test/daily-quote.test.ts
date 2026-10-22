@@ -106,6 +106,72 @@ describe("售價與日報價", () => {
     ])
   })
 
+  test("同一份快照有一般價也有裝機價時日報價是一般價", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <option>裝機價｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>
+        <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $20990</option>
+      `),
+    ])
+    const view = present(series, [
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+    ])
+
+    expect(view.series).toEqual([
+      {
+        code: "華碩 DUAL-RTX4070-O12G",
+        quotes: [{ date: "2024-06-15", sellingPrice: 20990 }],
+      },
+    ])
+  })
+
+  test("只有裝機價或寫著售罄時仍有日報價，並標成虛線", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <option>裝機價｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>
+        <option>｛華碩 DUAL-RTX4070-O12G-WHITE｝2535MHz 售罄！, $19990</option>
+      `),
+    ])
+    const view = present(series, [
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G-WHITE" },
+    ])
+
+    expect(view.series).toEqual([
+      {
+        code: "華碩 DUAL-RTX4070-O12G",
+        quotes: [{ date: "2024-06-15", sellingPrice: 18990, dashed: true }],
+      },
+      {
+        code: "華碩 DUAL-RTX4070-O12G-WHITE",
+        quotes: [{ date: "2024-06-15", sellingPrice: 19990, dashed: true }],
+      },
+    ])
+  })
+
+  test("同一天較晚的快照只剩裝機價時日報價改為裝機價", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(
+        `<option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $20990</option>`,
+        "2024-06-15T02:00:00.000Z",
+      ),
+      vgaSnapshot(
+        `<option>裝機價｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>`,
+        "2024-06-15T08:00:00.000Z",
+      ),
+    ])
+    const view = present(series, [
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+    ])
+
+    expect(view.series).toEqual([
+      {
+        code: "華碩 DUAL-RTX4070-O12G",
+        quotes: [{ date: "2024-06-15", sellingPrice: 18990, dashed: true }],
+      },
+    ])
+  })
+
   test("UTC 快照落在台北時間的哪一天點就在那一天", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(

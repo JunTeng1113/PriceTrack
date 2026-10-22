@@ -121,12 +121,13 @@ const fields = {
   date: await input.question("日期："),
   price: await input.question("二手開價："),
   link: await input.question("連結："),
+  seller: await input.question("賣家個人網址："),
 }
 input.close()
 
 const post = usedPostFromFields(fields)
 if (post === null) {
-  console.error("這一筆不能記。要有代號、日期（YYYYMMDD、YYYY-MM-DD、YYYY/M/D 或 YYYY年M月D日）、正整數金額，以及 http 或 https 連結。")
+  console.error("這一筆不能記。要有代號、日期（YYYYMMDD、YYYY-MM-DD、YYYY/M/D 或 YYYY年M月D日）、正整數金額，以及貼文連結和賣家個人網址（皆為 http 或 https）。")
   process.exitCode = 1
 } else {
   const posts = await readPosts()
