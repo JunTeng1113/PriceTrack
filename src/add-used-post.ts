@@ -96,15 +96,6 @@ function printOptions(options: readonly string[]): void {
 
 const input = createInterface({ input: stdin, output: stdout })
 const codes = await readListingCodes()
-let seller = ""
-while (seller === "") {
-  const entry = (await input.question("賣家個人網址：")).trim()
-  if (isHttpLink(entry)) {
-    seller = entry
-    continue
-  }
-  console.error("賣家個人網址要是 http 或 https。")
-}
 let code = ""
 while (code === "") {
   const query = await input.question("代號：")
@@ -125,6 +116,15 @@ while (code === "") {
   }
   code = chosen
 }
+let seller = ""
+while (seller === "") {
+  const entry = (await input.question("賣家個人網址：")).trim()
+  if (isHttpLink(entry)) {
+    seller = entry
+    continue
+  }
+  console.error("賣家個人網址要是 http 或 https。")
+}
 const posts = await readPosts()
 const existing = sellerListings(posts, seller, code)
 let proceed = true
@@ -135,7 +135,8 @@ if (existing.length > 0) {
   }
   let answer = ""
   while (answer !== "是" && answer !== "否") {
-    answer = (await input.question("是否繼續輸入？（是/否）：")).trim()
+    const entry = (await input.question("是否繼續輸入？（是/否）：")).trim()
+    answer = entry === "" ? "否" : entry
   }
   proceed = answer === "是"
 }
