@@ -200,6 +200,49 @@ describe("每個晶片分組一張圖", () => {
     expect(both.querySelector('[aria-label="晶片分組"]')?.textContent).toBe(`${older}、${decoy}`)
   })
 
+  test("世代按鈕預設是 50系列，改看 30 或 40 系列時只畫該世代", () => {
+    const older = "NVIDIA RTX4070 SUPER 12GB"
+    const ti = "NVIDIA RTX4070Ti SUPER 16GB"
+    const thirty = "NVIDIA RTX3060TI"
+    const fifty = "NVIDIA RTX5090-32GB(GDDR7)"
+    const series = update(emptySeries(), [
+      snapshot("2024-06-15T02:00:00.000Z", [
+        { label: older, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
+        { label: ti, rows: ["華碩 TUF-RTX4070TI-O16G(2610MHz), $28990"] },
+        { label: thirty, rows: ["微星 RTX3060 VENTUS 2X 8G(1807MHz), $9990"] },
+        { label: fifty, rows: ["華碩 TUF-RTX5090-O32G-GAMING(2520MHz), $99990"] },
+      ]),
+    ])
+    const pressed = (doc: Document): string[] =>
+      [...doc.querySelectorAll('[aria-label="世代"] button')]
+        .filter((button) => button.getAttribute("aria-pressed") === "true")
+        .map((button) => button.textContent ?? "")
+
+    const open = documentOf(renderPage(series, []))
+    expect([...open.querySelectorAll('[aria-label="世代"] button')].map((button) => button.textContent)).toEqual([
+      "30系列",
+      "40系列",
+      "50系列",
+    ])
+    expect(pressed(open)).toEqual(["50系列"])
+    expect(open.querySelector(`[aria-label="${fifty}"]`)).not.toBeNull()
+    expect(open.querySelector(`[aria-label="${older}"]`)).toBeNull()
+    expect(open.querySelector(`[aria-label="${thirty}"]`)).toBeNull()
+
+    const forty = documentOf(renderPage(series, [{ type: "setGeneration", name: "40" }]))
+    expect(pressed(forty)).toEqual(["40系列"])
+    expect(forty.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
+    expect(forty.querySelector(`[aria-label="${ti}"]`)).not.toBeNull()
+    expect(forty.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+    expect(forty.querySelector(`[aria-label="${thirty}"]`)).toBeNull()
+
+    const picked = documentOf(renderPage(series, [{ type: "setGeneration", name: "30" }]))
+    expect(pressed(picked)).toEqual(["30系列"])
+    expect(picked.querySelector(`[aria-label="${thirty}"]`)).not.toBeNull()
+    expect(picked.querySelector(`[aria-label="${older}"]`)).toBeNull()
+    expect(picked.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+  })
+
   test("另一張分組圖也把缺日前後的日報價連起來", () => {
     const twelveG = "NVIDIA RTX5070-12GB"
     const code = "華碩 DUAL-RTX4070-O12G"

@@ -32,6 +32,7 @@ export type View = {
   }[]
   axis: { lower: number; upper: number } | null
   readout: { date: string; code: string; sellingPrice: number } | null
+  generation: Generation
   modelCharts: readonly {
     group: string
     selectedBrands: readonly string[]
@@ -53,12 +54,15 @@ export type View = {
   }[]
 }
 
+export type Generation = "30" | "40" | "50"
+
 export type Action =
   | { type: "setKeyword"; text: string }
   | { type: "select"; code: string }
   | { type: "deselect"; code: string }
   | { type: "setRange"; start: string; end: string }
   | { type: "setChipGroup"; name: string }
+  | { type: "setGeneration"; name: Generation }
   | { type: "setBrand"; group: string; name: string }
   | { type: "setFocus"; group: string; code: string }
   | { type: "point"; date: string; code: string }
@@ -275,6 +279,7 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
 export function present(series: PriceSeries, actions: readonly Action[], usedPosts: readonly UsedPost[] = []): View {
   const stored = normalizeQuotes(series.quotes)
   let keyword = ""
+  let generation: Generation = "50"
   const chosenGroups: string[] = []
   const brandsByGroup = new Map<string, string[]>()
   const focusByGroup = new Map<string, string>()
@@ -291,6 +296,10 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       if (action.name !== "" && !chosenGroups.includes(action.name)) {
         chosenGroups.push(action.name)
       }
+      continue
+    }
+    if (action.type === "setGeneration") {
+      generation = action.name
       continue
     }
     if (action.type === "setBrand") {
@@ -352,7 +361,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       .map((quote) => quoteMark(quote, delistedOn)),
   }))
   const shownGroups = chosenGroups.length === 0
-    ? chipGroups.filter(isRtx50Group)
+    ? chipGroups.filter((group) => isRtxGeneration(group, generation))
     : chipGroups.filter((group) => chosenGroups.includes(group))
   const modelCharts = shownGroups.map((group) => {
     const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === group))
@@ -395,6 +404,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     series: plotted,
     axis: priceAxis(plotted),
     readout: readoutFor(plotted, pointer),
+    generation,
     modelCharts,
   }
 }
@@ -762,8 +772,8 @@ function compareCodePoints(left: string, right: string): number {
   return leftPoints.length < rightPoints.length ? -1 : 1
 }
 
-function isRtx50Group(group: string): boolean {
-  return /RTX50(?:50|60|70|80|90)/.test(group)
+function isRtxGeneration(group: string, generation: Generation): boolean {
+  return new RegExp(`RTX${generation}(?:50|60|70|80|90)`).test(group)
 }
 
 function chipGroupsInOrder(quotes: readonly StoredQuote[]): string[] {

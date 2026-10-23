@@ -1,4 +1,4 @@
-import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, listingTableMarkup } from "./fields.tsx"
+import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, generationMarkup, listingTableMarkup } from "./fields.tsx"
 import { brandColorIndex, brandGroup, brandPaint, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 import type { UsedBox, UsedPost } from "./used-post.ts"
 
@@ -381,8 +381,10 @@ function filterSection(view: View, actions: readonly Action[]): string {
   const selected = view.selected
     .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
     .join("")
+  const generation = chipGroups.length === 0 ? view.generation : ""
   return `<section class="mb-6 flex flex-col gap-6 text-sm">
       <h2>篩選</h2>
+      ${generationMarkup(generation)}
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
       <div>晶片分組 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</div>
@@ -449,6 +451,7 @@ function modelSvg(
     series,
     axis: priceBounds(series, extraPrices(lines, used)),
     readout: null,
+    generation: "50",
     modelCharts: [],
   }, true, focus))
 }
@@ -541,6 +544,7 @@ export function visibleChart(
     series,
     axis: priceBounds(series, extraPrices(lines, chart.used)),
     readout: null,
+    generation: "50",
     modelCharts: [],
   }, true, chart.focus)
   const frame = marks[0] ?? ""

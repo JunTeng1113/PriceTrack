@@ -3,13 +3,21 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { Button } from "./components/ui/button.tsx"
 import { ChipGroupSelect, chipVendors } from "./components/ui/select.tsx"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table.tsx"
-import { brandColor } from "./present.ts"
+import { brandColor, type Generation } from "./present.ts"
 
 export function buttonMarkup(
   label: ReactNode,
   props: { "aria-pressed"?: "true" | "false"; "data-code"?: string; "aria-label"?: string },
 ): string {
   return renderToStaticMarkup(createElement(Button, props, label))
+}
+
+export function generationMarkup(selected: Generation | ""): string {
+  const names: readonly Generation[] = ["30", "40", "50"]
+  const buttons = names
+    .map((name) => buttonMarkup(`${name}系列`, { "aria-pressed": name === selected ? "true" : "false" }))
+    .join("")
+  return `<div aria-label="世代" class="flex flex-wrap gap-2">${buttons}</div>`
 }
 
 export function chipVendorMarkup(): string {

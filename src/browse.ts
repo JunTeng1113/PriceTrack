@@ -651,6 +651,26 @@ export function start(series: PriceSeries): {
       showChipVendor(nextDraft.vendor)
     })
 
+    const generationButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')
+    for (const button of generationButtons) {
+      button.addEventListener("click", () => {
+        const label = button.textContent ?? ""
+        const name = label === "30系列" ? "30" : label === "40系列" ? "40" : label === "50系列" ? "50" : ""
+        if (name === "") {
+          return
+        }
+        const draft = readFilterDraft()
+        actions = [
+          ...actions.filter((action) => action.type !== "setChipGroup" && action.type !== "setGeneration"),
+          { type: "setGeneration", name },
+        ]
+        draw(false)
+        if (draft !== null) {
+          showChipVendor(draft.vendor)
+        }
+      })
+    }
+
     const vendorButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="晶片廠"] button')
     for (const button of vendorButtons) {
       button.addEventListener("click", () => {
