@@ -81,21 +81,21 @@
       "code": "微星 RTX5060 8G VENTUS 2X OC",
       "date": "2026-08-05",
       "price": 11500,
-      "link": "https://www.facebook.com/groups/547598856155394/permalink/2214034346178495/?locale=zh_TW",
+      "link": "https://www.facebook.com/groups/547598856155394/permalink/2214034346178495/",
       "seller": ""
     },
     {
       "code": "技嘉 RTX3060Ti VISION OC 8G",
       "date": "2026-10-22",
       "price": 5900,
-      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4765306027025804/?locale=zh_TW",
+      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4765306027025804/",
       "seller": ""
     },
     {
       "code": "技嘉 RTX4060 EAGLE OC ICE 8G 冰魄白",
       "date": "2026-10-22",
       "price": 9000,
-      "link": "https://www.facebook.com/groups/547598856155394/permalink/2299158257666103/?locale=zh_TW",
+      "link": "https://www.facebook.com/groups/547598856155394/permalink/2299158257666103/",
       "seller": ""
     },
     {
@@ -151,7 +151,7 @@
       "code": "華碩 ROG-STRIX-RTX4070TI-12G-GAMING",
       "date": "2026-10-22",
       "price": 25800,
-      "link": "https://www.facebook.com/groups/2064226603851309/permalink/4577300275877250/?sale_post_id=4577300275877250",
+      "link": "https://www.facebook.com/groups/2064226603851309/permalink/4577300275877250/",
       "seller": "https://www.facebook.com/xu.xiang.jie.561079/"
     },
     {
@@ -207,8 +207,57 @@
       "code": "華碩 DUAL-RTX5060TI-O16",
       "date": "2026-10-24",
       "price": 20500,
-      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4767728210116919/?locale=zh_TW",
-      "seller": "https://www.facebook.com/ceng.bai.quan.95470/?locale=zh_TW"
+      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4767728210116919/",
+      "seller": "https://www.facebook.com/ceng.bai.quan.95470/"
+    },
+    {
+      "code": "華碩 DUAL-RTX3060Ti-O8G",
+      "date": "2026-10-24",
+      "price": 6500,
+      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4768144443408629/",
+      "seller": "https://www.facebook.com/lin.cen.tai/"
+    },
+    {
+      "code": "華碩 TUF-GTX1660S-O6G-GAMING",
+      "date": "2026-10-24",
+      "price": 2300,
+      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4768018643421209/",
+      "seller": "https://www.facebook.com/hon.xioc/"
+    },
+    {
+      "code": "華碩 DUAL-RTX4060-O8G",
+      "date": "2026-10-24",
+      "price": 8800,
+      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4768114043411669/",
+      "seller": "https://www.facebook.com/ericwengkh/"
+    },
+    {
+      "code": "華碩 TUF-RTX5060TI-O16G-GAMING",
+      "date": "2026-09-01",
+      "price": 20000,
+      "link": "https://www.facebook.com/groups/547598856155394/permalink/2242438953338034/",
+      "seller": "https://www.facebook.com/nicsonyee/"
+    },
+    {
+      "code": "華碩 DUAL-RTX5060TI-O16G",
+      "date": "2026-05-17",
+      "price": 17600,
+      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4591488297740912/",
+      "seller": "https://www.facebook.com/joe.keven.58/"
+    },
+    {
+      "code": "微星 RTX5060Ti 16G CYCLONE OC",
+      "date": "2026-10-19",
+      "price": 18900,
+      "link": "https://www.facebook.com/groups/1923977991158636/permalink/4762038114019262",
+      "seller": "https://www.facebook.com/profile.php?id=100000235053862"
+    },
+    {
+      "code": "EVGA RTX3060Ti XC",
+      "date": "2026-10-24",
+      "price": 7500,
+      "link": "https://www.facebook.com/groups/1448001268623486/permalink/28832123579784552/",
+      "seller": "https://www.facebook.com/jeff.yang.568/"
     }
   ]
 }
