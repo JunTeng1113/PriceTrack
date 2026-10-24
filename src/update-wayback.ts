@@ -94,7 +94,7 @@ if (!cdxResponse.ok) {
       continue
     }
     if (fetched.ok && fetched.text.includes("顯示卡VGA")) {
-      const snapshot: Snapshot = { capturedAt: capture.capturedAt, html: fetched.text }
+      const snapshot: Snapshot = { capturedAt: capture.capturedAt, html: fetched.text, source: "快照" }
       series = update(series, [snapshot])
       done.add(capture.capturedAt)
     }

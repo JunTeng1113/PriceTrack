@@ -74,6 +74,9 @@ function storedQuote(value: unknown): PriceSeries["quotes"][number] | null {
   if (!("rowIndex" in value) || typeof value.rowIndex !== "number") {
     return null
   }
+  if (!("source" in value) || (value.source !== "估價頁" && value.source !== "快照")) {
+    return null
+  }
   return {
     code: value.code,
     date: value.date,
@@ -82,6 +85,7 @@ function storedQuote(value: unknown): PriceSeries["quotes"][number] | null {
     rowText: value.rowText,
     capturedAt: value.capturedAt,
     rowIndex: value.rowIndex,
+    source: value.source,
   }
 }
 

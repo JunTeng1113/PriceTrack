@@ -1,8 +1,11 @@
 import { usedBoxes, type UsedBox, type UsedPost } from "./used-post.ts"
 
+export type QuoteSource = "估價頁" | "快照"
+
 export type Snapshot = {
   capturedAt: string
   html: string
+  source?: QuoteSource
 }
 
 type StoredQuote = {
@@ -13,6 +16,7 @@ type StoredQuote = {
   rowText: string
   capturedAt: string
   rowIndex: number
+  source: QuoteSource
 }
 
 export type PriceSeries = {
@@ -113,6 +117,7 @@ export function update(series: PriceSeries, snapshots: readonly Snapshot[]): Pri
         rowText: row.text,
         capturedAt: snapshot.capturedAt,
         rowIndex,
+        source: snapshot.source ?? "快照",
       }
       const existing = quotes.findIndex((quote) => quote.code === code && quote.date === date)
       const previous = existing >= 0 ? quotes[existing] : undefined

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "update": "vite-node src/update-wayback.ts",
-    "used": "vite-node src/add-used-post.ts"
+    "used": "vite-node src/add-used-post.ts",
+    "coolpc": "vite-node src/watch-coolpc.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -25,5 +25,8 @@ export function isQuote(value: unknown): value is PriceSeries["quotes"][number] 
   if (!("rowIndex" in value) || typeof value.rowIndex !== "number") {
     return false
   }
+  if (!("source" in value) || (value.source !== "估價頁" && value.source !== "快照")) {
+    return false
+  }
   return true
 }

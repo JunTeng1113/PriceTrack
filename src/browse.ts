@@ -1,5 +1,5 @@
 import { brandCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
-import { present, type Action, type PriceSeries, type View } from "./present.ts"
+import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
 function dayNumber(isoDate: string): number | null {
@@ -364,7 +364,96 @@ export function start(series: PriceSeries): {
   let latestView: View | null = null
   let usedPosts: readonly UsedPost[] = []
   let renderToken = 0
+  let cacheToken = 0
   let actions: Action[] = []
+  const generationCache = new Map<Generation, { view: View; html: string; signature: string }>()
+  const generationNames: readonly Generation[] = ["30", "40", "50"]
+
+  const generationBase = (): Action[] =>
+    actions.filter((action) => action.type !== "setChipGroup" && action.type !== "setGeneration")
+
+  const cacheSignature = (view: View, list: readonly Action[]): string => {
+    const groups = new Set(view.modelCharts.map((chart) => chart.group))
+    const relevant = list.filter((action) => {
+      if (action.type === "setRange" || action.type === "setKeyword") {
+        return true
+      }
+      if (action.type === "setBrand" || action.type === "setFocus") {
+        return groups.has(action.group)
+      }
+      return false
+    })
+    return JSON.stringify(relevant)
+  }
+
+  const markPrepared = (name: Generation): void => {
+    const button = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')]
+      .find((node) => node.textContent === `${name}系列`)
+    button?.setAttribute("data-prepared", "true")
+  }
+
+  const sectionHtml = (view: View, chart: View["modelCharts"][number]): string => {
+    const piece = visibleChart(view, chart)
+    const at = piece.section.indexOf("</svg>")
+    const html = at < 0 ? piece.section : `${piece.section.slice(0, at)}${piece.marks.join("")}${piece.section.slice(at)}`
+    const parsed = new DOMParser().parseFromString(html, "text/html")
+    const svg = parsed.querySelector("svg[data-price-chart]")
+    if (isSvg(svg)) {
+      storeBrandChart(chart.group, brandCacheKey(chart.selectedBrands), svg.outerHTML)
+    }
+    return html
+  }
+
+  const snapshotVisible = (): void => {
+    if (latestView === null || actions.some((action) => action.type === "setChipGroup")) {
+      return
+    }
+    const sections = [...document.querySelectorAll("section")]
+      .filter((section) => section.querySelector("svg[data-price-chart]") !== null)
+    const expected = latestView.modelCharts.map((chart) => chart.group)
+    const labels = sections.map((section) => section.getAttribute("aria-label"))
+    if (labels.length !== expected.length || labels.some((label, index) => label !== expected[index])) {
+      return
+    }
+    generationCache.set(latestView.generation, {
+      view: latestView,
+      html: sections.map((section) => section.outerHTML).join(""),
+      signature: cacheSignature(latestView, generationBase()),
+    })
+    markPrepared(latestView.generation)
+  }
+
+  const preloadGenerations = (token: number, shown: Generation): void => {
+    const base = generationBase()
+    const queue = generationNames.filter((name) => name !== shown)
+    const load = (index: number): void => {
+      if (token !== cacheToken) {
+        return
+      }
+      const name = queue[index]
+      if (name === undefined) {
+        return
+      }
+      const view = present(series, [...base, { type: "setGeneration", name }], usedPosts)
+      const parts: string[] = []
+      const paintOne = (chartIndex: number): void => {
+        if (token !== cacheToken) {
+          return
+        }
+        const chart = view.modelCharts[chartIndex]
+        if (chart === undefined) {
+          generationCache.set(name, { view, html: parts.join(""), signature: cacheSignature(view, base) })
+          markPrepared(name)
+          setTimeout(() => load(index + 1), 0)
+          return
+        }
+        parts.push(sectionHtml(view, chart))
+        setTimeout(() => paintOne(chartIndex + 1), 0)
+      }
+      setTimeout(() => paintOne(0), 0)
+    }
+    setTimeout(() => load(0), 0)
+  }
   let lockedCode: string | null = null
   let lockedSvg: SVGSVGElement | null = null
 
@@ -397,7 +486,10 @@ export function start(series: PriceSeries): {
     ]
   }
 
-  const draw = (keepDraft = true): void => {
+    const draw = (keepDraft = true): void => {
+    cacheToken += 1
+    const token = cacheToken
+    generationCache.clear()
     const draft = keepDraft ? readFilterDraft() : null
     lockedCode = null
     lockedSvg = null
@@ -615,6 +707,49 @@ export function start(series: PriceSeries): {
       }
     }
 
+    const showPreparedGeneration = (name: Generation): boolean => {
+      const cached = generationCache.get(name)
+      if (cached === undefined || cached.signature !== cacheSignature(cached.view, generationBase())) {
+        return false
+      }
+      const host = document.querySelector(".p-4")
+      if (host === null) {
+        return false
+      }
+      renderToken += 1
+      latestView = cached.view
+      for (const section of [...host.querySelectorAll("section")]) {
+        if (section.querySelector("svg[data-price-chart]") !== null) {
+          section.remove()
+        }
+      }
+      document.querySelector("[data-loading]")?.remove()
+      const parsed = new DOMParser().parseFromString(cached.html, "text/html")
+      for (const section of [...parsed.body.children]) {
+        if (!(section instanceof HTMLElement)) {
+          continue
+        }
+        host.append(section)
+        bindBrands(section)
+        const svg = section.querySelector("svg[data-price-chart]")
+        if (isSvg(svg)) {
+          bindChart(svg)
+        }
+      }
+      for (const button of document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')) {
+        const label = button.textContent ?? ""
+        button.setAttribute("aria-pressed", label === `${name}系列` ? "true" : "false")
+      }
+      for (const item of document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')) {
+        item.setAttribute("aria-selected", "false")
+      }
+      const trigger = document.querySelector('[aria-label="晶片分組"]')
+      if (trigger !== null) {
+        trigger.textContent = ""
+      }
+      return true
+    }
+
     const bindShell = (): void => {
       bindSelect("晶片分組", (item) => {
         const trigger = document.querySelector('[aria-label="晶片分組"]')
@@ -660,10 +795,17 @@ export function start(series: PriceSeries): {
           return
         }
         const draft = readFilterDraft()
+        snapshotVisible()
         actions = [
           ...actions.filter((action) => action.type !== "setChipGroup" && action.type !== "setGeneration"),
           { type: "setGeneration", name },
         ]
+        if (showPreparedGeneration(name)) {
+          if (draft !== null) {
+            showChipVendor(draft.vendor)
+          }
+          return
+        }
         draw(false)
         if (draft !== null) {
           showChipVendor(draft.vendor)
@@ -735,6 +877,9 @@ export function start(series: PriceSeries): {
         const chart = charts[index]
         if (chart === undefined || host === null) {
           note?.remove()
+          if (chart === undefined) {
+            snapshotVisible()
+          }
           return
         }
         if (note !== null) {
@@ -805,6 +950,7 @@ export function start(series: PriceSeries): {
           window.scrollTo(0, scrollY)
         }
         paintCharts(view, generation)
+        preloadGenerations(token, view.generation)
       }, 0)
       return
     }
@@ -814,6 +960,10 @@ export function start(series: PriceSeries): {
     paint(renderPage(series, actions, usedPosts))
     bindShell()
     bindDrawnCharts()
+    snapshotVisible()
+    if (latestView !== null) {
+      preloadGenerations(token, latestView.generation)
+    }
 
     if (typeof window.scrollTo === "function") {
       window.scrollTo(0, scrollY)

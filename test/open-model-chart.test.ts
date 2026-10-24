@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import { start } from "../src/browse.ts"
 import { emptySeries, update, type Snapshot } from "../src/present.ts"
 
@@ -365,5 +365,55 @@ test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分�
   expect(generation("30系列")?.getAttribute("aria-pressed")).toBe("true")
   expect(document.querySelector(`[aria-label="${other}"]`)).not.toBeNull()
   expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+  expect(document.querySelector('[aria-label="晶片分組"]')?.textContent).toBe("")
+})
+
+test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
+  const fifty = "NVIDIA RTX5090"
+  const older = "NVIDIA RTX4070"
+  const other = "NVIDIA RTX3060"
+  const html = `
+    <tr>
+      <td>顯示卡VGA</td>
+      <td>
+        <select name="n12">
+          <optgroup label="${fifty}"><option>華碩 TUF-RTX5090(2520MHz), $99990</option></optgroup>
+          <optgroup label="${older}"><option>華碩 DUAL-RTX4070-O12G(2535MHz), $18990</option></optgroup>
+          <optgroup label="${other}"><option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option></optgroup>
+        </select>
+      </td>
+    </tr>
+  `
+  start(update(emptySeries(), [{ capturedAt: "2024-06-15T02:00:00.000Z", html }]))
+
+  const generation = (name: string): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')]
+      .find((node) => node.textContent === name)
+  const marker = document.createElement("p")
+  marker.id = "keep"
+  document.querySelector("section")?.append(marker)
+
+  await vi.waitFor(() => {
+    expect(generation("30系列")?.getAttribute("data-prepared")).toBe("true")
+    expect(generation("40系列")?.getAttribute("data-prepared")).toBe("true")
+  })
+
+  generation("40系列")?.click()
+  expect(document.getElementById("keep")).not.toBeNull()
+  expect(document.querySelector("[data-loading]")).toBeNull()
+  expect(generation("40系列")?.getAttribute("aria-pressed")).toBe("true")
+  expect(generation("50系列")?.getAttribute("aria-pressed")).toBe("false")
+  expect(document.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
+  expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+  expect(document.querySelector(`[aria-label="${other}"]`)).toBeNull()
+
+  const item = [...document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')]
+    .find((node) => node.textContent === fifty)
+  document.querySelector<HTMLElement>('[data-slot="select-trigger"]')?.click()
+  item?.click()
+  generation("30系列")?.click()
+  expect(document.getElementById("keep")).not.toBeNull()
+  expect(document.querySelector(`[aria-label="${other}"]`)).not.toBeNull()
+  expect(document.querySelector(`[aria-label="${older}"]`)).toBeNull()
   expect(document.querySelector('[aria-label="晶片分組"]')?.textContent).toBe("")
 })
