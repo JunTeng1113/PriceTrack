@@ -18,8 +18,8 @@ export function usedPostFromFields(fields: UsedFields): UsedPost | null {
   const code = fields.code.trim()
   const date = canonicalDate(fields.date)
   const priceText = fields.price.trim()
-  const link = fields.link.trim()
-  const seller = fields.seller.trim()
+  const link = withoutQuery(fields.link)
+  const seller = withoutQuery(fields.seller)
   if (code === "" || date === null || !isHttpLink(link) || !isHttpLink(seller) || !/^[1-9]\d*$/.test(priceText)) {
     return null
   }
@@ -100,14 +100,14 @@ export function pickCode(options: readonly string[], entry: string): string | nu
 }
 
 export function sellerListings(posts: readonly UsedPost[], seller: string, code: string): UsedPost[] {
-  const sellerPage = seller.trim()
+  const sellerPage = withoutQuery(seller)
   const listing = code.trim()
   const found: UsedPost[] = []
   if (sellerPage === "" || listing === "") {
     return found
   }
   for (const post of posts) {
-    if (post.seller.trim() === sellerPage && post.code === listing) {
+    if (withoutQuery(post.seller) === sellerPage && post.code === listing) {
       found.push(post)
     }
   }
@@ -115,7 +115,8 @@ export function sellerListings(posts: readonly UsedPost[], seller: string, code:
 }
 
 export function addUsedPost(posts: readonly UsedPost[], post: UsedPost): UsedPost[] | null {
-  if (posts.some((item) => item.link === post.link && item.code === post.code && item.price === post.price)) {
+  const link = withoutQuery(post.link)
+  if (posts.some((item) => withoutQuery(item.link) === link && item.code === post.code && item.price === post.price)) {
     return null
   }
   return [...posts, post]
@@ -180,7 +181,7 @@ export function usedBoxes(
 function lowestPerSeller(posts: readonly UsedPost[]): UsedPost[] {
   const cheapest = new Map<string, UsedPost>()
   for (const post of posts) {
-    const seller = post.seller.trim()
+    const seller = withoutQuery(post.seller)
     if (seller === "") {
       continue
     }
@@ -192,7 +193,7 @@ function lowestPerSeller(posts: readonly UsedPost[]): UsedPost[] {
   const kept: UsedPost[] = []
   const seen = new Set<string>()
   for (const post of posts) {
-    const seller = post.seller.trim()
+    const seller = withoutQuery(post.seller)
     if (seller === "") {
       kept.push(post)
       continue
@@ -263,8 +264,8 @@ function storedPost(value: unknown): UsedPost | null {
   if (!("link" in value) || typeof value.link !== "string") {
     return null
   }
-  const seller = "seller" in value && typeof value.seller === "string" ? value.seller : ""
-  return { code: value.code, date: value.date, price: value.price, link: value.link, seller }
+  const seller = "seller" in value && typeof value.seller === "string" ? withoutQuery(value.seller) : ""
+  return { code: value.code, date: value.date, price: value.price, link: withoutQuery(value.link), seller }
 }
 
 function canonicalDate(value: string): string | null {
@@ -309,4 +310,37 @@ export function isHttpLink(value: string): boolean {
   }
   const rest = value.slice(scheme.length + marker.length)
   return rest.includes(".") && !rest.includes(" ")
+}
+
+function withoutQuery(value: string): string {
+  const trimmed = value.trim()
+  const queryAt = trimmed.indexOf("?")
+  if (queryAt < 0) {
+    return trimmed
+  }
+  const path = trimmed.slice(0, queryAt)
+  const id = profileId(path, trimmed.slice(queryAt + 1))
+  if (id === null) {
+    return path
+  }
+  return `${path}?id=${id}`
+}
+
+function profileId(path: string, query: string): string | null {
+  if (!path.endsWith("/profile.php")) {
+    return null
+  }
+  const hashAt = query.indexOf("#")
+  const params = hashAt < 0 ? query : query.slice(0, hashAt)
+  for (const part of params.split("&")) {
+    const eq = part.indexOf("=")
+    if (eq <= 0 || part.slice(0, eq) !== "id") {
+      continue
+    }
+    const id = part.slice(eq + 1)
+    if (/^\d+$/.test(id)) {
+      return id
+    }
+  }
+  return null
 }

@@ -1,7 +1,7 @@
 import { update, type PriceSeries, type Snapshot } from "./present.ts"
 
 const pageUrl = "https://www.coolpc.com.tw/evaluate.php"
-const fetchHour = 18
+const checkIntervalMs = 6 * 60 * 60 * 1000
 
 export type PreparedSeries = {
   quotes: PriceSeries["quotes"]
@@ -74,16 +74,8 @@ function taipeiWallClock(year: number, month: number, day: number, hour: number,
   return candidate
 }
 
-export function nextDailyFetch(now: Date): Date | null {
-  const parts = taipeiParts(now)
-  if (parts === null) {
-    return null
-  }
-  const today = taipeiWallClock(parts.year, parts.month, parts.day, fetchHour, 0, 0)
-  if (today !== null && today.getTime() >= now.getTime()) {
-    return today
-  }
-  return taipeiWallClock(parts.year, parts.month, parts.day + 1, fetchHour, 0, 0)
+export function nextCheck(after: Date): Date {
+  return new Date(after.getTime() + checkIntervalMs)
 }
 
 export function siteCapturedAt(html: string): string | null {

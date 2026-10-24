@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { ingestCoolpc, nextDailyFetch, siteCapturedAt, type PreparedSeries } from "../src/coolpc-daily.ts"
+import { ingestCoolpc, nextCheck, siteCapturedAt, type PreparedSeries } from "../src/coolpc-daily.ts"
 
 function atUtc(iso: string): Date {
   return new Date(iso)
@@ -16,11 +16,10 @@ const page = `
   </select>
 `
 
-describe("每天 18:00", () => {
-  test("18:00 之前等到當天，過了就等到明天", () => {
-    expect(nextDailyFetch(atUtc("2026-10-24T09:59:00.000Z"))?.toISOString()).toBe("2026-10-24T10:00:00.000Z")
-    expect(nextDailyFetch(atUtc("2026-10-24T10:00:00.000Z"))?.toISOString()).toBe("2026-10-24T10:00:00.000Z")
-    expect(nextDailyFetch(atUtc("2026-10-24T10:00:01.000Z"))?.toISOString()).toBe("2026-10-25T10:00:00.000Z")
+describe("每六小時", () => {
+  test("這一次檢查完，六小時後再檢查", () => {
+    expect(nextCheck(atUtc("2026-10-24T09:59:00.000Z")).toISOString()).toBe("2026-10-24T15:59:00.000Z")
+    expect(nextCheck(atUtc("2026-10-24T22:30:00.000Z")).toISOString()).toBe("2026-10-25T04:30:00.000Z")
   })
 
   test("更新時間用頁面上的標記，不採用秒數時鐘", () => {

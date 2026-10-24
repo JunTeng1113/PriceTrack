@@ -6,7 +6,7 @@ import { isQuote } from "./quote.ts"
 import {
   coolpcPageUrl,
   ingestCoolpc,
-  nextDailyFetch,
+  nextCheck,
   taipeiParts,
   type PreparedSeries,
 } from "./coolpc-daily.ts"
@@ -111,9 +111,9 @@ async function fetchOnce(): Promise<void> {
   console.log(`已記下 ${ingested.result.capturedAt}，報價 ${ingested.result.quotes}`)
 }
 
-console.log("原價屋每天 18:00（台北）抓一次。程式開著才會抓。")
-let due = nextDailyFetch(new Date())
-while (due !== null) {
+console.log("原價屋一開就檢查一次，之後每 6 小時再檢查。程式開著才會抓。")
+let due = new Date()
+while (true) {
   const delay = due.getTime() - Date.now()
   if (delay > 0) {
     console.log(`下次抓取 ${formatTaipei(due)}`)
@@ -121,9 +121,5 @@ while (due !== null) {
   }
   console.log(`開始抓取 ${formatTaipei(new Date())}`)
   await fetchOnce()
-  due = nextDailyFetch(new Date(due.getTime() + 1000))
-}
-if (due === null) {
-  console.error("算不出台北時間。")
-  process.exitCode = 1
+  due = nextCheck(new Date())
 }

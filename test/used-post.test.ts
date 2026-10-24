@@ -154,6 +154,38 @@ describe("二手貼文", () => {
     expect(addUsedPost([post], { ...post, date: "2024-06-16" })).toBeNull()
     expect(addUsedPost([], post)).toEqual([post])
   })
+
+  test("問號後面的文字不算另一個連結或賣家", () => {
+    const stored = usedPostFromFields({
+      ...fields,
+      link: "https://example.com/groups/1/permalink/2/?locale=zh_TW",
+      seller: "https://example.com/seller/one/?locale=zh_TW",
+    })
+    const again = usedPostFromFields({
+      ...fields,
+      link: "https://example.com/groups/1/permalink/2/?sale_post_id=2",
+      seller: "https://example.com/seller/one/",
+    })
+    expect(stored?.link).toBe("https://example.com/groups/1/permalink/2/")
+    expect(stored?.seller).toBe("https://example.com/seller/one/")
+    expect(again).not.toBeNull()
+    if (stored === null || again === null) {
+      return
+    }
+    expect(addUsedPost([stored], again)).toBeNull()
+
+    const person = usedPostFromFields({
+      ...fields,
+      seller: "https://www.facebook.com/profile.php?id=100024287646951&locale=zh_TW",
+    })
+    const other = usedPostFromFields({
+      ...fields,
+      price: "11000",
+      seller: "https://www.facebook.com/profile.php?id=100000000000002&locale=en_US",
+    })
+    expect(person?.seller).toBe("https://www.facebook.com/profile.php?id=100024287646951")
+    expect(other?.seller).toBe("https://www.facebook.com/profile.php?id=100000000000002")
+  })
 })
 
 function post(code: string, date: string, price: number): UsedPost {
@@ -230,6 +262,25 @@ describe("二手行情", () => {
       otherPrice,
     ])
     expect(sellerListings([matched], "", "A")).toEqual([])
+    expect(sellerListings([matched], `${seller}?locale=zh_TW`, "A")).toEqual([matched])
+  })
+
+  test("問號只差語言設定時仍是同一個賣家", () => {
+    const low = {
+      ...post("A", "2024-06-15", 10000),
+      seller: "https://example.com/seller/same?locale=zh_TW",
+      link: "https://example.com/low?locale=zh_TW",
+    }
+    const high = {
+      ...post("A", "2024-06-20", 14000),
+      seller: "https://example.com/seller/same",
+      link: "https://example.com/high",
+    }
+    const boxes = usedBoxes([high, low], ["A"], { start: "2024-06-01", end: "2024-06-30" })
+
+    expect(boxes[0]?.posts).toEqual([low])
+    expect(usedPostsFrom({ posts: [low] })[0]?.link).toBe("https://example.com/low")
+    expect(usedPostsFrom({ posts: [low] })[0]?.seller).toBe("https://example.com/seller/same")
   })
 
   test("讀檔時略過不完整的紀錄", () => {
