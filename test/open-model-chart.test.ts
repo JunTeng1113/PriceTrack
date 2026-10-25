@@ -242,10 +242,11 @@ test("滑鼠停在折線上時，Tooltip 顯示日期、型號名稱與價格", 
   expect(document.querySelector('[role="tooltip"]')?.classList.contains("hidden")).toBe(true)
 })
 
-test("下架的最後一筆在 Tooltip 標明下架", () => {
+test("下架的日子在 Tooltip 標明下架", () => {
   const series = update(emptySeries(), [
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`, `${windforce}(2497MHz), $20000`]),
     vga("2024-06-16T02:00:00.000Z", [`${prime}(2505MHz), $11000`]),
+    vga("2024-06-17T02:00:00.000Z", [`${prime}(2505MHz), $12000`, `${windforce}(2497MHz), $22000`]),
   ])
   start(series)
 
@@ -253,7 +254,7 @@ test("下架的最後一筆在 Tooltip 標明下架", () => {
   const removed = svg?.querySelector(`circle[data-code="${windforce}"][data-delisted="true"]`)
   removed?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 40, clientY: 40 }))
   const removedRows = [...document.querySelectorAll('[role="tooltip"] p')].map((node) => node.textContent ?? "")
-  expect(removedRows).toEqual(["2024-06-15", windforce, "$20,000", "下架"])
+  expect(removedRows).toEqual(["2024-06-16", windforce, "$20,000", "下架"])
 
   const kept = svg?.querySelector(`circle[data-code="${prime}"][data-date="2024-06-16"]`)
   kept?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 80, clientY: 40 }))

@@ -90,8 +90,8 @@ describe("售價與日報價", () => {
   test("同一個代號同一天有兩個售價時日報價取較低者", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`
-        <option>｛華碩 DUAL-RTX4070-O12G｝限搭機, $18990</option>
         <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $20990</option>
+        <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>
       `),
     ])
     const view = present(series, [
@@ -191,7 +191,32 @@ describe("售價與日報價", () => {
     ])
   })
 
-  test("當天快照沒有這個代號時圖上沒有該日的點也不是 0", () => {
+  test("限搭機與組裝價視同裝機價", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <option>限搭機｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>
+        <option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $20990</option>
+        <option>組裝價｛華碩 DUAL-RTX4070-O12G-WHITE｝2535MHz, $19990</option>
+      `),
+    ])
+    const view = present(series, [
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G-WHITE" },
+    ])
+
+    expect(view.series).toEqual([
+      {
+        code: "華碩 DUAL-RTX4070-O12G",
+        quotes: [{ date: "2024-06-15", sellingPrice: 20990 }],
+      },
+      {
+        code: "華碩 DUAL-RTX4070-O12G-WHITE",
+        quotes: [{ date: "2024-06-15", sellingPrice: 19990, dashed: true }],
+      },
+    ])
+  })
+
+  test("前後都有出現而中間的快照沒有這個代號時，中間的日子用前一次的售價並標成下架", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(
         `<option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>`,
@@ -215,7 +240,39 @@ describe("售價與日報價", () => {
         code: "華碩 DUAL-RTX4070-O12G",
         quotes: [
           { date: "2024-06-15", sellingPrice: 18990 },
+          { date: "2024-06-16", sellingPrice: 18990, dashed: true, delisted: true },
           { date: "2024-06-17", sellingPrice: 17990 },
+        ],
+      },
+    ])
+  })
+
+  test("下架只補有快照的日子", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(
+        `<option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $18990</option>`,
+        "2024-06-15T02:00:00.000Z",
+      ),
+      vgaSnapshot(
+        `<option>｛華碩 DUAL-RTX4070-O12G-WHITE｝2535MHz, $19990</option>`,
+        "2024-06-17T02:00:00.000Z",
+      ),
+      vgaSnapshot(
+        `<option>｛華碩 DUAL-RTX4070-O12G｝2535MHz, $17990</option>`,
+        "2024-06-19T02:00:00.000Z",
+      ),
+    ])
+    const view = present(series, [
+      { type: "select", code: "華碩 DUAL-RTX4070-O12G" },
+    ])
+
+    expect(view.series).toEqual([
+      {
+        code: "華碩 DUAL-RTX4070-O12G",
+        quotes: [
+          { date: "2024-06-15", sellingPrice: 18990 },
+          { date: "2024-06-17", sellingPrice: 18990, dashed: true, delisted: true },
+          { date: "2024-06-19", sellingPrice: 17990 },
         ],
       },
     ])

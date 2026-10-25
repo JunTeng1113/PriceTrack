@@ -140,55 +140,101 @@ function replacesDailyQuote(previous: StoredQuote, next: StoredQuote): boolean {
   if (order > 0) {
     return false
   }
-  const previousInstall = previous.rowText.includes("裝機價")
-  const nextInstall = next.rowText.includes("裝機價")
+  const previousInstall = isInstallPrice(previous.rowText)
+  const nextInstall = isInstallPrice(next.rowText)
   if (previousInstall !== nextInstall) {
     return previousInstall
   }
   return next.sellingPrice < previous.sellingPrice
 }
 
-function quoteMark(
-  quote: { code: string; date: string; sellingPrice: number; rowText: string },
-  delistedOn: ReadonlyMap<string, string>,
-): { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean } {
-  const dashed = quote.rowText.includes("裝機價") || quote.rowText.includes("售罄")
-  const delisted = delistedOn.get(quote.code) === quote.date
-  if (!dashed && !delisted) {
-    return { date: quote.date, sellingPrice: quote.sellingPrice }
-  }
-  return {
-    date: quote.date,
-    sellingPrice: quote.sellingPrice,
-    dashed: true,
-    ...(delisted ? { delisted: true } : {}),
-  }
+function isInstallPrice(rowText: string): boolean {
+  return rowText.includes("裝機價") || rowText.includes("限搭機") || rowText.includes("組裝價")
 }
 
-function delistedDates(quotes: readonly StoredQuote[]): Map<string, string> {
-  let latestCapturedAt = ""
-  for (const quote of quotes) {
-    if (quote.capturedAt > latestCapturedAt) {
-      latestCapturedAt = quote.capturedAt
-    }
+type QuoteMark = { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean }
+
+function quoteMark(quote: { date: string; sellingPrice: number; rowText: string }): QuoteMark {
+  if (!isInstallPrice(quote.rowText) && !quote.rowText.includes("售罄")) {
+    return { date: quote.date, sellingPrice: quote.sellingPrice }
   }
-  const listed = new Set<string>()
+  return { date: quote.date, sellingPrice: quote.sellingPrice, dashed: true }
+}
+
+function quotesByCode(quotes: readonly StoredQuote[]): Map<string, StoredQuote[]> {
+  const grouped = new Map<string, StoredQuote[]>()
   for (const quote of quotes) {
-    if (quote.capturedAt === latestCapturedAt) {
-      listed.add(quote.code)
-    }
-  }
-  const lastDate = new Map<string, string>()
-  for (const quote of quotes) {
-    if (listed.has(quote.code)) {
+    const list = grouped.get(quote.code)
+    if (list === undefined) {
+      grouped.set(quote.code, [quote])
       continue
     }
-    const current = lastDate.get(quote.code) ?? ""
-    if (quote.date > current) {
-      lastDate.set(quote.code, quote.date)
+    list.push(quote)
+  }
+  for (const list of grouped.values()) {
+    list.sort((left, right) => left.date.localeCompare(right.date))
+  }
+  return grouped
+}
+
+function snapshotDates(quotes: readonly StoredQuote[]): string[] {
+  const dates = new Set<string>()
+  for (const quote of quotes) {
+    const date = taipeiDate(quote.capturedAt)
+    if (date !== "") {
+      dates.add(date)
     }
   }
-  return lastDate
+  return [...dates].sort()
+}
+
+function datesBetween(dates: readonly string[], after: string, before: string): string[] {
+  let low = 0
+  let high = dates.length
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2)
+    if ((dates[mid] ?? "") <= after) {
+      low = mid + 1
+    } else {
+      high = mid
+    }
+  }
+  const found: string[] = []
+  for (let index = low; index < dates.length; index += 1) {
+    const date = dates[index]
+    if (date === undefined || date >= before) {
+      break
+    }
+    found.push(date)
+  }
+  return found
+}
+
+function lineQuotes(
+  own: readonly StoredQuote[],
+  dates: readonly string[],
+  range: { start: string; end: string } | null,
+): QuoteMark[] {
+  const marks: QuoteMark[] = []
+  for (let index = 0; index < own.length; index += 1) {
+    const quote = own[index]
+    if (quote === undefined) {
+      continue
+    }
+    if (quoteInRange(quote.date, range)) {
+      marks.push(quoteMark(quote))
+    }
+    const next = own[index + 1]
+    if (next === undefined) {
+      continue
+    }
+    for (const day of datesBetween(dates, quote.date, next.date)) {
+      if (quoteInRange(day, range)) {
+        marks.push({ date: day, sellingPrice: quote.sellingPrice, dashed: true, delisted: true })
+      }
+    }
+  }
+  return marks
 }
 
 function chipModelName(group: string): string | null {
@@ -350,7 +396,8 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
 
   const queryRange = rangeOverride ?? queryRangeFor(stored)
   const visibleQuotes = stored.filter((quote) => quoteInRange(quote.date, queryRange))
-  const delistedOn = delistedDates(stored)
+  const byCode = quotesByCode(stored)
+  const dates = snapshotDates(stored)
   const chipGroups = chipGroupsInOrder(stored)
   const pool = uniqueCodes(visibleQuotes).filter((code) =>
     chosenGroups.length === 0 || visibleQuotes.some((quote) => quote.code === code && chosenGroups.includes(quote.group)),
@@ -366,26 +413,22 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
   })
   const plotted = selected.map((code) => ({
     code,
-    quotes: visibleQuotes
-      .filter((quote) => quote.code === code)
-      .sort((left, right) => left.date.localeCompare(right.date))
-      .map((quote) => quoteMark(quote, delistedOn)),
+    quotes: lineQuotes(byCode.get(code) ?? [], dates, queryRange),
   }))
   const shownGroups = chosenGroups.length === 0
     ? chipGroups.filter((group) => isRtxGeneration(group, generation))
     : chipGroups.filter((group) => chosenGroups.includes(group))
   const modelCharts = shownGroups.map((group) => {
-    const groupCodes = uniqueCodes(visibleQuotes.filter((quote) => quote.group === group))
     const selectedBrands = brandsByGroup.get(group) ?? []
     const focus = focusByGroup.get(group) ?? ""
-    const allSeries = groupCodes.map((code) => ({
-      code,
-      brand: brandOf(code),
-      quotes: visibleQuotes
-        .filter((quote) => quote.code === code)
-        .sort((left, right) => left.date.localeCompare(right.date))
-        .map((quote) => quoteMark(quote, delistedOn)),
-    }))
+    const allSeries = uniqueCodes(stored.filter((quote) => quote.group === group)).flatMap((code) => {
+      const quotes = lineQuotes(byCode.get(code) ?? [], dates, queryRange)
+      if (quotes.length === 0) {
+        return []
+      }
+      return [{ code, brand: brandOf(code), quotes }]
+    })
+    const groupCodes = allSeries.map((line) => line.code)
     const branded = allSeries.filter((line) => selectedBrands.length === 0 || selectedBrands.includes(brandGroup(line.brand)))
     const activeFocus = branded.some((line) => line.code === focus) ? focus : ""
     const lines = branded.map((line, index) => ({

@@ -164,8 +164,6 @@ describe("已選、金額軸與讀數", () => {
     const series = update(emptySeries(), [
       vgaSnapshot("2024-06-15T02:00:00.000Z", [
         { label: "RTX 4070", rows: [`｛${dual}｝, $18990`] },
-      ]),
-      vgaSnapshot("2024-06-17T02:00:00.000Z", [
         { label: "RTX 4060", rows: [`｛${rtx4060}｝, $9000`] },
       ]),
       vgaSnapshot("2024-06-20T02:00:00.000Z", [

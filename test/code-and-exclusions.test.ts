@@ -431,7 +431,7 @@ describe("代號與排除", () => {
     expect(view.series).toEqual([
       {
         code: "華碩 DUAL-RTX5060-O8G",
-        quotes: [{ date: "2024-06-15", sellingPrice: 9990 }],
+        quotes: [{ date: "2024-06-15", sellingPrice: 10990 }],
       },
     ])
   })

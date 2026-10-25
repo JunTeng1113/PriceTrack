@@ -62,41 +62,48 @@ describe("每個晶片分組一張圖", () => {
     expect(dashOf(regular)).toBe("")
   })
 
-  test("下架前的最後一筆是虛線和空心圓，仍標下架前的售價", () => {
+  test("中間缺席的日子用前一次的售價，標成下架", () => {
     const kept = "華碩 DUAL-RTX5060-O8G"
     const removed = "技嘉 RTX5060 WINDFORCE OC 8G"
+    const gone = "微星 RTX5060 8G VENTUS 2X"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [{
         label: "NVIDIA RTX5060-8GB",
         rows: [
           `｛${kept}｝2497MHz, $10000`,
           `｛${removed}｝2497MHz, $9000`,
+          `｛${gone}｝2497MHz, $8000`,
         ],
       }]),
       snapshot("2024-06-16T02:00:00.000Z", [{
         label: "NVIDIA RTX5060-8GB",
-        rows: [
-          `｛${kept}｝2497MHz, $11000`,
-          `｛${removed}｝2497MHz, $9500`,
-        ],
+        rows: [`｛${kept}｝2497MHz, $11000`],
       }]),
       snapshot("2024-06-17T02:00:00.000Z", [{
         label: "NVIDIA RTX5060-8GB",
-        rows: [`｛${kept}｝2497MHz, $12000`],
+        rows: [
+          `｛${kept}｝2497MHz, $12000`,
+          `｛${removed}｝2497MHz, $9500`,
+        ],
       }]),
     ])
     const doc = documentOf(renderPage(series, []))
     const chart = doc.querySelector("svg[data-price-chart]")
-    const removedPoint = chart?.querySelector(`circle[data-code="${removed}"][data-date="2024-06-16"]`)
+    const gapPoint = chart?.querySelector(`circle[data-code="${removed}"][data-date="2024-06-16"]`)
     const earlierPoint = chart?.querySelector(`circle[data-code="${removed}"][data-date="2024-06-15"]`)
-    const removedLine = chart?.querySelector(`line:not([data-hit])[data-code="${removed}"]`)
+    const laterPoint = chart?.querySelector(`circle[data-code="${removed}"][data-date="2024-06-17"]`)
+    const gapLines = [...(chart?.querySelectorAll(`line:not([data-hit])[data-code="${removed}"]`) ?? [])]
 
-    expect(removedPoint?.getAttribute("data-price")).toBe("9500")
-    expect(removedPoint?.getAttribute("data-delisted")).toBe("true")
-    expect(removedPoint?.getAttribute("fill")).toBe("none")
+    expect(gapPoint?.getAttribute("data-price")).toBe("9000")
+    expect(gapPoint?.getAttribute("data-delisted")).toBe("true")
+    expect(gapPoint?.getAttribute("fill")).toBe("none")
     expect(earlierPoint?.hasAttribute("data-delisted")).toBe(false)
     expect(earlierPoint?.getAttribute("fill")).not.toBe("none")
-    expect(removedLine?.getAttribute("stroke-dasharray")).toBe("2 1.2")
+    expect(laterPoint?.getAttribute("data-price")).toBe("9500")
+    expect(laterPoint?.hasAttribute("data-delisted")).toBe(false)
+    expect(gapLines.map((line) => line.getAttribute("stroke-dasharray"))).toEqual(["2 1.2", "2 1.2"])
+    expect(chart?.querySelector(`circle[data-code="${gone}"][data-date="2024-06-16"]`)).toBeNull()
+    expect(chart?.querySelector(`circle[data-code="${gone}"][data-delisted]`)).toBeNull()
     expect(chart?.querySelector(`circle[data-code="${kept}"][data-delisted]`)?.getAttribute("data-delisted") ?? null).toBeNull()
   })
 
