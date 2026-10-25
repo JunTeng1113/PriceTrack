@@ -160,7 +160,7 @@ describe("代號與排除", () => {
           <option>華碩 DUAL-RTX3060TI-O8G(1695MHz), $11990</option>
         </optgroup>
         <optgroup label="NVIDIA RTX3060TI-8G(GDDR6X)">
-          <option>華碩 TUF-RTX3060TI-O8G-GAMING(1695MHz), $13990</option>
+          <option>華碩 TUF-RTX3060TI-O8GD6X-GAMING(1695MHz), $13990</option>
         </optgroup>
       `),
     ])
@@ -175,6 +175,38 @@ describe("代號與排除", () => {
       "NVIDIA RTX3060Ti-8GB(GDDR6)",
       "NVIDIA RTX3060Ti-8GB(GDDR6X)",
     ])
+  })
+
+  test("RTX3060 Ti 沒寫 GDDR6X 的是同一分組", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX3060TI">
+          <option>華碩 DUAL-RTX3060Ti-O8G(1695MHz), $11990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060TI-8G">
+          <option>技嘉 RTX3060Ti EAGLE OC 8G(1695MHz), $10990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060TI-8G(GDDR6)">
+          <option>微星 RTX3060Ti VENTUS 2X 8G(1665MHz), $9990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060TI-8G(GDDR6X)">
+          <option>ZOTAC RTX3060Ti Twin Edge LHR(1665MHz), $8990</option>
+          <option>華碩 DUAL-RTX3060TI-O8GD6X(1695MHz), $12990</option>
+        </optgroup>
+      `),
+    ])
+    const view = present(series, [{ type: "setGeneration", name: "30" }])
+    const gddr6 = view.modelCharts.find((item) => item.group === "NVIDIA RTX3060Ti-8GB(GDDR6)")
+    const gddr6x = view.modelCharts.find((item) => item.group === "NVIDIA RTX3060Ti-8GB(GDDR6X)")
+
+    expect(view.chipGroups).toEqual(["NVIDIA RTX3060Ti-8GB(GDDR6)", "NVIDIA RTX3060Ti-8GB(GDDR6X)"])
+    expect(gddr6?.series.map((line) => line.code)).toEqual([
+      "華碩 DUAL-RTX3060Ti-O8G",
+      "技嘉 RTX3060Ti EAGLE OC 8G",
+      "微星 RTX3060Ti VENTUS 2X 8G",
+      "ZOTAC RTX3060Ti Twin Edge LHR",
+    ])
+    expect(gddr6x?.series.map((line) => line.code)).toEqual(["華碩 DUAL-RTX3060TI-O8GD6X"])
   })
 
   test("晶片分組名稱含周邊的列不出現在候選", () => {

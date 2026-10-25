@@ -234,6 +234,9 @@ function sameCapacitySpelling(name: string): string {
   if (spelled === "NVIDIA RTX5090-16GB(GDDR7)") {
     return "NVIDIA RTX5090-32GB(GDDR7)"
   }
+  if (spelled === "NVIDIA RTX3060TI" || spelled === "NVIDIA RTX3060Ti-8GB") {
+    return "NVIDIA RTX3060Ti-8GB(GDDR6)"
+  }
   return spelled
 }
 
@@ -255,10 +258,13 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
     if (code === null || comboPrice(quote.rowText, code) || notGraphicsCard(code)) {
       continue
     }
-    const group = chipModelName(quote.group)
-    if (group === null) {
+    const named = chipModelName(quote.group)
+    if (named === null) {
       continue
     }
+    const group = named === "NVIDIA RTX3060Ti-8GB(GDDR6X)" && !/GDDR6X|D6X/i.test(code)
+      ? "NVIDIA RTX3060Ti-8GB(GDDR6)"
+      : named
     const next = code === quote.code && group === quote.group ? quote : { ...quote, code, group }
     const key = `${next.code}\0${next.date}`
     const previous = byKey.get(key)
