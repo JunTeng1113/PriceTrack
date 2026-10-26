@@ -346,4 +346,46 @@ describe("售價與日報價", () => {
     const chart = view.modelCharts.find((item) => item.group === "NVIDIA RTX4070")
     expect(chart?.used.map((box) => box.code)).toEqual(["技嘉 AORUS RTX3080TI MASTER 12G"])
   })
+
+  test("末尾的中文暱稱仍是同一個代號，雪白版仍分開", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(
+        `<option>｛微星 RTX5060 8G VENTUS 2X OC WHITE 純白｝, $10000</option>
+         <option>｛微星 RTX5060 8G CYCLONE OC 雪螳螂【獨家】｝, $9000</option>
+         <option>｛華碩 ATS-RTX5060-O8G 鋸齒鯊｝, $8000</option>
+         <option>｛ZOTAC RTX3080 Trinity OC LHR｝, $30000</option>
+         <option>｛ZOTAC RTX3080 Trinity OC LHR 雪白版｝, $31000</option>`,
+        "2024-06-15T02:00:00.000Z",
+      ),
+      vgaSnapshot(
+        `<option>｛微星 RTX5060 8G CYCLONE OC 螳螂【獨家】｝, $9100</option>
+         <option>｛華碩 ATS-RTX5060-O8G 巨齒鯊｝, $8100</option>`,
+        "2024-06-16T02:00:00.000Z",
+      ),
+      vgaSnapshot(
+        `<option>｛微星 RTX5060 8G VENTUS 2X OC WHITE｝, $11000</option>
+         <option>｛微星 RTX5060 8G CYCLONE OC｝, $9200</option>
+         <option>｛華碩 ATS-RTX5060-O8G｝, $8200</option>`,
+        "2024-06-17T02:00:00.000Z",
+      ),
+    ])
+    const view = present(series, [
+      { type: "select", code: "微星 RTX5060 8G VENTUS 2X OC WHITE" },
+      { type: "select", code: "微星 RTX5060 8G CYCLONE OC" },
+      { type: "select", code: "華碩 ATS-RTX5060-O8G" },
+    ])
+
+    expect(view.series.map((item) => item.code)).toEqual([
+      "微星 RTX5060 8G VENTUS 2X OC WHITE",
+      "微星 RTX5060 8G CYCLONE OC",
+      "華碩 ATS-RTX5060-O8G",
+    ])
+    expect(view.series[0]?.quotes.map((quote) => quote.sellingPrice)).toEqual([10000, 10000, 11000])
+    expect(view.series[1]?.quotes.map((quote) => quote.sellingPrice)).toEqual([9000, 9100, 9200])
+    expect(view.series[2]?.quotes.map((quote) => quote.sellingPrice)).toEqual([8000, 8100, 8200])
+    expect(visibleCodes(series).filter((code) => code.includes("Trinity"))).toEqual([
+      "ZOTAC RTX3080 Trinity OC LHR",
+      "ZOTAC RTX3080 Trinity OC LHR 雪白版",
+    ])
+  })
 })

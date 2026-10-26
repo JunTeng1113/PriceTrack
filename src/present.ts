@@ -305,6 +305,21 @@ function spellingKey(code: string): string {
     .replaceAll("gddr6", "d6")
 }
 
+function nicknameKey(code: string): string {
+  let key = spellingKey(code)
+  let previous = ""
+  while (key !== previous) {
+    previous = key
+    key = key.replace(/【[^】版]*】$/g, "")
+    key = key.replace(/\[[^\]版]*\]$/g, "")
+    if (key.endsWith("雪白版") && !key.includes("white")) {
+      break
+    }
+    key = key.replace(/[^\u0000-\u007f]+$/g, "")
+  }
+  return key
+}
+
 function normalizeQuotes(quotes: readonly StoredQuote[]): { quotes: StoredQuote[]; spellings: ReadonlyMap<string, string> } {
   const prepared: { quote: StoredQuote; code: string; group: string }[] = []
   for (const quote of quotes) {
@@ -323,7 +338,7 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): { quotes: StoredQuote[
   }
   const chosen = new Map<string, { code: string; capturedAt: string }>()
   for (const item of prepared) {
-    const key = spellingKey(item.code)
+    const key = nicknameKey(item.code)
     const current = chosen.get(key)
     if (
       current === undefined
@@ -340,7 +355,7 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): { quotes: StoredQuote[
   const byKey = new Map<string, StoredQuote>()
   const order: string[] = []
   for (const item of prepared) {
-    const code = spellings.get(spellingKey(item.code)) ?? item.code
+    const code = spellings.get(nicknameKey(item.code)) ?? item.code
     const next = code === item.quote.code && item.group === item.quote.group ? item.quote : { ...item.quote, code, group: item.group }
     const key = `${next.code}\0${next.date}`
     const previous = byKey.get(key)
@@ -499,7 +514,7 @@ function recordedCode(post: UsedPost, spellings: ReadonlyMap<string, string>): U
   if (freed === null) {
     return post
   }
-  const code = spellings.get(spellingKey(freed)) ?? freed
+  const code = spellings.get(nicknameKey(freed)) ?? freed
   if (code === post.code) {
     return post
   }
