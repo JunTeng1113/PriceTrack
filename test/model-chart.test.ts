@@ -57,8 +57,8 @@ describe("每個晶片分組一張圖", () => {
     const lines = [...doc.querySelectorAll("svg[data-price-chart] line:not([data-hit])")]
     const dashOf = (code: string) => lines.find((line) => line.getAttribute("data-code") === code)?.getAttribute("stroke-dasharray") ?? ""
 
-    expect(dashOf(install)).toBe("2 1.2")
-    expect(dashOf(sold)).toBe("2 1.2")
+    expect(dashOf(install)).toBe("1 0.6")
+    expect(dashOf(sold)).toBe("1 0.6")
     expect(dashOf(regular)).toBe("")
   })
 
@@ -101,7 +101,7 @@ describe("每個晶片分組一張圖", () => {
     expect(earlierPoint?.getAttribute("fill")).not.toBe("none")
     expect(laterPoint?.getAttribute("data-price")).toBe("9500")
     expect(laterPoint?.hasAttribute("data-delisted")).toBe(false)
-    expect(gapLines.map((line) => line.getAttribute("stroke-dasharray"))).toEqual(["2 1.2", "2 1.2"])
+    expect(gapLines.map((line) => line.getAttribute("stroke-dasharray"))).toEqual(["1 0.6", "1 0.6"])
     expect(chart?.querySelector(`circle[data-code="${gone}"][data-date="2024-06-16"]`)).toBeNull()
     expect(chart?.querySelector(`circle[data-code="${gone}"][data-delisted]`)).toBeNull()
     expect(chart?.querySelector(`circle[data-code="${kept}"][data-delisted]`)?.getAttribute("data-delisted") ?? null).toBeNull()

@@ -318,7 +318,7 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
       const delisted = quote.delisted === true
       if (previous !== null && (connectGaps || addDays(previous.date, 1) === quote.date)) {
         const segment = `data-code="${escapeAttribute(item.code)}" data-from-date="${escapeAttribute(previous.date)}" data-from-price="${previous.price}" data-to-date="${escapeAttribute(quote.date)}" data-to-price="${quote.sellingPrice}" x1="${previous.x}" y1="${previous.y}" x2="${x}" y2="${y}"`
-        const dash = dashed || previous.dashed ? ` stroke-dasharray="2 1.2"` : ""
+        const dash = dashed || previous.dashed ? ` stroke-dasharray="1 0.6"` : ""
         marks.push(
           `<line ${segment} stroke="${paint}" stroke-width="0.6"${dash} fill="none" opacity="${opacity}" pointer-events="none" />`,
         )
