@@ -288,7 +288,7 @@ function sameCapacitySpelling(name: string): string {
 
 export function visibleCodes(series: PriceSeries): string[] {
   const codes: string[] = []
-  for (const quote of normalizeQuotes(series.quotes)) {
+  for (const quote of normalizeQuotes(series.quotes).quotes) {
     if (!codes.includes(quote.code)) {
       codes.push(quote.code)
     }
@@ -296,9 +296,17 @@ export function visibleCodes(series: PriceSeries): string[] {
   return codes
 }
 
-function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
-  const byKey = new Map<string, StoredQuote>()
-  const order: string[] = []
+function spellingKey(code: string): string {
+  return code
+    .toLowerCase()
+    .replace(/[\s\-_]/g, "")
+    .replace(/(\d+)gb\b/g, "$1g")
+    .replaceAll("gddr6x", "d6x")
+    .replaceAll("gddr6", "d6")
+}
+
+function normalizeQuotes(quotes: readonly StoredQuote[]): { quotes: StoredQuote[]; spellings: ReadonlyMap<string, string> } {
+  const prepared: { quote: StoredQuote; code: string; group: string }[] = []
   for (const quote of quotes) {
     const code = promotionFree(quote.code)
     if (code === null || comboPrice(quote.rowText, code) || notGraphicsCard(code)) {
@@ -311,7 +319,29 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
     const group = named === "NVIDIA RTX3060Ti-8GB(GDDR6X)" && !/GDDR6X|D6X/i.test(code)
       ? "NVIDIA RTX3060Ti-8GB(GDDR6)"
       : named
-    const next = code === quote.code && group === quote.group ? quote : { ...quote, code, group }
+    prepared.push({ quote, code, group })
+  }
+  const chosen = new Map<string, { code: string; capturedAt: string }>()
+  for (const item of prepared) {
+    const key = spellingKey(item.code)
+    const current = chosen.get(key)
+    if (
+      current === undefined
+      || item.quote.capturedAt > current.capturedAt
+      || (item.quote.capturedAt === current.capturedAt && item.code.localeCompare(current.code, "zh-Hant") > 0)
+    ) {
+      chosen.set(key, { code: item.code, capturedAt: item.quote.capturedAt })
+    }
+  }
+  const spellings = new Map<string, string>()
+  for (const [key, value] of chosen) {
+    spellings.set(key, value.code)
+  }
+  const byKey = new Map<string, StoredQuote>()
+  const order: string[] = []
+  for (const item of prepared) {
+    const code = spellings.get(spellingKey(item.code)) ?? item.code
+    const next = code === item.quote.code && item.group === item.quote.group ? item.quote : { ...item.quote, code, group: item.group }
     const key = `${next.code}\0${next.date}`
     const previous = byKey.get(key)
     if (previous === undefined) {
@@ -330,11 +360,12 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): StoredQuote[] {
       normalized.push(quote)
     }
   }
-  return normalized
+  return { quotes: normalized, spellings }
 }
 
 export function present(series: PriceSeries, actions: readonly Action[], usedPosts: readonly UsedPost[] = []): View {
-  const stored = normalizeQuotes(series.quotes)
+  const normalized = normalizeQuotes(series.quotes)
+  const stored = normalized.quotes
   let keyword = ""
   let generation: Generation = "50"
   const chosenGroups: string[] = []
@@ -445,7 +476,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       series: lines,
       allSeries,
       readout: readoutFor(lines, pointer),
-      used: usedBoxes(usedPosts.map(recordedCode), groupCodes, queryRange),
+      used: usedBoxes(usedPosts.map((post) => recordedCode(post, normalized.spellings)), groupCodes, queryRange),
     }
   })
 
@@ -463,9 +494,13 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
   }
 }
 
-function recordedCode(post: UsedPost): UsedPost {
-  const code = promotionFree(post.code)
-  if (code === null || code === post.code) {
+function recordedCode(post: UsedPost, spellings: ReadonlyMap<string, string>): UsedPost {
+  const freed = promotionFree(post.code)
+  if (freed === null) {
+    return post
+  }
+  const code = spellings.get(spellingKey(freed)) ?? freed
+  if (code === post.code) {
     return post
   }
   return { ...post, code }

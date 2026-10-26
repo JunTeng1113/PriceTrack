@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { emptySeries, present, update, type Snapshot } from "../src/present.ts"
+import { emptySeries, present, update, visibleCodes, type Snapshot } from "../src/present.ts"
 
 const capturedAt = "2024-06-15T02:00:00.000Z"
 
@@ -299,5 +299,51 @@ describe("售價與日報價", () => {
         quotes: [{ date: "2024-06-15", sellingPrice: 18990 }],
       },
     ])
+  })
+
+  test("空白、連字號、大小寫或容量單位不同仍是同一個代號", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(
+        `<option>｛技嘉 AORUS RTX3080Ti MASTER 12G｝, $10000</option>
+         <option>｛ZOTAC GAMING GTX1650 OC GDDR6｝, $5000</option>
+         <option>｛華碩 DUAL-RTX2060-O6G-EVO｝, $8000</option>`,
+        "2024-06-15T02:00:00.000Z",
+      ),
+      vgaSnapshot(
+        `<option>｛技嘉 AORUS RTX3080TI MASTER 12G｝, $11000</option>
+         <option>｛ZOTAC GAMING GTX1650 OC D6｝, $5200</option>
+         <option>｛華碩 DUAL-RTX2060-6G-EVO｝, $7000</option>`,
+        "2024-06-16T02:00:00.000Z",
+      ),
+    ])
+    const view = present(series, [
+      { type: "setGeneration", name: "40" },
+      { type: "select", code: "技嘉 AORUS RTX3080TI MASTER 12G" },
+      { type: "select", code: "ZOTAC GAMING GTX1650 OC D6" },
+    ], [
+      {
+        code: "技嘉 AORUS RTX3080Ti MASTER 12G",
+        date: "2024-06-16",
+        price: 9000,
+        link: "https://example.com/a",
+        seller: "https://example.com/s",
+      },
+    ])
+
+    expect(view.series.map((item) => item.code)).toEqual([
+      "技嘉 AORUS RTX3080TI MASTER 12G",
+      "ZOTAC GAMING GTX1650 OC D6",
+    ])
+    expect(view.series[0]?.quotes.map((quote) => quote.sellingPrice)).toEqual([10000, 11000])
+    expect(view.series[1]?.quotes.map((quote) => quote.sellingPrice)).toEqual([5000, 5200])
+    expect(visibleCodes(series).filter((code) => code.includes("RTX3080"))).toEqual([
+      "技嘉 AORUS RTX3080TI MASTER 12G",
+    ])
+    expect(visibleCodes(series).filter((code) => code.includes("2060"))).toEqual([
+      "華碩 DUAL-RTX2060-O6G-EVO",
+      "華碩 DUAL-RTX2060-6G-EVO",
+    ])
+    const chart = view.modelCharts.find((item) => item.group === "NVIDIA RTX4070")
+    expect(chart?.used.map((box) => box.code)).toEqual(["技嘉 AORUS RTX3080TI MASTER 12G"])
   })
 })
