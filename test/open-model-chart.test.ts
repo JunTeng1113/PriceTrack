@@ -178,19 +178,26 @@ test("滑鼠移到一條線上時其他線變半透明，移開就恢復", () =>
   }
   const opacity = (code: string): string | null =>
     svg.querySelector(`line[data-code="${code}"]`)?.getAttribute("opacity") ?? null
+  const stack = (): string[] =>
+    [...svg.querySelectorAll("line[data-code], circle[data-code]")]
+      .filter((node) => node.getAttribute("data-hit") !== "true")
+      .map((node) => node.getAttribute("data-code") ?? "")
   const primeLine = svg.querySelector(`line[data-code="${prime}"]`)
   const otherLine = svg.querySelector(`line[data-code="${windforce}"]`)
   primeLine?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
   expect(opacity(prime)).toBe("1")
   expect(opacity(windforce)).toBe("0.25")
+  expect(stack().lastIndexOf(windforce)).toBeLessThan(stack().indexOf(prime))
 
   otherLine?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
   expect(opacity(windforce)).toBe("1")
   expect(opacity(prime)).toBe("0.25")
+  expect(stack().lastIndexOf(prime)).toBeLessThan(stack().indexOf(windforce))
 
   primeLine?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }))
   expect(opacity(prime)).toBe("1")
   expect(opacity(windforce)).toBe("1")
+  expect(stack().lastIndexOf(prime)).toBeLessThan(stack().indexOf(windforce))
 })
 
 test("每一條折線懸停都會出現 Tooltip", () => {

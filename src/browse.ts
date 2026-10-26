@@ -127,6 +127,54 @@ function paintFocus(svg: Element, code: string | null): void {
       mark.setAttribute("data-focused", active && same ? "true" : "false")
     }
   }
+  raiseFocusedMarks(svg, active ? code : null)
+}
+
+const raisedOrder = new WeakMap<Element, number>()
+const raisedReady = new WeakSet<Element>()
+
+function isRaisedMark(node: Element): boolean {
+  if (node.getAttribute("data-hit") === "true" || !node.hasAttribute("data-code")) {
+    return false
+  }
+  const tag = node.tagName.toLowerCase()
+  return tag === "line" || tag === "circle"
+}
+
+function rememberRaised(svg: Element): void {
+  if (raisedReady.has(svg)) {
+    return
+  }
+  let index = 0
+  for (const child of svg.children) {
+    if (!isRaisedMark(child)) {
+      continue
+    }
+    raisedOrder.set(child, index)
+    index += 1
+  }
+  raisedReady.add(svg)
+}
+
+function raiseFocusedMarks(svg: Element, code: string | null): void {
+  rememberRaised(svg)
+  const marks = [...svg.children].filter((node) => isRaisedMark(node))
+  const anchor = [...svg.children].find((node) => node.getAttribute("data-series-label") === "true") ?? null
+  const ordered = [...marks].sort((left, right) => {
+    const leftFocused = code !== null && left.getAttribute("data-code") === code
+    const rightFocused = code !== null && right.getAttribute("data-code") === code
+    if (leftFocused !== rightFocused) {
+      return leftFocused ? 1 : -1
+    }
+    return (raisedOrder.get(left) ?? 0) - (raisedOrder.get(right) ?? 0)
+  })
+  for (const node of ordered) {
+    if (anchor === null) {
+      svg.append(node)
+    } else {
+      svg.insertBefore(node, anchor)
+    }
+  }
 }
 
 function followLine(node: Element): void {
