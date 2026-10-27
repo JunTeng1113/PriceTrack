@@ -113,3 +113,88 @@ export function ingestCoolpc(prepared: PreparedSeries, html: string): { prepared
     result: { status: "saved", capturedAt, quotes: series.quotes.length },
   }
 }
+
+type ComparedQuote = {
+  code: string
+  sellingPrice: number
+  rowText: string
+}
+
+export function changesAgainstPrevious(
+  before: PreparedSeries,
+  after: PreparedSeries,
+  capturedAt: string,
+): { previousAt: string | null; lines: string[] } {
+  const previousAt = before.done.filter((item) => item < capturedAt).sort().at(-1) ?? null
+  if (previousAt === null) {
+    return { previousAt: null, lines: [] }
+  }
+  const previous = before.quotes.filter((quote) => quote.capturedAt === previousAt)
+  const next = after.quotes.filter((quote) => quote.capturedAt === capturedAt)
+  return { previousAt, lines: describeChanges(previous, next) }
+}
+
+function describeChanges(previous: readonly ComparedQuote[], next: readonly ComparedQuote[]): string[] {
+  const before = byCode(previous)
+  const after = byCode(next)
+  const codes = [...new Set([...before.keys(), ...after.keys()])].sort((left, right) => left.localeCompare(right, "zh-Hant"))
+  const priced: string[] = []
+  const status: string[] = []
+  const added: string[] = []
+  const removed: string[] = []
+  for (const code of codes) {
+    const oldQuote = before.get(code)
+    const newQuote = after.get(code)
+    if (oldQuote === undefined && newQuote !== undefined) {
+      added.push(`新增 ${code} ${quoteText(newQuote)}`)
+      continue
+    }
+    if (oldQuote !== undefined && newQuote === undefined) {
+      removed.push(`移除 ${code} ${quoteText(oldQuote)}`)
+      continue
+    }
+    if (oldQuote === undefined || newQuote === undefined || sameQuote(oldQuote, newQuote)) {
+      continue
+    }
+    const price = oldQuote.sellingPrice === newQuote.sellingPrice ? "" : ` ${money(oldQuote.sellingPrice)} → ${money(newQuote.sellingPrice)}`
+    const changedStatus = quoteStatus(oldQuote.rowText) === quoteStatus(newQuote.rowText) ? "" : ` ${quoteStatus(oldQuote.rowText)} → ${quoteStatus(newQuote.rowText)}`
+    const line = `${price === "" ? "狀態" : "售價"} ${code}${price}${changedStatus}`
+    if (price === "") {
+      status.push(line)
+    } else {
+      priced.push(line)
+    }
+  }
+  return [...priced, ...status, ...added, ...removed]
+}
+
+function byCode(quotes: readonly ComparedQuote[]): Map<string, ComparedQuote> {
+  const indexed = new Map<string, ComparedQuote>()
+  for (const quote of quotes) {
+    indexed.set(quote.code, quote)
+  }
+  return indexed
+}
+
+function sameQuote(left: ComparedQuote, right: ComparedQuote): boolean {
+  return left.sellingPrice === right.sellingPrice && quoteStatus(left.rowText) === quoteStatus(right.rowText)
+}
+
+function quoteText(quote: ComparedQuote): string {
+  const status = quoteStatus(quote.rowText)
+  return status === "一般" ? money(quote.sellingPrice) : `${money(quote.sellingPrice)} ${status}`
+}
+
+function quoteStatus(rowText: string): string {
+  if (rowText.includes("售罄")) {
+    return "售罄"
+  }
+  if (rowText.includes("裝機價") || rowText.includes("限搭機") || rowText.includes("組裝價")) {
+    return "裝機價"
+  }
+  return "一般"
+}
+
+function money(price: number): string {
+  return `$${new Intl.NumberFormat("en-US").format(price)}`
+}

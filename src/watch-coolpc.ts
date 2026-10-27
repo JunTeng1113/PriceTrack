@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import { decodePage } from "./page-bytes.ts"
 import { isQuote } from "./quote.ts"
 import {
+  changesAgainstPrevious,
   coolpcPageUrl,
   ingestCoolpc,
   nextCheck,
@@ -109,6 +110,19 @@ async function fetchOnce(): Promise<void> {
   }
   await save(ingested.prepared)
   console.log(`已記下 ${ingested.result.capturedAt}，報價 ${ingested.result.quotes}`)
+  const compared = changesAgainstPrevious(prepared, ingested.prepared, ingested.result.capturedAt)
+  if (compared.previousAt === null) {
+    console.log("沒有上一份快照可比較")
+    return
+  }
+  console.log(`跟上一次 ${compared.previousAt}`)
+  if (compared.lines.length === 0) {
+    console.log("沒有不同")
+    return
+  }
+  for (const line of compared.lines) {
+    console.log(line)
+  }
 }
 
 console.log("原價屋一開就檢查一次，之後每 6 小時再檢查。程式開著才會抓。")
