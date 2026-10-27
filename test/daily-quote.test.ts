@@ -388,4 +388,19 @@ describe("售價與日報價", () => {
       "ZOTAC RTX3080 Trinity OC LHR 雪白版",
     ])
   })
+
+  test("【V2】與 V2 是同一個代號，中間的中文【】仍分開", () => {
+    const plain = "華碩 ROG-STRIX-RTX3060-O12G-V2-GAMING"
+    const bracketed = "華碩 ROG-STRIX-RTX3060-O12G-【V2】-GAMING"
+    const named = "華碩 ROG-STRIX-RTX3060-O12G-【猛】-GAMING"
+    const series = update(emptySeries(), [
+      vgaSnapshot(`<option>｛${bracketed}｝, $10000</option><option>｛${named}｝, $11000</option>`, "2024-06-15T02:00:00.000Z"),
+      vgaSnapshot(`<option>｛${plain}｝, $12000</option>`, "2024-06-16T02:00:00.000Z"),
+    ])
+    const view = present(series, [{ type: "select", code: plain }, { type: "select", code: named }])
+
+    expect(view.series.map((item) => item.code)).toEqual([plain, named])
+    expect(view.series[0]?.quotes.map((quote) => quote.sellingPrice)).toEqual([10000, 12000])
+    expect(visibleCodes(series).filter((code) => code.includes("ROG-STRIX-RTX3060"))).toEqual([plain, named])
+  })
 })

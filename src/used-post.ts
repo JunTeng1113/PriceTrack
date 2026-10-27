@@ -50,11 +50,19 @@ function listingBrand(code: string): string {
 
 function tokenMatches(token: string, code: string): boolean {
   const folded = code.toLowerCase().replaceAll("-", "")
-  if (folded.includes(token.replaceAll("-", ""))) {
+  const needle = token.replaceAll("-", "")
+  if (needle === "ti") {
+    return namesTi(code)
+  }
+  if (folded.includes(needle)) {
     return true
   }
   const alias = brandAliases[token]
   return alias !== undefined && listingBrand(code) === alias
+}
+
+function namesTi(text: string): boolean {
+  return /(?:^|[^A-Za-z])[Tt][Ii](?:[^A-Za-z]|$)/.test(text) || /\d[Tt][Ii]S(?:[^A-Za-z]|$)/.test(text)
 }
 
 export function matchCodes(query: string, codes: readonly string[]): CodeMatch {
@@ -62,10 +70,14 @@ export function matchCodes(query: string, codes: readonly string[]): CodeMatch {
   if (tokens.length === 0) {
     return { status: "none" }
   }
+  const allowTi = namesTi(query)
   const ranked: { code: string; score: number }[] = []
   let best = 0
   for (const code of codes) {
     if (ranked.some((item) => item.code === code)) {
+      continue
+    }
+    if (!allowTi && namesTi(code)) {
       continue
     }
     let score = 0

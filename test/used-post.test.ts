@@ -21,7 +21,7 @@ describe("代號片段", () => {
   test("dual 5060 對上同時含這兩個片段的代號", () => {
     expect(matchCodes("dual 5060", knownCodes)).toEqual({
       status: "choose",
-      options: ["華碩 DUAL-RTX5060-O8G", "華碩 DUAL-RTX5060TI-O8G"],
+      options: ["華碩 DUAL-RTX5060-O8G"],
     })
   })
 
@@ -60,7 +60,7 @@ describe("代號片段", () => {
     })
     expect(matchCodes("asus", codes)).toEqual({
       status: "choose",
-      options: ["華碩 DUAL-RTX5060-O8G", "ROG-STRIX-RTX5070TI-16G-GAMING"],
+      options: ["華碩 DUAL-RTX5060-O8G"],
     })
   })
 
@@ -74,9 +74,45 @@ describe("代號片段", () => {
     ]
     expect(matchCodes("GeForce RTX 4060 VENTUS 2X", codes)).toEqual({
       status: "choose",
+      options: ["微星 RTX4060 VENTUS 2X BLACK 8G OC"],
+    })
+  })
+
+  test("沒有寫 ti、Ti 或 TI 時不列出帶 Ti 的代號", () => {
+    const codes = [
+      "華碩 TUF-RTX4070-O12G",
+      "微星 RTX4070Ti VENTUS",
+      "華碩 TUF-RTX4070TIS-16G-GAMING",
+      "NVIDIA GeForce RTX4070 Founders Edition",
+      "ZOTAC RTX4070 AMP White Edition",
+    ]
+    expect(matchCodes("4070", codes)).toEqual({
+      status: "choose",
       options: [
-        "微星 RTX4060Ti VENTUS 2X BLACK 8G OC",
-        "微星 RTX4060 VENTUS 2X BLACK 8G OC",
+        "華碩 TUF-RTX4070-O12G",
+        "NVIDIA GeForce RTX4070 Founders Edition",
+        "ZOTAC RTX4070 AMP White Edition",
+      ],
+    })
+    expect(matchCodes("4070 Ti", codes)).toEqual({
+      status: "choose",
+      options: [
+        "微星 RTX4070Ti VENTUS",
+        "華碩 TUF-RTX4070TIS-16G-GAMING",
+      ],
+    })
+    expect(matchCodes("4070TI", codes)).toEqual({
+      status: "choose",
+      options: [
+        "微星 RTX4070Ti VENTUS",
+        "華碩 TUF-RTX4070TIS-16G-GAMING",
+      ],
+    })
+    expect(matchCodes("4070ti", codes)).toEqual({
+      status: "choose",
+      options: [
+        "微星 RTX4070Ti VENTUS",
+        "華碩 TUF-RTX4070TIS-16G-GAMING",
       ],
     })
   })

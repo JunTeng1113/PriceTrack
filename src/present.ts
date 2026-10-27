@@ -309,7 +309,7 @@ function spellingKey(code: string): string {
 }
 
 function nicknameKey(code: string): string {
-  let key = spellingKey(code)
+  let key = spellingKey(code).replace(/【([\u0000-\u007f]*)】/g, "$1")
   let previous = ""
   while (key !== previous) {
     previous = key
