@@ -39,33 +39,38 @@ export function listingTableMarkup(
   }
   return renderToStaticMarkup(
     createElement(
-      Table,
-      { "aria-label": "候選" },
+      "details",
+      null,
+      createElement("summary", { className: "cursor-pointer font-medium" }, `型號列表（${rows.length}）`),
       createElement(
-        TableHeader,
-        null,
+        Table,
+        { "aria-label": "候選" },
         createElement(
-          TableRow,
+          TableHeader,
           null,
-          createElement(TableHead, null, "型號名稱"),
-          createElement(TableHead, { className: "text-right" }, "價格"),
-          createElement(TableHead, null, "日期"),
-        ),
-      ),
-      createElement(
-        TableBody,
-        null,
-        rows.map((row) =>
           createElement(
             TableRow,
-            { key: row.code },
+            null,
+            createElement(TableHead, null, "型號名稱"),
+            createElement(TableHead, { className: "text-right" }, "價格"),
+            createElement(TableHead, null, "日期"),
+          ),
+        ),
+        createElement(
+          TableBody,
+          null,
+          rows.map((row) =>
             createElement(
-              TableCell,
-              { className: "whitespace-normal font-medium" },
-              createElement(Button, { "aria-pressed": row.pressed ? "true" : "false" }, row.code),
+              TableRow,
+              { key: row.code },
+              createElement(
+                TableCell,
+                { className: "whitespace-normal font-medium" },
+                createElement(Button, { "aria-pressed": row.pressed ? "true" : "false" }, row.code),
+              ),
+              createElement(TableCell, { className: "text-right" }, row.price),
+              createElement(TableCell, null, row.date),
             ),
-            createElement(TableCell, { className: "text-right" }, row.price),
-            createElement(TableCell, null, row.date),
           ),
         ),
       ),

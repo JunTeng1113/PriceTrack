@@ -1,4 +1,4 @@
-import { chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
+import { chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -404,11 +404,18 @@ function writeFilterDraft(draft: FilterDraft): void {
 
 const chartQuoteLimit = 2000
 const markBatch = 1200
+let browseSession = 0
+
+function pageIsOpen(): boolean {
+  return typeof document !== "undefined" && typeof DOMParser !== "undefined"
+}
 
 export function start(series: PriceSeries): {
   setSeries(next: PriceSeries): void
   setUsedPosts(next: readonly UsedPost[]): void
 } {
+  const session = browseSession + 1
+  browseSession = session
   let latestView: View | null = null
   let usedPosts: readonly UsedPost[] = []
   let renderToken = 0
@@ -475,7 +482,7 @@ export function start(series: PriceSeries): {
     const base = generationBase()
     const queue = generationNames.filter((name) => name !== shown)
     const load = (index: number): void => {
-      if (token !== cacheToken) {
+      if (session !== browseSession || token !== cacheToken || !pageIsOpen()) {
         return
       }
       const name = queue[index]
@@ -485,7 +492,7 @@ export function start(series: PriceSeries): {
       const view = present(series, [...base, { type: "setGeneration", name }], usedPosts)
       const parts: string[] = []
       const paintOne = (chartIndex: number): void => {
-        if (token !== cacheToken) {
+        if (session !== browseSession || token !== cacheToken || !pageIsOpen()) {
           return
         }
         const chart = view.modelCharts[chartIndex]
@@ -803,7 +810,7 @@ export function start(series: PriceSeries): {
       renderToken += 1
       latestView = cached.view
       for (const section of [...host.querySelectorAll("section")]) {
-        if (section.querySelector("svg[data-price-chart]") !== null) {
+        if (section.querySelector("svg[data-price-chart]") !== null || section.getAttribute("aria-label") === "價格趨勢") {
           section.remove()
         }
       }
@@ -831,6 +838,33 @@ export function start(series: PriceSeries): {
         trigger.textContent = ""
       }
       return true
+    }
+
+    const showSelection = (): void => {
+      const view = present(series, actions, usedPosts)
+      latestView = view
+      for (const button of document.querySelectorAll<HTMLButtonElement>('[aria-label="候選"] button')) {
+        button.setAttribute("aria-pressed", view.selected.includes(button.textContent ?? "") ? "true" : "false")
+      }
+      const list = document.querySelector('[aria-label="已選"]')
+      if (list !== null) {
+        list.innerHTML = selectedListMarkup(view.selected)
+      }
+      bindRemove()
+    }
+
+    const bindRemove = (): void => {
+      const removeButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="已選"] button')
+      for (const button of removeButtons) {
+        button.addEventListener("click", () => {
+          const code = button.dataset.code ?? ""
+          if (code === "") {
+            return
+          }
+          actions = [...actions, { type: "deselect", code }]
+          showSelection()
+        })
+      }
     }
 
     const bindShell = (): void => {
@@ -918,21 +952,11 @@ export function start(series: PriceSeries): {
         }
         const type: "select" | "deselect" = button.getAttribute("aria-pressed") === "true" ? "deselect" : "select"
         actions = [...actions, { type, code }]
-        draw()
+        showSelection()
       })
     }
 
-    const removeButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="已選"] button')
-    for (const button of removeButtons) {
-      button.addEventListener("click", () => {
-        const code = button.dataset.code ?? ""
-        if (code === "") {
-          return
-        }
-        actions = [...actions, { type: "deselect", code }]
-        draw()
-      })
-    }
+    bindRemove()
     }
 
     const bindDrawnCharts = (): void => {
@@ -955,7 +979,7 @@ export function start(series: PriceSeries): {
       const note = document.querySelector("[data-loading]")
       const charts = view.modelCharts
       const appendChart = (index: number): void => {
-        if (generation !== renderToken) {
+        if (session !== browseSession || generation !== renderToken || !pageIsOpen()) {
           return
         }
         const chart = charts[index]
@@ -979,7 +1003,7 @@ export function start(series: PriceSeries): {
         }
         host.append(section)
         const pump = (offset: number): void => {
-          if (generation !== renderToken || !svg.isConnected) {
+          if (session !== browseSession || generation !== renderToken || !pageIsOpen() || !svg.isConnected) {
             return
           }
           const slice = piece.marks.slice(offset, offset + markBatch).join("")
@@ -1018,7 +1042,7 @@ export function start(series: PriceSeries): {
         loading.textContent = "正在整理報價"
       }
       setTimeout(() => {
-        if (generation !== renderToken) {
+        if (session !== browseSession || generation !== renderToken || !pageIsOpen()) {
           return
         }
         const view = present(series, actions, usedPosts)

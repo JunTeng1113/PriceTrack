@@ -24,12 +24,20 @@ test("拿掉已選、取消候選勾選，並點圖上的點讀數", () => {
     .find((item) => item.textContent === "NVIDIA RTX4070")
   group?.click()
   document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
+  const chart = document.querySelector("svg[data-price-chart]")
+  const trend = document.querySelector('[aria-label="價格趨勢"]')
+  expect(chart).not.toBeNull()
+  expect(trend).not.toBeNull()
   document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')?.click()
 
   expect(document.querySelector('[aria-label="已選"] li span')?.textContent).toBe("華碩 DUAL-RTX4070-O12G")
+  expect(document.querySelector("svg[data-price-chart]")).toBe(chart)
+  expect(document.querySelector('[aria-label="價格趨勢"]')).toBe(trend)
 
   document.querySelector<HTMLButtonElement>('[aria-label="已選"] button')?.click()
   expect(document.querySelectorAll('[aria-label="已選"] li')).toHaveLength(0)
+  expect(document.querySelector("svg[data-price-chart]")).toBe(chart)
+  expect(document.querySelector('[aria-label="價格趨勢"]')).toBe(trend)
   expect(sectionByHeading("價格序列")).toBeNull()
 
   const candidate = document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')

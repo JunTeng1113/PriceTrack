@@ -3,10 +3,22 @@ import { start } from "./browse.ts"
 import { demoSeries } from "./main.ts"
 import { emptySeries, type PriceSeries } from "./present.ts"
 import { isQuote } from "./quote.ts"
-import { usedPostsFrom } from "./used-post.ts"
+import { usedPostsFrom, type UsedPost } from "./used-post.ts"
 
 const session = start(emptySeries())
 const quotes: PriceSeries["quotes"][number][] = []
+let seriesReady = false
+let usedReady = false
+let nextSeries: PriceSeries = demoSeries()
+let nextPosts: readonly UsedPost[] = []
+
+function publish(): void {
+  if (!seriesReady || !usedReady) {
+    return
+  }
+  session.setUsedPosts(nextPosts)
+  session.setSeries(nextSeries)
+}
 
 function showProgress(text: string): void {
   const existing = document.querySelector("[data-loading]")
@@ -44,28 +56,39 @@ worker.addEventListener("message", (event: MessageEvent<unknown>) => {
     return
   }
   if (data.type === "done") {
-    session.setSeries(quotes.length === 0 ? demoSeries() : { quotes })
+    nextSeries = quotes.length === 0 ? demoSeries() : { quotes }
+    seriesReady = true
+    publish()
     return
   }
   if (data.type === "empty") {
-    session.setSeries(demoSeries())
+    nextSeries = demoSeries()
+    seriesReady = true
+    publish()
   }
 })
 
 worker.addEventListener("error", () => {
-  session.setSeries(demoSeries())
+  nextSeries = demoSeries()
+  seriesReady = true
+  publish()
 })
 
 function loadUsedPosts(): void {
   void fetch(`${import.meta.env.BASE_URL}data/used.json`, { cache: "no-store" }).then(async (response) => {
-    if (!response.ok) {
-      return
+    if (response.ok) {
+      const text = await response.text()
+      if (text.startsWith("{")) {
+        nextPosts = usedPostsFrom(JSON.parse(text))
+      }
     }
-    const text = await response.text()
-    if (!text.startsWith("{")) {
-      return
-    }
-    session.setUsedPosts(usedPostsFrom(JSON.parse(text)))
+    return nextPosts
+  }).then(() => {
+    usedReady = true
+    publish()
+  }, () => {
+    usedReady = true
+    publish()
   })
 }
 

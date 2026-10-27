@@ -58,6 +58,15 @@ export type View = {
     readout: { date: string; code: string; sellingPrice: number } | null
     used: readonly UsedBox[]
   }[]
+  trend: readonly {
+    group: string
+    series: readonly {
+      code: string
+      colorIndex: number
+      quotes: readonly { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean }[]
+    }[]
+    used: readonly { code: string; date: string; price: number; link: string }[]
+  }[]
 }
 
 export type Generation = "30" | "40" | "50"
@@ -290,13 +299,7 @@ function sameCapacitySpelling(name: string): string {
 }
 
 export function visibleCodes(series: PriceSeries): string[] {
-  const codes: string[] = []
-  for (const quote of normalizeQuotes(series.quotes).quotes) {
-    if (!codes.includes(quote.code)) {
-      codes.push(quote.code)
-    }
-  }
-  return codes
+  return [...prepareSeries(series.quotes).byCode.keys()]
 }
 
 function spellingKey(code: string): string {
@@ -381,9 +384,120 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): { quotes: StoredQuote[
   return { quotes: normalized, spellings }
 }
 
-export function present(series: PriceSeries, actions: readonly Action[], usedPosts: readonly UsedPost[] = []): View {
-  const normalized = normalizeQuotes(series.quotes)
+type PreparedSeries = {
+  quotes: readonly StoredQuote[]
+  spellings: ReadonlyMap<string, string>
+  byCode: ReadonlyMap<string, readonly StoredQuote[]>
+  codesByGroup: ReadonlyMap<string, readonly string[]>
+  dates: readonly string[]
+  chipGroups: readonly string[]
+  sellingNow: ReadonlySet<string>
+  lines: Map<string, Map<string, QuoteMark[]>>
+  visible: Map<string, readonly StoredQuote[]>
+}
+
+const preparedByQuotes = new WeakMap<readonly StoredQuote[], PreparedSeries>()
+const recordedByPosts = new WeakMap<readonly UsedPost[], Map<ReadonlyMap<string, string>, readonly UsedPost[]>>()
+
+function prepareSeries(quotes: readonly StoredQuote[]): PreparedSeries {
+  const cached = preparedByQuotes.get(quotes)
+  if (cached !== undefined) {
+    return cached
+  }
+  const normalized = normalizeQuotes(quotes)
   const stored = normalized.quotes
+  const codesByGroup = new Map<string, string[]>()
+  for (const quote of stored) {
+    const codes = codesByGroup.get(quote.group)
+    if (codes === undefined) {
+      codesByGroup.set(quote.group, [quote.code])
+      continue
+    }
+    if (!codes.includes(quote.code)) {
+      codes.push(quote.code)
+    }
+  }
+  let latestCapturedAt = ""
+  for (const quote of stored) {
+    if (quote.capturedAt > latestCapturedAt) {
+      latestCapturedAt = quote.capturedAt
+    }
+  }
+  const sellingNow = new Set<string>()
+  for (const quote of stored) {
+    if (quote.capturedAt === latestCapturedAt && !quote.rowText.includes("售罄")) {
+      sellingNow.add(quote.code)
+    }
+  }
+  const prepared: PreparedSeries = {
+    quotes: stored,
+    spellings: normalized.spellings,
+    byCode: quotesByCode(stored),
+    codesByGroup,
+    dates: snapshotDates(stored),
+    chipGroups: chipGroupsInOrder(stored),
+    sellingNow,
+    lines: new Map(),
+    visible: new Map(),
+  }
+  preparedByQuotes.set(quotes, prepared)
+  return prepared
+}
+
+function rangeKey(range: { start: string; end: string } | null): string {
+  if (range === null) {
+    return ""
+  }
+  return `${range.start}\0${range.end}`
+}
+
+function marksFor(prepared: PreparedSeries, code: string, range: { start: string; end: string } | null): QuoteMark[] {
+  const key = rangeKey(range)
+  let lines = prepared.lines.get(key)
+  if (lines === undefined) {
+    lines = new Map()
+    prepared.lines.set(key, lines)
+  }
+  const found = lines.get(code)
+  if (found !== undefined) {
+    return found
+  }
+  const marks = lineQuotes(prepared.byCode.get(code) ?? [], prepared.dates, range)
+  lines.set(code, marks)
+  return marks
+}
+
+function quotesInRange(prepared: PreparedSeries, range: { start: string; end: string } | null): readonly StoredQuote[] {
+  const key = rangeKey(range)
+  const found = prepared.visible.get(key)
+  if (found !== undefined) {
+    return found
+  }
+  const visible = prepared.quotes.filter((quote) => quoteInRange(quote.date, range))
+  prepared.visible.set(key, visible)
+  return visible
+}
+
+function rememberPosts(posts: readonly UsedPost[], spellings: ReadonlyMap<string, string>): readonly UsedPost[] {
+  if (posts.length === 0) {
+    return posts
+  }
+  let bySpellings = recordedByPosts.get(posts)
+  if (bySpellings === undefined) {
+    bySpellings = new Map()
+    recordedByPosts.set(posts, bySpellings)
+  }
+  const found = bySpellings.get(spellings)
+  if (found !== undefined) {
+    return found
+  }
+  const recorded = posts.map((post) => recordedCode(post, spellings))
+  bySpellings.set(spellings, recorded)
+  return recorded
+}
+
+export function present(series: PriceSeries, actions: readonly Action[], usedPosts: readonly UsedPost[] = []): View {
+  const prepared = prepareSeries(series.quotes)
   let keyword = ""
   let generation: Generation = "50"
   const chosenGroups: string[] = []
@@ -442,56 +556,40 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       pointer = { date: action.date, code: action.code }
       continue
     }
-    const known = stored.some((quote) => quote.code === action.code)
-    if (known && !selected.includes(action.code) && selected.length < 8) {
+    if (prepared.byCode.has(action.code) && !selected.includes(action.code) && selected.length < 8) {
       selected.push(action.code)
     }
   }
 
-  const queryRange = rangeOverride ?? queryRangeFor(stored)
-  const visibleQuotes = stored.filter((quote) => quoteInRange(quote.date, queryRange))
-  const byCode = quotesByCode(stored)
-  const dates = snapshotDates(stored)
-  const chipGroups = chipGroupsInOrder(stored)
-  const pool = uniqueCodes(visibleQuotes).filter((code) =>
-    chosenGroups.length === 0 || visibleQuotes.some((quote) => quote.code === code && chosenGroups.includes(quote.group)),
+  const queryRange = rangeOverride ?? queryRangeFor(prepared.quotes)
+  const chipGroups = prepared.chipGroups
+  const visible = keyword === "" && chosenGroups.length === 0 ? [] : quotesInRange(prepared, queryRange)
+  const pool = uniqueCodes(visible).filter((code) =>
+    chosenGroups.length === 0 || visible.some((quote) => quote.code === code && chosenGroups.includes(quote.group)),
   )
-  const candidates = keyword === "" && chosenGroups.length === 0
-    ? []
-    : pool
-      .filter((code) => keyword === "" || matchesKeyword(code, latestRowText(visibleQuotes, code), keyword))
-      .sort(compareCodePoints)
+  const candidates = pool
+    .filter((code) => keyword === "" || matchesKeyword(code, latestRowText(visible, code), keyword))
+    .sort(compareCodePoints)
   const listings = candidates.flatMap((code) => {
-    const nearest = latestQuote(visibleQuotes, code)
+    const nearest = latestQuote(visible, code)
     return nearest === null ? [] : [{ code, date: nearest.date, sellingPrice: nearest.sellingPrice }]
   })
   const plotted = selected.map((code) => ({
     code,
-    quotes: lineQuotes(byCode.get(code) ?? [], dates, queryRange),
+    quotes: marksFor(prepared, code, queryRange),
   }))
   const shownGroups = chosenGroups.length === 0
     ? chipGroups.filter((group) => isRtxGeneration(group, generation))
     : chipGroups.filter((group) => chosenGroups.includes(group))
-  let latestCapturedAt = ""
-  for (const quote of stored) {
-    if (quote.capturedAt > latestCapturedAt) {
-      latestCapturedAt = quote.capturedAt
-    }
-  }
-  const sellingNow = new Set<string>()
-  for (const quote of stored) {
-    if (quote.capturedAt === latestCapturedAt && !quote.rowText.includes("售罄")) {
-      sellingNow.add(quote.code)
-    }
-  }
+  const recordedPosts = rememberPosts(usedPosts, prepared.spellings)
   const modelCharts = shownGroups.map((group) => {
     const focus = focusByGroup.get(group) ?? ""
-    const allSeries = uniqueCodes(stored.filter((quote) => quote.group === group)).flatMap((code) => {
-      const quotes = lineQuotes(byCode.get(code) ?? [], dates, queryRange)
+    const allSeries = (prepared.codesByGroup.get(group) ?? []).flatMap((code) => {
+      const quotes = marksFor(prepared, code, queryRange)
       if (quotes.length === 0) {
         return []
       }
-      return [{ code, brand: brandOf(code), onSale: sellingNow.has(code), quotes }]
+      return [{ code, brand: brandOf(code), onSale: prepared.sellingNow.has(code), quotes }]
     })
     const groupCodes = allSeries.map((line) => line.code)
     const branded = allSeries.filter((line) => selectedBrands.length === 0 || selectedBrands.includes(brandGroup(line.brand)))
@@ -511,7 +609,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       series: lines,
       allSeries,
       readout: readoutFor(lines, pointer),
-      used: usedBoxes(usedPosts.map((post) => recordedCode(post, normalized.spellings)), groupCodes, queryRange),
+      used: usedBoxes(recordedPosts, groupCodes, queryRange),
     }
   })
 
@@ -527,7 +625,42 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     onSaleOnly,
     generation,
     modelCharts,
+    trend: trendOf(chosenGroups, prepared, recordedPosts, queryRange),
   }
+}
+
+function trendOf(
+  groups: readonly string[],
+  prepared: PreparedSeries,
+  posts: readonly UsedPost[],
+  range: { start: string; end: string } | null,
+): View["trend"] {
+  if (range === null || groups.length === 0) {
+    return []
+  }
+  const charts: View["trend"][number][] = []
+  for (const group of groups) {
+    const codes = prepared.codesByGroup.get(group) ?? []
+    if (codes.length === 0) {
+      continue
+    }
+    const series = codes.flatMap((member) => {
+      const quotes = marksFor(prepared, member, range)
+      if (quotes.length === 0) {
+        return []
+      }
+      return [{ code: member, colorIndex: brandColorIndex(brandOf(member)), quotes }]
+    })
+    const used = usedBoxes(posts, codes, range).flatMap((box) =>
+      box.posts.map((post) => ({ code: box.code, date: post.date, price: post.price, link: post.link })),
+    )
+    used.sort((left, right) => left.date.localeCompare(right.date) || left.price - right.price || left.code.localeCompare(right.code, "zh-Hant"))
+    if (series.length === 0 && used.length === 0) {
+      continue
+    }
+    charts.push({ group, series, used })
+  }
+  return charts
 }
 
 function recordedCode(post: UsedPost, spellings: ReadonlyMap<string, string>): UsedPost {

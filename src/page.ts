@@ -277,9 +277,9 @@ function spreadLabelYs(preferred: readonly number[], gap: number): number[] {
   return result
 }
 
-function chartSvg(marks: string, label = ""): string {
+function chartSvg(marks: string, label = "", chartAttribute = "data-price-chart"): string {
   const named = label === "" ? "" : ` aria-label="${label}"`
-  return `<svg data-price-chart${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
+  return `<svg ${chartAttribute}${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
 }
 
 function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
@@ -368,6 +368,267 @@ function chipGroupNames(actions: readonly Action[]): string[] {
   return names
 }
 
+function trendSection(view: View): string {
+  return view.trend.map((trend) => trendChart(trend)).join("")
+}
+
+function trendChart(trend: View["trend"][number]): string {
+  const bounds = trendBounds(trend)
+  if (bounds === null) {
+    return ""
+  }
+  const axis = steppedPriceBounds(bounds.low, bounds.high)
+  const startDay = dayNumber(bounds.start)
+  const daySpan = dayNumber(bounds.end) - startDay
+  const marks = [
+    chartFrame(bounds.start, bounds.end, axis),
+    priceArea(sellingBands(trend.series), "data-selling-band", "#1d4ed8", startDay, daySpan, axis),
+    priceArea(usedHalfBands(trend.used, bounds.start, bounds.end), "data-used-band", "#c2410c", startDay, daySpan, axis),
+    trendAverage(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
+    trendUsedMarks(trend.used, startDay, daySpan, axis),
+  ].join("")
+  return `<section aria-label="價格趨勢" class="mb-6 flex flex-col gap-2 text-sm"><h2 class="font-medium">${escapeHtml(trend.group)}</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的半月均線。</p>${chartSvg(marks, "", "data-trend-chart")}</section>`
+}
+
+function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
+  let start = ""
+  let end = ""
+  let low = 0
+  let high = 0
+  let seen = false
+  const add = (date: string, price: number): void => {
+    if (!seen) {
+      start = date
+      end = date
+      low = price
+      high = price
+      seen = true
+      return
+    }
+    if (date < start) {
+      start = date
+    }
+    if (date > end) {
+      end = date
+    }
+    if (price < low) {
+      low = price
+    }
+    if (price > high) {
+      high = price
+    }
+  }
+  for (const line of trend.series) {
+    for (const quote of line.quotes) {
+      add(quote.date, quote.sellingPrice)
+    }
+  }
+  for (const post of trend.used) {
+    add(post.date, post.price)
+  }
+  if (!seen) {
+    return null
+  }
+  return { start, end, low, high }
+}
+
+function sellingBands(
+  series: NonNullable<View["trend"]>["series"],
+): { date: string; low: number; high: number }[] {
+  const grouped = new Map<string, number[]>()
+  for (const line of series) {
+    for (const quote of line.quotes) {
+      if (quote.delisted === true) {
+        continue
+      }
+      const prices = grouped.get(quote.date) ?? []
+      prices.push(quote.sellingPrice)
+      grouped.set(quote.date, prices)
+    }
+  }
+  const bands: { date: string; low: number; high: number }[] = []
+  for (const [date, prices] of grouped) {
+    let low = prices[0] ?? 0
+    let high = low
+    for (const price of prices) {
+      if (price < low) {
+        low = price
+      }
+      if (price > high) {
+        high = price
+      }
+    }
+    bands.push({ date, low, high })
+  }
+  bands.sort((left, right) => left.date.localeCompare(right.date))
+  return bands
+}
+
+function usedHalfBands(
+  used: readonly { date: string; price: number }[],
+  start: string,
+  end: string,
+): { date: string; low: number; high: number }[] {
+  const ranges = new Map<string, { low: number; high: number }>()
+  for (const post of used) {
+    const key = halfMonthKey(post.date)
+    const range = ranges.get(key)
+    if (range === undefined) {
+      ranges.set(key, { low: post.price, high: post.price })
+      continue
+    }
+    if (post.price < range.low) {
+      range.low = post.price
+    }
+    if (post.price > range.high) {
+      range.high = post.price
+    }
+  }
+  const bands: { date: string; low: number; high: number }[] = []
+  if (ranges.size === 0 || start > end) {
+    return bands
+  }
+  let cursor = start
+  while (cursor <= end) {
+    const range = ranges.get(halfMonthKey(cursor))
+    if (range !== undefined) {
+      bands.push({ date: cursor, low: range.low, high: range.high })
+    }
+    const next = addDays(cursor, 1)
+    if (next <= cursor) {
+      break
+    }
+    cursor = next
+  }
+  return bands
+}
+
+function priceArea(
+  bands: readonly { date: string; low: number; high: number }[],
+  attribute: string,
+  color: string,
+  startDay: number,
+  daySpan: number,
+  axis: { lower: number; upper: number },
+): string {
+  const upper: string[] = []
+  const lower: string[] = []
+  const spans: string[] = []
+  for (const band of bands) {
+    const x = xAt(band.date, startDay, daySpan)
+    upper.push(`${x.toFixed(2)} ${yAt(band.high, axis).toFixed(2)}`)
+    lower.push(`${x.toFixed(2)} ${yAt(band.low, axis).toFixed(2)}`)
+    spans.push(
+      `<line ${attribute}="true" data-date="${escapeAttribute(band.date)}" data-low="${band.low}" data-high="${band.high}" x1="${x.toFixed(2)}" y1="${yAt(band.high, axis).toFixed(2)}" x2="${x.toFixed(2)}" y2="${yAt(band.low, axis).toFixed(2)}" stroke="transparent" stroke-width="0" pointer-events="none" />`,
+    )
+  }
+  const start = upper[0]
+  if (start === undefined) {
+    return ""
+  }
+  const forward = upper.slice(1).map((point) => `L${point}`).join("")
+  const back = [...lower].reverse().map((point) => `L${point}`).join("")
+  return `<path ${attribute}="true" d="M${start}${forward}${back}Z" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-width="0.45" pointer-events="none" />${spans.join("")}`
+}
+
+function usedDayPrices(used: readonly { date: string; price: number }[]): { date: string; price: number }[] {
+  const grouped = new Map<string, number[]>()
+  for (const post of used) {
+    const prices = grouped.get(post.date) ?? []
+    prices.push(post.price)
+    grouped.set(post.date, prices)
+  }
+  const days: { date: string; price: number }[] = []
+  for (const [date, prices] of grouped) {
+    let sum = 0
+    for (const price of prices) {
+      sum += price
+    }
+    days.push({ date, price: sum / prices.length })
+  }
+  days.sort((left, right) => left.date.localeCompare(right.date))
+  return days
+}
+
+function halfMonthKey(isoDate: string): string {
+  const day = Number(isoDate.slice(8, 10))
+  return `${isoDate.slice(0, 7)}-${day <= 15 ? "01" : "16"}`
+}
+
+function usedHalfAverage(
+  used: readonly { date: string; price: number }[],
+  start: string,
+  end: string,
+): { date: string; price: number }[] {
+  const totals = new Map<string, { sum: number; count: number }>()
+  for (const day of usedDayPrices(used)) {
+    const key = halfMonthKey(day.date)
+    const total = totals.get(key) ?? { sum: 0, count: 0 }
+    total.sum += day.price
+    total.count += 1
+    totals.set(key, total)
+  }
+  const points: { date: string; price: number }[] = []
+  if (totals.size === 0 || start > end) {
+    return points
+  }
+  let cursor = start
+  while (cursor <= end) {
+    const total = totals.get(halfMonthKey(cursor))
+    if (total !== undefined && total.count > 0) {
+      points.push({ date: cursor, price: total.sum / total.count })
+    }
+    const next = addDays(cursor, 1)
+    if (next <= cursor) {
+      break
+    }
+    cursor = next
+  }
+  return points
+}
+
+function trendAverage(
+  used: readonly { date: string; price: number }[],
+  start: string,
+  end: string,
+  startDay: number,
+  daySpan: number,
+  axis: { lower: number; upper: number },
+): string {
+  const points = usedHalfAverage(used, start, end)
+  if (points.length === 0) {
+    return ""
+  }
+  let path = ""
+  let previous = ""
+  const marks: string[] = []
+  for (const point of points) {
+    const x = xAt(point.date, startDay, daySpan).toFixed(2)
+    const y = yAt(point.price, axis).toFixed(2)
+    const command = previous !== "" && addDays(previous, 1) === point.date ? "L" : "M"
+    path += `${command}${x} ${y}`
+    previous = point.date
+    marks.push(
+      `<circle data-average="true" data-date="${escapeAttribute(point.date)}" data-price="${point.price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
+    )
+  }
+  return `<path data-trend="true" d="${path}" fill="none" stroke="#1e3a5f" stroke-width="0.7" pointer-events="none" />${marks.join("")}`
+}
+
+function trendUsedMarks(
+  used: readonly { code: string; date: string; price: number; link: string }[],
+  startDay: number,
+  daySpan: number,
+  axis: { lower: number; upper: number },
+): string {
+  return used.map((post) => {
+    const x = xAt(post.date, startDay, daySpan)
+    const y = yAt(post.price, axis)
+    const circle = `<circle data-used-price="true" data-code="${escapeAttribute(post.code)}" data-date="${escapeAttribute(post.date)}" data-price="${post.price}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.2" fill="#c2410c" stroke="#ffffff" stroke-width="0.3" />`
+    return `<a href="${escapeAttribute(post.link)}" target="_blank" rel="noreferrer">${circle}</a>`
+  }).join("")
+}
+
 function filterSection(view: View, actions: readonly Action[]): string {
   const chipGroups = chipGroupNames(actions)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
@@ -378,9 +639,7 @@ function filterSection(view: View, actions: readonly Action[]): string {
     date: row.date,
     pressed: view.selected.includes(row.code),
   })))
-  const selected = view.selected
-    .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
-    .join("")
+  const selected = selectedListMarkup(view.selected)
   const generation = chipGroups.length === 0 ? view.generation : ""
   return `<section class="mb-6 flex flex-col gap-6 text-sm">
       <h2>篩選</h2>
@@ -391,7 +650,13 @@ function filterSection(view: View, actions: readonly Action[]): string {
       ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
       ${candidates}
       <ul aria-label="已選">${selected}</ul>
-    </section>`
+    </section>${trendSection(view)}`
+}
+
+export function selectedListMarkup(codes: readonly string[]): string {
+  return codes
+    .map((code) => `<li><span>${escapeHtml(code)}</span>${buttonMarkup("拿掉", { "data-code": code })}</li>`)
+    .join("")
 }
 
 function sharedBrandNames(view: View): string[] {
@@ -484,6 +749,7 @@ function modelSvg(
     onSaleOnly: false,
     generation: "50",
     modelCharts: [],
+    trend: [],
   }, true, focus))
 }
 
@@ -589,6 +855,7 @@ export function visibleChart(
     onSaleOnly: false,
     generation: "50",
     modelCharts: [],
+    trend: [],
   }, true, chart.focus)
   const frame = marks[0] ?? ""
   return { section: chartSection(chart.group, chartSvg(frame), usedStrip(lines, chart.used)), marks: marks.slice(1) }

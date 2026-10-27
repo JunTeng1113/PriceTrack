@@ -99,6 +99,8 @@ describe("單日單卡頁面", () => {
     const cells = [...(table?.querySelectorAll("tbody td") ?? [])].map((cell) => cell.textContent)
 
     expect(table?.getAttribute("data-slot")).toBe("table")
+    expect(table?.closest("details")?.querySelector("summary")?.textContent).toBe("型號列表（1）")
+    expect(table?.closest("details")?.hasAttribute("open")).toBe(false)
     expect(heads).toEqual(["型號名稱", "價格", "日期"])
     expect(cells).toEqual(["華碩 DUAL-RTX4070-O12G", "$17,990", "2024-06-20"])
 

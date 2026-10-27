@@ -3,7 +3,7 @@
 import { expect, test } from "vitest"
 import { start } from "../src/browse.ts"
 import { renderPage } from "../src/page.ts"
-import { emptySeries, update, type Snapshot } from "../src/present.ts"
+import { emptySeries, present, update, type Snapshot } from "../src/present.ts"
 import type { UsedPost } from "../src/used-post.ts"
 
 const group = "NVIDIA RTX5060-8GB"
@@ -55,6 +55,18 @@ const posts = [
 function documentOf(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html")
 }
+
+test("同一份報價只整理一次", () => {
+  const prepared = series()
+  const first = present(prepared, [])
+  present(prepared, [{ type: "setGeneration", name: "40" }])
+  const again = present(prepared, [])
+  const line = first.modelCharts.find((chart) => chart.group === group)?.allSeries[0]?.quotes
+  const repeated = again.modelCharts.find((chart) => chart.group === group)?.allSeries[0]?.quotes
+
+  expect(line).toBeDefined()
+  expect(repeated).toBe(line)
+})
 
 test("區間內同一代號合成一個盒鬚圖，畫在該晶片分組折線下方", () => {
   const doc = documentOf(renderPage(series(), [{ type: "setRange", start: "2020-01-01", end: "2024-06-16" }], posts))
