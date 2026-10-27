@@ -371,7 +371,7 @@ test("下架的日子在 Tooltip 標明下架", () => {
 test("晶片分組可以複選，搜尋後留下勾選的圖", () => {
   const fifty = "NVIDIA RTX5090"
   const older = "NVIDIA RTX4070"
-  const other = "NVIDIA RTX3060"
+  const other = "NVIDIA RTX3060-8GB"
   const html = `
     <tr>
       <td>顯示卡VGA</td>
@@ -379,7 +379,7 @@ test("晶片分組可以複選，搜尋後留下勾選的圖", () => {
         <select name="n12">
           <optgroup label="${fifty}"><option>華碩 TUF-RTX5090(2520MHz), $99990</option></optgroup>
           <optgroup label="${older}"><option>華碩 DUAL-RTX4070-O12G(2535MHz), $18990</option></optgroup>
-          <optgroup label="${other}"><option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option></optgroup>
+          <optgroup label="NVIDIA RTX3060"><option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option></optgroup>
           <optgroup label="AMD RX6800"><option>華碩 Radeon RX6800-16G(1800MHz), $19990</option></optgroup>
         </select>
       </td>
@@ -428,7 +428,7 @@ test("晶片分組可以複選，搜尋後留下勾選的圖", () => {
 test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分組", () => {
   const fifty = "NVIDIA RTX5090"
   const older = "NVIDIA RTX4070"
-  const other = "NVIDIA RTX3060"
+  const other = "NVIDIA RTX3060-8GB"
   const html = `
     <tr>
       <td>顯示卡VGA</td>
@@ -436,7 +436,7 @@ test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分�
         <select name="n12">
           <optgroup label="${fifty}"><option>華碩 TUF-RTX5090(2520MHz), $99990</option></optgroup>
           <optgroup label="${older}"><option>華碩 DUAL-RTX4070-O12G(2535MHz), $18990</option></optgroup>
-          <optgroup label="${other}"><option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option></optgroup>
+          <optgroup label="NVIDIA RTX3060"><option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option></optgroup>
         </select>
       </td>
     </tr>
@@ -478,7 +478,7 @@ test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分�
 test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
   const fifty = "NVIDIA RTX5090"
   const older = "NVIDIA RTX4070"
-  const other = "NVIDIA RTX3060"
+  const other = "NVIDIA RTX3060-8GB"
   const html = `
     <tr>
       <td>顯示卡VGA</td>
@@ -486,7 +486,7 @@ test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
         <select name="n12">
           <optgroup label="${fifty}"><option>華碩 TUF-RTX5090(2520MHz), $99990</option></optgroup>
           <optgroup label="${older}"><option>華碩 DUAL-RTX4070-O12G(2535MHz), $18990</option></optgroup>
-          <optgroup label="${other}"><option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option></optgroup>
+          <optgroup label="NVIDIA RTX3060"><option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option></optgroup>
         </select>
       </td>
     </tr>

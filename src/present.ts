@@ -284,6 +284,22 @@ function chipModelName(group: string): string | null {
   return sameCapacitySpelling(trimmed)
 }
 
+function canonicalGroup(named: string, code: string): string {
+  if (named === "NVIDIA RTX3060Ti-8GB(GDDR6X)" && !/GDDR6X|D6X/i.test(code)) {
+    return "NVIDIA RTX3060Ti-8GB(GDDR6)"
+  }
+  if (named === "NVIDIA RTX3060") {
+    return /8G/i.test(code) ? "NVIDIA RTX3060-8GB" : "NVIDIA RTX3060-12GB"
+  }
+  if (named === "NVIDIA RTX3080") {
+    return /12G/i.test(code) ? "NVIDIA RTX3080-12GB" : "NVIDIA RTX3080-10GB"
+  }
+  if (named === "NVIDIA RTX2060") {
+    return /12G/i.test(code) ? "NVIDIA RTX2060-12GB" : "NVIDIA RTX2060-6GB"
+  }
+  return named
+}
+
 function sameCapacitySpelling(name: string): string {
   const withUnit = name.replace(/(\d+)G(?!B)/gi, "$1GB")
   const unwrapped = withUnit.replace(/\((\d+GB)\)/gi, "-$1")
@@ -337,9 +353,7 @@ function normalizeQuotes(quotes: readonly StoredQuote[]): { quotes: StoredQuote[
     if (named === null) {
       continue
     }
-    const group = named === "NVIDIA RTX3060Ti-8GB(GDDR6X)" && !/GDDR6X|D6X/i.test(code)
-      ? "NVIDIA RTX3060Ti-8GB(GDDR6)"
-      : named
+    const group = canonicalGroup(named, code)
     prepared.push({ quote, code, group })
   }
   const chosen = new Map<string, { code: string; capturedAt: string }>()
@@ -1035,28 +1049,12 @@ function isRtxGeneration(group: string, generation: Generation): boolean {
 }
 
 function chipGroupsInOrder(quotes: readonly StoredQuote[]): string[] {
-  let latestCapturedAt = ""
+  const names: string[] = []
   for (const quote of quotes) {
-    if (quote.capturedAt > latestCapturedAt) {
-      latestCapturedAt = quote.capturedAt
+    if (quote.group !== "" && !names.includes(quote.group)) {
+      names.push(quote.group)
     }
   }
-  const leading: string[] = []
-  const latestRows = quotes
-    .filter((quote) => quote.capturedAt === latestCapturedAt && quote.group !== "")
-    .sort((left, right) => left.rowIndex - right.rowIndex)
-  for (const quote of latestRows) {
-    if (!leading.includes(quote.group)) {
-      leading.push(quote.group)
-    }
-  }
-  const trailing: string[] = []
-  for (const quote of quotes) {
-    if (quote.group === "" || leading.includes(quote.group) || trailing.includes(quote.group)) {
-      continue
-    }
-    trailing.push(quote.group)
-  }
-  trailing.sort(compareCodePoints)
-  return [...leading, ...trailing]
+  names.sort((left, right) => compareCodePoints(right, left))
+  return names
 }

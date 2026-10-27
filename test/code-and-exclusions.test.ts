@@ -86,22 +86,22 @@ describe("代號與排除", () => {
     const view = present(series, [])
 
     expect(view.chipGroups).toEqual([
-      "NVIDIA RTX5070-12GB(GDDR7)",
       "NVIDIA RTX5090-32GB(GDDR7)",
-      "NVIDIA RTX3080",
-      "NVIDIA RTX3070",
-      "AMD RX6800",
-      "NVIDIA RTX4080-16GB",
-      "NVIDIA RTX4070 SUPER 12GB",
       "NVIDIA RTX5070Ti-16GB(GDDR7)",
-      "INTEL Arc B580",
-      "NVIDIA GTX1660Ti",
-      "AMD Radeon 550",
-      "NVIDIA Quadro 專業繪圖卡",
-      "AMD RX6600XT",
-      "AMD Radeon AI PRO R9700",
-      "NVIDIA RTX4070-12GB (GDDR6)",
+      "NVIDIA RTX5070-12GB(GDDR7)",
+      "NVIDIA RTX4080-16GB",
       "NVIDIA RTX4070-12GB (GDDR6X)",
+      "NVIDIA RTX4070-12GB (GDDR6)",
+      "NVIDIA RTX4070 SUPER 12GB",
+      "NVIDIA RTX3080-10GB",
+      "NVIDIA RTX3070",
+      "NVIDIA Quadro 專業繪圖卡",
+      "NVIDIA GTX1660Ti",
+      "INTEL Arc B580",
+      "AMD Radeon AI PRO R9700",
+      "AMD Radeon 550",
+      "AMD RX6800",
+      "AMD RX6600XT",
     ])
   })
 
@@ -124,6 +124,42 @@ describe("代號與排除", () => {
       "華碩 ROG-ASTRAL-RTX5090-O32G-GAMING",
       "微星 RTX5090 32G VENTUS 3X OC",
     ])
+  })
+
+  test("沒寫容量的 RTX2060、RTX3060、RTX3080 併入實際容量", () => {
+    const series = update(emptySeries(), [
+      vgaSnapshot(`
+        <optgroup label="NVIDIA RTX2060">
+          <option>華碩 DUAL-RTX2060-O6G(1680MHz), $8990</option>
+          <option>ZOTAC RTX2060 Twin Fan 12GB(1680MHz), $9990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3060">
+          <option>華碩 TUF-RTX3060-O12G-GAMING(1807MHz), $12990</option>
+          <option>華碩 DUAL-RTX3060-O8G(1807MHz), $9990</option>
+        </optgroup>
+        <optgroup label="NVIDIA RTX3080">
+          <option>華碩 TUF-RTX3080-O10G-GAMING(1800MHz), $29990</option>
+          <option>華碩 TUF-RTX3080-O12G-GAMING(1800MHz), $32990</option>
+        </optgroup>
+      `),
+    ])
+    const names = [
+      "NVIDIA RTX3080-12GB",
+      "NVIDIA RTX3080-10GB",
+      "NVIDIA RTX3060-8GB",
+      "NVIDIA RTX3060-12GB",
+      "NVIDIA RTX2060-6GB",
+      "NVIDIA RTX2060-12GB",
+    ]
+    const view = present(series, names.map((name) => ({ type: "setChipGroup", name })))
+
+    expect(view.chipGroups).toEqual(names)
+    expect(view.modelCharts.find((item) => item.group === "NVIDIA RTX2060-12GB")?.series.map((line) => line.code)).toEqual([
+      "ZOTAC RTX2060 Twin Fan 12GB",
+    ])
+    expect(view.modelCharts.find((item) => item.group === "NVIDIA RTX2060")).toBeUndefined()
+    expect(view.modelCharts.find((item) => item.group === "NVIDIA RTX3060")).toBeUndefined()
+    expect(view.modelCharts.find((item) => item.group === "NVIDIA RTX3080")).toBeUndefined()
   })
 
   test("容量的 G 與 GB、括號容量與連字號容量是同一分組", () => {
@@ -167,13 +203,13 @@ describe("代號與排除", () => {
     const view = present(series, [])
 
     expect(view.chipGroups).toEqual([
+      "NVIDIA RTX4070Ti-12GB",
+      "NVIDIA RTX3080-10GB",
+      "NVIDIA RTX3060Ti-8GB(GDDR6X)",
+      "NVIDIA RTX3060Ti-8GB(GDDR6)",
       "NVIDIA RTX3060-8GB",
       "NVIDIA RTX3060-12GB",
       "NVIDIA RTX2060-12GB",
-      "NVIDIA RTX3080-10GB",
-      "NVIDIA RTX4070Ti-12GB",
-      "NVIDIA RTX3060Ti-8GB(GDDR6)",
-      "NVIDIA RTX3060Ti-8GB(GDDR6X)",
     ])
   })
 
@@ -199,7 +235,7 @@ describe("代號與排除", () => {
     const gddr6 = view.modelCharts.find((item) => item.group === "NVIDIA RTX3060Ti-8GB(GDDR6)")
     const gddr6x = view.modelCharts.find((item) => item.group === "NVIDIA RTX3060Ti-8GB(GDDR6X)")
 
-    expect(view.chipGroups).toEqual(["NVIDIA RTX3060Ti-8GB(GDDR6)", "NVIDIA RTX3060Ti-8GB(GDDR6X)"])
+    expect(view.chipGroups).toEqual(["NVIDIA RTX3060Ti-8GB(GDDR6X)", "NVIDIA RTX3060Ti-8GB(GDDR6)"])
     expect(gddr6?.series.map((line) => line.code)).toEqual([
       "華碩 DUAL-RTX3060Ti-O8G",
       "技嘉 RTX3060Ti EAGLE OC 8G",

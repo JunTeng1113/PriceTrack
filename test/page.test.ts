@@ -313,7 +313,7 @@ describe("篩選候選", () => {
       ?.querySelectorAll('[data-slot="select-item"]') ?? [])]
       .map((item) => item.textContent)
 
-    expect(items).toEqual(["NVIDIA RTX5090", "NVIDIA RTX3060"])
+    expect(items).toEqual(["NVIDIA RTX5090", "NVIDIA RTX3060-8GB"])
     expect(doc.querySelector('[data-slot="select-content"]')?.classList.contains("overflow-y-auto")).toBe(true)
   })
 

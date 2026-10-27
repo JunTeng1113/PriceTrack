@@ -55,7 +55,7 @@ describe("篩選候選", () => {
       { type: "setRange", start: "2024-06-01", end: "2024-06-30" },
     ])
 
-    expect(view.chipGroups).toEqual(["NVIDIA RTX4070", "舊分組"])
+    expect(view.chipGroups).toEqual(["舊分組", "NVIDIA RTX4070"])
   })
 
   test("「RTX 4070」與「RTX4070」是兩個分組", () => {
@@ -73,10 +73,10 @@ describe("篩選候選", () => {
     ])
     const view = present(series, [])
 
-    expect(view.chipGroups).toEqual(["RTX 4070", "RTX4070"])
+    expect(view.chipGroups).toEqual(["RTX4070", "RTX 4070"])
   })
 
-  test("分組順序跟區間內最晚快照由上到下一致，更早才有的名稱依碼位接在後面", () => {
+  test("晶片分組依名稱碼位遞減排列", () => {
     const series = update(emptySeries(), [
       vgaSnapshot("2024-06-15T02:00:00.000Z", [
         {
@@ -105,10 +105,10 @@ describe("篩選候選", () => {
     ])
     const view = present(series, [])
 
-    expect(view.chipGroups).toEqual(["RTX 4070", "RTX 4060", "AMD", "舊分組"])
+    expect(view.chipGroups).toEqual(["舊分組", "RTX 4070", "RTX 4060", "AMD"])
   })
 
-  test("同一天較晚的快照改了由上到下的順序時，分組清單跟那份走", () => {
+  test("同一天較晚的快照改了由上到下的順序時，分組清單仍依名稱遞減", () => {
     const series = update(emptySeries(), [
       vgaSnapshot("2024-06-15T02:00:00.000Z", [
         {
@@ -129,7 +129,7 @@ describe("篩選候選", () => {
     ])
     const view = present(series, [])
 
-    expect(view.chipGroups).toEqual(["RTX 4060", "RTX 4070"])
+    expect(view.chipGroups).toEqual(["RTX 4070", "RTX 4060"])
   })
 
   test("選了分組後，候選是區間內至少有一天落在該名稱下的報價列", () => {
