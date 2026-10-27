@@ -457,11 +457,17 @@ function modelSvg(
 }
 
 function chartSection(group: string, brands: string, svg: string, used: string): string {
-  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3><div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div>${svg}${used}</section>`
+  const onSale = buttonMarkup("僅顯示在售", { "aria-pressed": "false", "aria-label": "僅顯示在售" })
+  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3><div class="flex flex-wrap items-center gap-2">${onSale}<div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div></div>${svg}${used}</section>`
 }
 
 export function brandCacheKey(names: readonly string[]): string {
   return [...names].sort().join("\0")
+}
+
+export function chartCacheKey(names: readonly string[], onSaleOnly = false): string {
+  const brands = brandCacheKey(names)
+  return onSaleOnly ? `${brands}\u0001在售` : brands
 }
 
 function visibleLines(chart: View["modelCharts"][number]): View["modelCharts"][number]["allSeries"] {
@@ -483,6 +489,8 @@ function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const lines = visibleLines(chart)
   const visible = modelSvg(view, lines, chart.focus, chart.used)
   stored.set(brandCacheKey(chart.selectedBrands), visible)
+  const selling = chart.allSeries.filter((line) => line.onSale)
+  stored.set(chartCacheKey([], true), modelSvg(view, selling, "", chart.used))
   return chartSection(chart.group, brands, visible, usedStrip(lines, chart.used))
 }
 
@@ -496,8 +504,8 @@ export function storeBrandChart(group: string, brand: string, markup: string): v
   preparedBrandSvgs.set(group, stored)
 }
 
-export function renderBrandSvg(view: View, group: string, brands: readonly string[]): string | null {
-  const key = brandCacheKey(brands)
+export function renderBrandSvg(view: View, group: string, brands: readonly string[], onSaleOnly = false): string | null {
+  const key = chartCacheKey(brands, onSaleOnly)
   const cached = preparedBrandChart(group, key)
   if (cached !== null) {
     return cached
@@ -506,22 +514,24 @@ export function renderBrandSvg(view: View, group: string, brands: readonly strin
   if (chart === undefined) {
     return null
   }
-  const lines = brands.length === 0
+  const branded = brands.length === 0
     ? chart.allSeries
     : chart.allSeries.filter((line) => brands.includes(brandGroup(line.brand)))
+  const lines = onSaleOnly ? branded.filter((line) => line.onSale) : branded
   const markup = modelSvg(view, lines, "", chart.used)
   storeBrandChart(group, key, markup)
   return markup
 }
 
-export function usedMarkup(view: View, group: string, brands: readonly string[]): string {
+export function usedMarkup(view: View, group: string, brands: readonly string[], onSaleOnly = false): string {
   const chart = view.modelCharts.find((item) => item.group === group)
   if (chart === undefined) {
     return ""
   }
-  const lines = brands.length === 0
+  const branded = brands.length === 0
     ? chart.allSeries
     : chart.allSeries.filter((line) => brands.includes(brandGroup(line.brand)))
+  const lines = onSaleOnly ? branded.filter((line) => line.onSale) : branded
   return usedStrip(lines, chart.used)
 }
 

@@ -51,6 +51,7 @@ export type View = {
     allSeries: readonly {
       code: string
       brand: string
+      onSale: boolean
       quotes: readonly { date: string; sellingPrice: number; dashed?: boolean; delisted?: boolean }[]
     }[]
     readout: { date: string; code: string; sellingPrice: number } | null
@@ -464,6 +465,18 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
   const shownGroups = chosenGroups.length === 0
     ? chipGroups.filter((group) => isRtxGeneration(group, generation))
     : chipGroups.filter((group) => chosenGroups.includes(group))
+  let latestCapturedAt = ""
+  for (const quote of stored) {
+    if (quote.capturedAt > latestCapturedAt) {
+      latestCapturedAt = quote.capturedAt
+    }
+  }
+  const sellingNow = new Set<string>()
+  for (const quote of stored) {
+    if (quote.capturedAt === latestCapturedAt && !quote.rowText.includes("售罄")) {
+      sellingNow.add(quote.code)
+    }
+  }
   const modelCharts = shownGroups.map((group) => {
     const selectedBrands = brandsByGroup.get(group) ?? []
     const focus = focusByGroup.get(group) ?? ""
@@ -472,7 +485,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       if (quotes.length === 0) {
         return []
       }
-      return [{ code, brand: brandOf(code), quotes }]
+      return [{ code, brand: brandOf(code), onSale: sellingNow.has(code), quotes }]
     })
     const groupCodes = allSeries.map((line) => line.code)
     const branded = allSeries.filter((line) => selectedBrands.length === 0 || selectedBrands.includes(brandGroup(line.brand)))

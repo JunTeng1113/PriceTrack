@@ -53,6 +53,42 @@ test("點品牌按鈕後，圖上只留該品牌的線", () => {
   expect(document.getElementById("keep")).not.toBeNull()
 })
 
+test("僅顯示在售只留最新快照裡沒有售罄的代號", () => {
+  const gone = "微星 RTX5060Ti VENTUS 2X 8G"
+  const series = update(emptySeries(), [
+    vga("2024-06-15T02:00:00.000Z", [
+      `${prime}(2505MHz), $18990`,
+      `${windforce}(2497MHz), $17990`,
+      `${gone}(2490MHz), $16990`,
+    ]),
+    vga("2024-06-16T02:00:00.000Z", [
+      `${prime}(2505MHz), $19990`,
+      `${windforce}(2497MHz), $18990 售罄`,
+    ]),
+  ])
+  start(series)
+
+  const button = document.querySelector<HTMLButtonElement>('button[aria-label="僅顯示在售"]')
+  const codes = (): string[] =>
+    [...document.querySelectorAll(`[aria-label="${modelGroup}"] [data-code]`)]
+      .map((node) => node.getAttribute("data-code") ?? "")
+  expect(button?.getAttribute("aria-pressed")).toBe("false")
+  expect(new Set(codes())).toEqual(new Set([prime, windforce, gone]))
+
+  const marker = document.createElement("p")
+  marker.id = "keep"
+  document.body.append(marker)
+  button?.click()
+
+  expect(button?.getAttribute("aria-pressed")).toBe("true")
+  expect(new Set(codes())).toEqual(new Set([prime]))
+  expect(document.getElementById("keep")).not.toBeNull()
+
+  button?.click()
+  expect(button?.getAttribute("aria-pressed")).toBe("false")
+  expect(new Set(codes())).toEqual(new Set([prime, windforce, gone]))
+})
+
 test("品牌可以複選，再點一次就取消", () => {
   const series = update(emptySeries(), [
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),

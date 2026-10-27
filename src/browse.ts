@@ -1,4 +1,4 @@
-import { brandCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
+import { brandCacheKey, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -680,10 +680,10 @@ export function start(series: PriceSeries): {
       })
     }
 
-    const showPreparedBrand = (section: Element, brands: readonly string[]): boolean => {
+    const showPreparedBrand = (section: Element, brands: readonly string[], onSaleOnly = false): boolean => {
       const group = section.getAttribute("aria-label") ?? ""
-      const key = brandCacheKey(brands)
-      const markup = preparedBrandChart(group, key) ?? (latestView === null ? null : renderBrandSvg(latestView, group, brands))
+      const key = chartCacheKey(brands, onSaleOnly)
+      const markup = preparedBrandChart(group, key) ?? (latestView === null ? null : renderBrandSvg(latestView, group, brands, onSaleOnly))
       if (markup === null) {
         return false
       }
@@ -700,7 +700,7 @@ export function start(series: PriceSeries): {
       current.replaceWith(nextSvg)
       bindChart(nextSvg)
       if (latestView !== null) {
-        paintUsed(section, usedMarkup(latestView, group, brands))
+        paintUsed(section, usedMarkup(latestView, group, brands, onSaleOnly))
       }
       return true
     }
@@ -723,6 +723,28 @@ export function start(series: PriceSeries): {
       }
     }
 
+    const bindOnSale = (scope: ParentNode): void => {
+      const buttons = scope.querySelectorAll<HTMLButtonElement>('button[aria-label="僅顯示在售"]')
+      for (const button of buttons) {
+        button.addEventListener("click", () => {
+          const section = button.closest("section")
+          if (section === null) {
+            return
+          }
+          const next = button.getAttribute("aria-pressed") !== "true"
+          const brands = [...section.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+            .filter((peer) => peer.getAttribute("aria-pressed") === "true")
+            .map((peer) => peer.textContent ?? "")
+            .filter((text) => text !== "")
+          if (!showPreparedBrand(section, brands, next)) {
+            return
+          }
+          button.setAttribute("aria-pressed", next ? "true" : "false")
+          snapshotVisible()
+        })
+      }
+    }
+
     const bindBrands = (scope: ParentNode): void => {
       const brandButtons = scope.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
       for (const button of brandButtons) {
@@ -741,7 +763,8 @@ export function start(series: PriceSeries): {
           if (!wasPressed) {
             selected.push(name)
           }
-          if (!showPreparedBrand(section, selected)) {
+          const onSale = section.querySelector('button[aria-label="僅顯示在售"]')?.getAttribute("aria-pressed") === "true"
+          if (!showPreparedBrand(section, selected, onSale)) {
             return
           }
           button.setAttribute("aria-pressed", wasPressed ? "false" : "true")
@@ -779,6 +802,7 @@ export function start(series: PriceSeries): {
         }
         host.append(section)
         bindBrands(section)
+        bindOnSale(section)
         const svg = section.querySelector("svg[data-price-chart]")
         if (isSvg(svg)) {
           bindChart(svg)
@@ -809,6 +833,7 @@ export function start(series: PriceSeries): {
         trigger.textContent = selectedChipGroups().join("、")
       })
       bindBrands(document)
+      bindOnSale(document)
 
     const search = document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')
     search?.addEventListener("click", () => {
@@ -943,6 +968,7 @@ export function start(series: PriceSeries): {
         }
         host.append(section)
         bindBrands(section)
+        bindOnSale(section)
         const pump = (offset: number): void => {
           if (generation !== renderToken || !svg.isConnected) {
             return
