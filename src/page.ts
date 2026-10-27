@@ -66,6 +66,61 @@ function dayNumber(isoDate: string): number {
   return Math.floor(Date.UTC(year, month - 1, day) / 86400000)
 }
 
+function addMonths(isoDate: string, count: number): string {
+  const year = Number(isoDate.slice(0, 4))
+  const month = Number(isoDate.slice(5, 7))
+  const day = Number(isoDate.slice(8, 10))
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12) {
+    return ""
+  }
+  const shifted = month - 1 + count
+  const nextYear = year + Math.floor(shifted / 12)
+  const nextMonth = ((shifted % 12) + 12) % 12
+  const last = new Date(Date.UTC(nextYear, nextMonth + 1, 0)).getUTCDate()
+  const nextDay = Math.min(day, last)
+  return [
+    String(nextYear).padStart(4, "0"),
+    String(nextMonth + 1).padStart(2, "0"),
+    String(nextDay).padStart(2, "0"),
+  ].join("-")
+}
+
+function longerThanYear(start: string, end: string): boolean {
+  const limit = addMonths(start, 12)
+  return limit !== "" && end > limit
+}
+
+function yearScale(start: string, end: string): number | null {
+  if (!longerThanYear(start, end)) {
+    return null
+  }
+  const windowDays = dayNumber(addMonths(start, 12)) - dayNumber(start)
+  const span = dayNumber(end) - dayNumber(start)
+  if (windowDays <= 0 || span <= windowDays) {
+    return null
+  }
+  return span / windowDays
+}
+
+function spanOf(lines: readonly { quotes: readonly { date: string }[] }[]): { start: string; end: string } | null {
+  let start = ""
+  let end = ""
+  for (const line of lines) {
+    for (const quote of line.quotes) {
+      if (start === "" || quote.date < start) {
+        start = quote.date
+      }
+      if (quote.date > end) {
+        end = quote.date
+      }
+    }
+  }
+  if (start === "" || end === "") {
+    return null
+  }
+  return { start, end }
+}
+
 function seriesColor(index: number): string {
   return brandPaint(index)
 }
@@ -277,9 +332,271 @@ function spreadLabelYs(preferred: readonly number[], gap: number): number[] {
   return result
 }
 
-function chartSvg(marks: string, label = "", chartAttribute = "data-price-chart"): string {
+function chartSvg(
+  marks: string,
+  label = "",
+  chartAttribute = "data-price-chart",
+  span: { start: string; end: string } | null = null,
+): string {
   const named = label === "" ? "" : ` aria-label="${label}"`
-  return `<svg ${chartAttribute}${named} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
+  const dated = span === null ? "" : ` data-chart-start="${escapeAttribute(span.start)}" data-chart-end="${escapeAttribute(span.end)}" data-mode="fit"`
+  const svg = `<svg ${chartAttribute}${named}${dated} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
+  if (span === null || !longerThanYear(span.start, span.end)) {
+    return svg
+  }
+  const fit = buttonMarkup("整張", { "aria-pressed": "true", "aria-label": "整張" })
+  const months = buttonMarkup("十二個月", { "aria-pressed": "false", "aria-label": "十二個月" })
+  return `<div data-chart-width data-mode="fit"><div role="group" aria-label="圖表寬度" class="flex flex-wrap gap-2">${fit}${months}</div><div data-chart-window class="w-full max-w-full overflow-x-auto">${svg}</div></div>`
+}
+
+const plotSpan = plotRight - plotLeft
+const axisGutter = 400 - plotRight
+
+function mapX(x: number, scale: number): number {
+  if (x <= plotRight) {
+    return plotLeft + (x - plotLeft) * scale
+  }
+  return x + plotSpan * (scale - 1)
+}
+
+function unmapX(x: number, scale: number): number {
+  const shifted = plotLeft + plotSpan * scale
+  if (x <= shifted) {
+    return plotLeft + (x - plotLeft) / scale
+  }
+  return x - plotSpan * (scale - 1)
+}
+
+function readNumber(element: Element, name: string): number | null {
+  const text = element.getAttribute(name)
+  if (text === null || text === "") {
+    return null
+  }
+  const value = Number(text)
+  return Number.isFinite(value) ? value : null
+}
+
+function scalePath(path: string, map: (x: number) => number): string {
+  const tokens = path.match(/[MLHVZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi)
+  if (tokens === null) {
+    return path
+  }
+  let command = ""
+  let expectX = true
+  const parts: string[] = []
+  for (const token of tokens) {
+    if (/^[MLHVZ]$/i.test(token)) {
+      command = token.toUpperCase()
+      expectX = true
+      parts.push(token)
+      continue
+    }
+    const value = Number(token)
+    if (!Number.isFinite(value)) {
+      parts.push(token)
+      continue
+    }
+    if (command === "H" || ((command === "M" || command === "L") && expectX)) {
+      parts.push(String(map(value)))
+      expectX = command === "H"
+      continue
+    }
+    parts.push(token)
+    expectX = true
+  }
+  return parts.join(" ")
+}
+
+function isAxisPiece(node: Element): boolean {
+  return node.getAttribute("data-axis") === "y" || node.getAttribute("data-series-label") === "true"
+}
+
+function scaleElement(element: Element, scale: number, toMonths: boolean): void {
+  const scaled = element.getAttribute("data-x-scaled") === "true"
+  if (toMonths === scaled) {
+    return
+  }
+  const map = toMonths ? (value: number): number => mapX(value, scale) : (value: number): number => unmapX(value, scale)
+  let changed = false
+  for (const name of ["x", "x1", "x2", "cx"]) {
+    const value = readNumber(element, name)
+    if (value === null) {
+      continue
+    }
+    element.setAttribute(name, String(map(value)))
+    changed = true
+  }
+  const path = element.getAttribute("d")
+  if (path !== null && path !== "") {
+    element.setAttribute("d", scalePath(path, map))
+    changed = true
+  }
+  if (element.getAttribute("data-axis") === "background") {
+    const width = readNumber(element, "width")
+    if (width !== null) {
+      element.setAttribute("width", String(toMonths ? width * scale : width / scale))
+      changed = true
+    }
+  }
+  if (!changed) {
+    return
+  }
+  if (toMonths) {
+    element.setAttribute("data-x-scaled", "true")
+    return
+  }
+  element.removeAttribute("data-x-scaled")
+}
+
+function scaleTree(root: Element, scale: number, toMonths: boolean): void {
+  scaleElement(root, scale, toMonths)
+  for (const node of root.querySelectorAll("*")) {
+    scaleElement(node, scale, toMonths)
+  }
+}
+
+function chartHost(svg: Element): Element | null {
+  return svg.closest("[data-chart-width]")
+}
+
+function isSvgNode(node: Element | null): node is SVGSVGElement {
+  return node !== null && node.tagName.toLowerCase() === "svg"
+}
+
+function axisSvg(host: Element): SVGSVGElement | null {
+  const side = host.querySelector("svg[data-chart-axis]")
+  return isSvgNode(side) ? side : null
+}
+
+function parkAxis(svg: SVGSVGElement, scale: number): void {
+  const host = chartHost(svg)
+  const windowEl = svg.closest("[data-chart-window]")
+  if (host === null || windowEl === null) {
+    return
+  }
+  let side = axisSvg(host)
+  if (side === null) {
+    const created = svg.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg")
+    if (!isSvgNode(created)) {
+      return
+    }
+    side = created
+    side.setAttribute("data-chart-axis", "")
+    side.setAttribute("viewBox", `${plotRight} 0 ${axisGutter} 100`)
+    side.setAttribute("style", "display:block;width:calc(130 / 400 * 100%);height:auto;aspect-ratio:130/100;flex:none")
+  }
+  const row = windowEl.parentElement?.getAttribute("data-chart-row") === ""
+    ? windowEl.parentElement
+    : svg.ownerDocument.createElement("div")
+  if (row === null) {
+    return
+  }
+  if (row.getAttribute("data-chart-row") !== "") {
+    row.setAttribute("data-chart-row", "")
+    row.setAttribute("class", "flex w-full items-start")
+    windowEl.replaceWith(row)
+    row.append(windowEl)
+  }
+  if (side.parentElement !== row) {
+    row.append(side)
+  }
+  windowEl.setAttribute("class", "min-w-0 overflow-x-auto")
+  windowEl.setAttribute("style", "width:calc(270 / 400 * 100%)")
+  for (const node of [...svg.querySelectorAll("*")].filter((item) => isAxisPiece(item))) {
+    scaleElement(node, scale, false)
+    side.append(node)
+  }
+}
+
+function restoreAxis(svg: SVGSVGElement): void {
+  const host = chartHost(svg)
+  if (host === null) {
+    return
+  }
+  const side = axisSvg(host)
+  if (side !== null) {
+    while (side.firstChild !== null) {
+      svg.append(side.firstChild)
+    }
+    side.remove()
+  }
+  const windowEl = host.querySelector("[data-chart-window]")
+  const row = host.querySelector("[data-chart-row]")
+  if (windowEl !== null) {
+    windowEl.setAttribute("class", "w-full max-w-full overflow-x-auto")
+    windowEl.removeAttribute("style")
+    if (row !== null) {
+      row.replaceWith(windowEl)
+    }
+  }
+}
+
+function pressWidth(svg: Element, mode: "fit" | "months"): void {
+  const host = chartHost(svg)
+  if (host === null) {
+    return
+  }
+  host.setAttribute("data-mode", mode)
+  const selected = mode === "months" ? "十二個月" : "整張"
+  for (const button of host.querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", button.getAttribute("aria-label") === selected ? "true" : "false")
+  }
+}
+
+export function applyChartMode(svg: SVGSVGElement, mode: "fit" | "months"): void {
+  const start = svg.getAttribute("data-chart-start") ?? ""
+  const end = svg.getAttribute("data-chart-end") ?? ""
+  const scale = yearScale(start, end)
+  if (scale === null) {
+    return
+  }
+  const current = svg.getAttribute("data-mode") ?? "fit"
+  if (current === mode) {
+    return
+  }
+  if (mode === "fit") {
+    restoreAxis(svg)
+    scaleTree(svg, scale, false)
+    svg.setAttribute("viewBox", "0 0 400 100")
+    svg.setAttribute("width", "100%")
+    svg.setAttribute("style", "display:block;width:100%;height:auto;aspect-ratio:4/1")
+    svg.setAttribute("data-mode", "fit")
+    pressWidth(svg, "fit")
+    return
+  }
+  scaleTree(svg, scale, true)
+  parkAxis(svg, scale)
+  const plotWidth = plotLeft + plotSpan * scale
+  svg.setAttribute("viewBox", `0 0 ${plotWidth} 100`)
+  svg.setAttribute("width", `${(plotWidth / 270) * 100}%`)
+  svg.setAttribute("style", `display:block;width:${(plotWidth / 270) * 100}%;height:auto;aspect-ratio:${plotWidth}/100`)
+  svg.setAttribute("data-mode", "months")
+  pressWidth(svg, "months")
+  const windowEl = svg.closest("[data-chart-window]")
+  if (windowEl instanceof HTMLElement) {
+    windowEl.scrollLeft = windowEl.scrollWidth
+  }
+}
+
+export function adoptChartMark(svg: SVGSVGElement, node: Element): void {
+  if ((svg.getAttribute("data-mode") ?? "fit") !== "months") {
+    return
+  }
+  const scale = yearScale(svg.getAttribute("data-chart-start") ?? "", svg.getAttribute("data-chart-end") ?? "")
+  if (scale === null) {
+    return
+  }
+  scaleTree(node, scale, true)
+  const host = chartHost(svg)
+  const side = host === null ? null : axisSvg(host)
+  if (side === null) {
+    return
+  }
+  const pieces = isAxisPiece(node) ? [node] : [...node.querySelectorAll("*")].filter((item) => isAxisPiece(item))
+  for (const piece of pieces) {
+    scaleElement(piece, scale, false)
+    side.append(piece)
+  }
 }
 
 function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
@@ -388,7 +705,7 @@ function trendChart(trend: View["trend"][number]): string {
     trendAverage(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的半月均線。</p>${chartSvg(marks, "", "data-trend-chart")}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的半月均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -751,7 +1068,7 @@ function modelSvg(
     generation: "50",
     modelCharts: [],
     trend: [],
-  }, true, focus))
+  }, true, focus), "", "data-price-chart", spanOf(lines))
 }
 
 function chartSection(group: string, svg: string, used: string, trend = ""): string {
@@ -859,7 +1176,7 @@ export function visibleChart(
     trend: [],
   }, true, chart.focus)
   const frame = marks[0] ?? ""
-  return { section: chartSection(chart.group, chartSvg(frame), usedStrip(lines, chart.used), trendFor(view, chart.group)), marks: marks.slice(1) }
+  return { section: chartSection(chart.group, chartSvg(frame, "", "data-price-chart", spanOf(lines)), usedStrip(lines, chart.used), trendFor(view, chart.group)), marks: marks.slice(1) }
 }
 
 function extraPrices(lines: readonly { code: string }[], used: readonly UsedBox[]): number[] {

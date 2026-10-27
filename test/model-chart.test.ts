@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, test } from "vitest"
-import { renderPage } from "../src/page.ts"
+import { applyChartMode, renderPage } from "../src/page.ts"
 import { emptySeries, update, type Snapshot } from "../src/present.ts"
 
 const modelGroup = "NVIDIA RTX5060Ti-8GB(GDDR7)"
@@ -626,5 +626,102 @@ describe("RTX5060Ti-8GB 型號圖", () => {
       .map((node) => node.getAttribute("data-code"))
 
     expect(new Set(shown)).toEqual(new Set(codes))
+  })
+})
+
+function pathYs(path: string): number[] {
+  const tokens = path.match(/[MLHVZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? []
+  let command = ""
+  let expectX = true
+  const ys: number[] = []
+  for (const token of tokens) {
+    if (/^[MLHVZ]$/i.test(token)) {
+      command = token.toUpperCase()
+      expectX = true
+      continue
+    }
+    const value = Number(token)
+    if ((command === "M" || command === "L") && !expectX && Number.isFinite(value)) {
+      ys.push(value)
+    }
+    if (command === "M" || command === "L") {
+      expectX = !expectX
+    }
+  }
+  return ys
+}
+
+describe("超過十二個月的圖表寬度", () => {
+  const group = "NVIDIA RTX5070-12GB"
+  const code = "華碩 DUAL-RTX4070-O12G"
+  const row = (price: number): string => `${code}(2535MHz), $${price}`
+
+  test("未超過十二個月時不提供寬度切換", () => {
+    const series = update(emptySeries(), [
+      snapshot("2024-01-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
+      snapshot("2025-01-15T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+
+    expect(doc.querySelector('[aria-label="圖表寬度"]')).toBeNull()
+    expect(doc.querySelector(`[aria-label="${group}"] svg[data-price-chart]`)?.getAttribute("viewBox")).toBe("0 0 400 100")
+  })
+
+  test("超過十二個月時可以在整張與十二個月之間切換", () => {
+    const series = update(emptySeries(), [
+      snapshot("2024-01-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
+      snapshot("2025-01-16T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const section = doc.querySelector(`[aria-label="${group}"]`)
+    const svg = section?.querySelector("svg[data-price-chart]")
+    const buttons = [...(section?.querySelectorAll('[aria-label="圖表寬度"] button') ?? [])]
+    const early = svg?.querySelector('[data-date="2024-01-15"]')
+    const late = svg?.querySelector('[data-date="2025-01-16"]')
+    const earlyX = Number(early?.getAttribute("cx"))
+    const lateX = Number(late?.getAttribute("cx"))
+
+    expect(buttons.map((button) => button.textContent)).toEqual(["整張", "十二個月", "整張", "十二個月"])
+    expect(buttons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["true", "false", "true", "false"])
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 400 100")
+    if (!(svg instanceof SVGSVGElement)) {
+      throw new Error("缺少售價圖")
+    }
+    applyChartMode(svg, "months")
+
+    const spread = svg.getAttribute("viewBox") ?? ""
+    const width = Number(spread.split(" ")[2])
+    const axis = section?.querySelector("svg[data-chart-axis]")
+    const name = axis?.querySelector("text[data-series-label]")
+
+    expect(width).toBeGreaterThan(270)
+    expect(Number(svg.getAttribute("width")?.replace("%", ""))).toBeGreaterThan(100)
+    expect(Number(svg.querySelector('[data-date="2024-01-15"]')?.getAttribute("cx"))).toBeCloseTo(earlyX, 5)
+    expect(Number(svg.querySelector('[data-date="2025-01-16"]')?.getAttribute("cx"))).toBeGreaterThan(lateX)
+    expect(section?.querySelector("[data-chart-window]")?.getAttribute("style")).toContain("270 / 400")
+    expect(name?.textContent).toBe(code)
+    expect(axis?.querySelector('[data-axis="y"]')).not.toBeNull()
+    expect(svg.querySelector("text[data-series-label]")).toBeNull()
+
+    const trend = section?.querySelector("svg[data-trend-chart]")
+    const trendPath = trend?.querySelector("path[data-selling-band]")?.getAttribute("d") ?? ""
+    const trendYs = pathYs(trendPath)
+    if (!(trend instanceof SVGSVGElement)) {
+      throw new Error("缺少價格趨勢")
+    }
+    expect(trendYs.length).toBeGreaterThan(0)
+    applyChartMode(trend, "months")
+    const spreadTrend = trend.querySelector("path[data-selling-band]")?.getAttribute("d") ?? ""
+    expect(pathYs(spreadTrend)).toEqual(trendYs)
+    expect(trend.getAttribute("viewBox")?.startsWith("0 0 400")).toBe(false)
+    expect(trend.closest("[data-chart-width]")?.querySelector("svg[data-chart-axis]")).not.toBeNull()
+
+    applyChartMode(trend, "fit")
+    applyChartMode(svg, "fit")
+
+    expect(svg.getAttribute("viewBox")).toBe("0 0 400 100")
+    expect(section?.querySelector("svg[data-chart-axis]")).toBeNull()
+    expect(svg.querySelector("text[data-series-label]")?.textContent).toBe(code)
+    expect(Number(svg.querySelector('[data-date="2025-01-16"]')?.getAttribute("cx"))).toBeCloseTo(lateX, 5)
   })
 })

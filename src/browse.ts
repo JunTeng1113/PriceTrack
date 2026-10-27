@@ -1,4 +1,4 @@
-import { chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
+import { adoptChartMark, applyChartMode, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -117,9 +117,13 @@ function nearestByDate(circles: readonly Element[], date: string): Element | nul
   return best
 }
 
-function paintFocus(svg: Element, code: string | null): void {
+function focusScope(node: Element): Element {
+  return node.closest("[data-chart-width]") ?? svgOf(node) ?? node
+}
+
+function paintFocus(scope: Element, code: string | null): void {
   const active = code !== null && code !== ""
-  const marks = svg.querySelectorAll("[data-code]")
+  const marks = scope.querySelectorAll("[data-code]")
   for (const mark of marks) {
     const same = mark.getAttribute("data-code") === code
     mark.setAttribute("opacity", active && !same ? "0.25" : "1")
@@ -127,7 +131,14 @@ function paintFocus(svg: Element, code: string | null): void {
       mark.setAttribute("data-focused", active && same ? "true" : "false")
     }
   }
-  raiseFocusedMarks(svg, active ? code : null)
+  const plotted = scope.querySelector("svg[data-price-chart], svg[data-trend-chart]")
+  if (isSvg(plotted)) {
+    raiseFocusedMarks(plotted, active ? code : null)
+    return
+  }
+  if (isSvg(scope)) {
+    raiseFocusedMarks(scope, active ? code : null)
+  }
 }
 
 const raisedOrder = new WeakMap<Element, number>()
@@ -179,11 +190,10 @@ function raiseFocusedMarks(svg: Element, code: string | null): void {
 
 function followLine(node: Element): void {
   const code = node.getAttribute("data-code") ?? ""
-  const svg = svgOf(node)
-  if (code === "" || svg === null) {
+  if (code === "") {
     return
   }
-  paintFocus(svg, code)
+  paintFocus(focusScope(node), code)
 }
 
 function isOnLine(node: Element): boolean {
@@ -202,15 +212,12 @@ function leaveLine(node: Element, event: Event): void {
   if (!(event instanceof MouseEvent)) {
     return
   }
-  const svg = svgOf(node)
-  if (svg === null) {
-    return
-  }
+  const scope = focusScope(node)
   const next = event.relatedTarget
-  if (next instanceof Element && isOnLine(next)) {
+  if (next instanceof Element && scope.contains(next) && isOnLine(next)) {
     return
   }
-  paintFocus(svg, null)
+  paintFocus(scope, null)
   hideTooltip()
 }
 
@@ -564,11 +571,33 @@ export function start(series: PriceSeries): {
       }
     }
 
+    const bindChartWidths = (root: ParentNode): void => {
+      const groups = root.querySelectorAll<HTMLElement>('[aria-label="圖表寬度"]')
+      for (const group of groups) {
+        if (group.dataset.bound === "true") {
+          continue
+        }
+        group.dataset.bound = "true"
+        const buttons = group.querySelectorAll<HTMLButtonElement>("button")
+        for (const button of buttons) {
+          button.addEventListener("click", () => {
+            const plotted = group.parentElement?.querySelector("svg[data-price-chart], svg[data-trend-chart]") ?? null
+            if (!isSvg(plotted)) {
+              return
+            }
+            const mode = button.getAttribute("aria-label") === "十二個月" ? "months" : "fit"
+            applyChartMode(plotted, mode)
+          })
+        }
+      }
+    }
+
     const bindChart = (svg: SVGSVGElement): void => {
       const held = (code: string): boolean =>
         lockedCode !== null && (lockedSvg !== svg || lockedCode !== code)
+      const scope: Element = svg.closest("[data-chart-width]") ?? svg
 
-      const chartMarks = svg.querySelectorAll<SVGElement>("[data-date], [data-day]")
+      const chartMarks = scope.querySelectorAll<SVGElement>("[data-date], [data-day]")
       for (const mark of chartMarks) {
         const show = (event: Event): void => {
           const code = mark.getAttribute("data-code") ?? ""
@@ -605,7 +634,7 @@ export function start(series: PriceSeries): {
         })
       }
 
-      const seriesLines = svg.querySelectorAll<SVGLineElement>("line[data-code]")
+      const seriesLines = scope.querySelectorAll<SVGLineElement>("line[data-code]")
       for (const line of seriesLines) {
         line.addEventListener("click", (event) => {
           if (!(event instanceof MouseEvent)) {
@@ -665,7 +694,7 @@ export function start(series: PriceSeries): {
         })
       }
 
-      const seriesLabels = svg.querySelectorAll<SVGTextElement>("text[data-series-label]")
+      const seriesLabels = scope.querySelectorAll<SVGTextElement>("text[data-series-label]")
       for (const label of seriesLabels) {
         label.addEventListener("mouseover", () => {
           followLine(label)
@@ -704,7 +733,15 @@ export function start(series: PriceSeries): {
         lockedCode = null
         lockedSvg = null
       }
+      const year = current.closest("[data-chart-width]")?.querySelector('[aria-label="十二個月"]')
+      const wantMonths = year?.getAttribute("aria-pressed") === "true"
+      if (wantMonths) {
+        applyChartMode(current, "fit")
+      }
       current.replaceWith(nextSvg)
+      if (wantMonths) {
+        applyChartMode(nextSvg, "months")
+      }
       bindChart(nextSvg)
       if (latestView !== null) {
         paintUsed(section, usedMarkup(latestView, group, brands, onSaleOnly))
@@ -821,6 +858,7 @@ export function start(series: PriceSeries): {
           continue
         }
         host.append(section)
+        bindChartWidths(section)
         const svg = section.querySelector("svg[data-price-chart]")
         if (isSvg(svg)) {
           bindChart(svg)
@@ -960,6 +998,7 @@ export function start(series: PriceSeries): {
     }
 
     const bindDrawnCharts = (): void => {
+      bindChartWidths(document)
       const charts = document.querySelectorAll("svg[data-price-chart]")
       for (const chart of charts) {
         const svg = svgOf(chart)
@@ -1002,6 +1041,7 @@ export function start(series: PriceSeries): {
           return
         }
         host.append(section)
+        bindChartWidths(section)
         const pump = (offset: number): void => {
           if (session !== browseSession || generation !== renderToken || !pageIsOpen() || !svg.isConnected) {
             return
@@ -1015,7 +1055,11 @@ export function start(series: PriceSeries): {
             const root = parsedMarks.documentElement
             if (root.namespaceURI === "http://www.w3.org/2000/svg" && root.localName !== "parsererror") {
               while (root.firstChild !== null) {
-                svg.append(root.firstChild)
+                const child = root.firstChild
+                svg.append(child)
+                if (child instanceof Element) {
+                  adoptChartMark(svg, child)
+                }
               }
             }
           }
@@ -1023,7 +1067,9 @@ export function start(series: PriceSeries): {
             setTimeout(() => pump(offset + markBatch), 0)
             return
           }
-          rememberChart(chart.group, chartCacheKey(chart.selectedBrands, view.onSaleOnly), svg)
+          if (svg.getAttribute("data-mode") !== "months") {
+            rememberChart(chart.group, chartCacheKey(chart.selectedBrands, view.onSaleOnly), svg)
+          }
           if (!showPreparedBrand(section, pressedBrands(), onSalePressed())) {
             bindChart(svg)
           }
