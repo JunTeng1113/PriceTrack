@@ -83,16 +83,17 @@ test("只選一個代號時，售價與二手開價各自連成面積", () => {
     [code, "2024-06-17", "15000"],
   ])
   expect(used[1]?.closest("a")?.getAttribute("href")).toBe("https://example.com/posts/8000")
-  expect(chart?.textContent).toContain("半月均線")
+  expect(chart?.textContent).toContain("季均線")
+  expect(chart?.textContent).not.toContain("半月均線")
   expect(averages(chart).map(([date, price]) => [date, Number(price)])).toEqual([
     ["2024-06-15", 7500],
-    ["2024-06-16", 15000],
-    ["2024-06-17", 15000],
+    ["2024-06-16", 7500],
+    ["2024-06-17", 11250],
   ])
   expect(doc.querySelector("svg[data-trend-chart]")?.getAttribute("data-price-chart")).toBeNull()
 })
 
-test("下半月的均線不含 1–15 日的二手開價", () => {
+test("季均線只平均三個月內的每日二手開價", () => {
   const flat = update(emptySeries(), [
     snapshot("2024-06-15T02:00:00.000Z", [`｛${code}｝, $10000`]),
     snapshot("2024-06-16T02:00:00.000Z", [`｛${code}｝, $10000`]),
@@ -101,36 +102,42 @@ test("下半月的均線不含 1–15 日的二手開價", () => {
   const view = present(flat, [
     { type: "setChipGroup", name: "NVIDIA RTX4070" },
     { type: "setRange", start: "2024-06-01", end: "2024-06-30" },
-  ], [post(20000, "2024-06-16")])
+  ], [
+    post(10000, "2024-05-15", "https://example.com/early"),
+    post(14000, "2024-05-16", "https://example.com/kept"),
+    post(20000, "2024-06-16"),
+  ])
   const doc = documentOf(renderPage(flat, [
     { type: "setChipGroup", name: "NVIDIA RTX4070" },
-    { type: "setRange", start: "2024-06-01", end: "2024-06-30" },
-  ], [post(20000, "2024-06-16")]))
+    { type: "setRange", start: "2024-05-01", end: "2024-06-30" },
+  ], [
+    post(10000, "2024-05-15", "https://example.com/early"),
+    post(14000, "2024-05-16", "https://example.com/kept"),
+    post(20000, "2024-06-16"),
+  ]))
   expect(view.trend[0]?.group).toBe("NVIDIA RTX4070")
   expect(bands(doc, "data-selling-band")).toEqual([
     ["2024-06-15", "10000", "10000"],
     ["2024-06-16", "10000", "10000"],
     ["2024-06-17", "10000", "10000"],
   ])
-  expect(bands(doc, "data-used-band")).toEqual([
-    ["2024-06-16", "20000", "20000"],
-    ["2024-06-17", "20000", "20000"],
-  ])
-  expect(averages(doc).map(([date, price]) => [date, Number(price)])).toEqual([
-    ["2024-06-16", 20000],
-    ["2024-06-17", 20000],
-  ])
+  expect(bands(doc, "data-used-band").find((row) => row[0] === "2024-06-16")).toEqual(["2024-06-16", "20000", "20000"])
+  expect(bands(doc, "data-used-band").find((row) => row[0] === "2024-06-17")).toEqual(["2024-06-17", "20000", "20000"])
+  expect(averages(doc).find((row) => row[0] === "2024-05-15")).toBeUndefined()
+  expect(averages(doc).find((row) => row[0] === "2024-06-15")?.[1]).toBe("12000")
+  expect(Number(averages(doc).find((row) => row[0] === "2024-06-16")?.[1])).toBeCloseTo(44000 / 3, 5)
 })
 
-test("半月均線把 1–15 日與 16 日至月底分開平均", () => {
+test("季均線隨日期滾動，滿一季後剔除窗口外的每日開價", () => {
   const wide = update(emptySeries(), [
     snapshot("2024-06-01T02:00:00.000Z", [`｛${code}｝, $18000`]),
     snapshot("2024-06-10T02:00:00.000Z", [`｛${code}｝, $18000`]),
     snapshot("2024-06-20T02:00:00.000Z", [`｛${code}｝, $18000`]),
+    snapshot("2024-09-02T02:00:00.000Z", [`｛${code}｝, $18000`]),
   ])
   const doc = documentOf(renderPage(wide, [
     { type: "setChipGroup", name: "NVIDIA RTX4070" },
-    { type: "setRange", start: "2024-06-01", end: "2024-06-30" },
+    { type: "setRange", start: "2024-06-01", end: "2024-09-30" },
   ], [
     post(10000, "2024-06-01", "https://example.com/old"),
     post(12000, "2024-06-01", "https://example.com/other"),
@@ -143,10 +150,10 @@ test("半月均線把 1–15 日與 16 日至月底分開平均", () => {
   expect(bands(chart, "data-used-band").find((row) => row[0] === "2024-06-01")).toEqual(["2024-06-01", "10000", "16000"])
   expect(bands(chart, "data-used-band").find((row) => row[0] === "2024-06-15")).toEqual(["2024-06-15", "10000", "16000"])
   expect(bands(chart, "data-used-band").find((row) => row[0] === "2024-06-16")).toEqual(["2024-06-16", "20000", "20000"])
-  expect(rows[0]).toEqual(["2024-06-01", "13500"])
-  expect(rows.find((row) => row[0] === "2024-06-15")?.[1]).toBe("13500")
-  expect(rows.find((row) => row[0] === "2024-06-16")?.[1]).toBe("20000")
-  expect(rows.find((row) => row[0] === "2024-06-20")?.[1]).toBe("20000")
+  expect(rows.find((row) => row[0] === "2024-06-01")?.[1]).toBe("11000")
+  expect(rows.find((row) => row[0] === "2024-06-10")?.[1]).toBe("13500")
+  expect(Number(rows.find((row) => row[0] === "2024-06-20")?.[1])).toBeCloseTo(47000 / 3, 5)
+  expect(rows.find((row) => row[0] === "2024-09-02")?.[1]).toBe("18000")
 })
 
 function bands(root: ParentNode | null, attribute: string): string[][] {

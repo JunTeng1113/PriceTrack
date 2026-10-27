@@ -705,7 +705,7 @@ function trendChart(trend: View["trend"][number]): string {
     trendAverage(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的半月均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -849,20 +849,20 @@ function priceArea(
   return `<path ${attribute}="true" d="M${start}${forward}${back}Z" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-width="0.45" pointer-events="none" />${spans.join("")}`
 }
 
-function usedDayPrices(used: readonly { date: string; price: number }[]): { date: string; price: number }[] {
+function usedDayPrices(used: readonly { date: string; price: number }[]): { date: string; price: number; count: number }[] {
   const grouped = new Map<string, number[]>()
   for (const post of used) {
     const prices = grouped.get(post.date) ?? []
     prices.push(post.price)
     grouped.set(post.date, prices)
   }
-  const days: { date: string; price: number }[] = []
+  const days: { date: string; price: number; count: number }[] = []
   for (const [date, prices] of grouped) {
     let sum = 0
     for (const price of prices) {
       sum += price
     }
-    days.push({ date, price: sum / prices.length })
+    days.push({ date, price: sum / prices.length, count: prices.length })
   }
   days.sort((left, right) => left.date.localeCompare(right.date))
   return days
@@ -873,28 +873,35 @@ function halfMonthKey(isoDate: string): string {
   return `${isoDate.slice(0, 7)}-${day <= 15 ? "01" : "16"}`
 }
 
-function usedHalfAverage(
+function usedQuarterAverage(
   used: readonly { date: string; price: number }[],
   start: string,
   end: string,
 ): { date: string; price: number }[] {
-  const totals = new Map<string, { sum: number; count: number }>()
-  for (const day of usedDayPrices(used)) {
-    const key = halfMonthKey(day.date)
-    const total = totals.get(key) ?? { sum: 0, count: 0 }
-    total.sum += day.price
-    total.count += 1
-    totals.set(key, total)
-  }
+  const days = usedDayPrices(used)
   const points: { date: string; price: number }[] = []
-  if (totals.size === 0 || start > end) {
+  if (days.length === 0 || start > end) {
     return points
   }
   let cursor = start
   while (cursor <= end) {
-    const total = totals.get(halfMonthKey(cursor))
-    if (total !== undefined && total.count > 0) {
-      points.push({ date: cursor, price: total.sum / total.count })
+    const windowStart = addMonths(cursor, -3)
+    let sum = 0
+    let count = 0
+    let posts = 0
+    for (const day of days) {
+      if (day.date < windowStart) {
+        continue
+      }
+      if (day.date > cursor) {
+        break
+      }
+      sum += day.price
+      count += 1
+      posts += day.count
+    }
+    if (posts >= 2 && count > 0) {
+      points.push({ date: cursor, price: sum / count })
     }
     const next = addDays(cursor, 1)
     if (next <= cursor) {
@@ -913,7 +920,7 @@ function trendAverage(
   daySpan: number,
   axis: { lower: number; upper: number },
 ): string {
-  const points = usedHalfAverage(used, start, end)
+  const points = usedQuarterAverage(used, start, end)
   if (points.length === 0) {
     return ""
   }
