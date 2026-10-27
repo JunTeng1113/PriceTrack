@@ -144,7 +144,7 @@ describe("每個晶片分組一張圖", () => {
     ])
     const open = documentOf(renderPage(series, []))
     const codesOf = (doc: Document): string[] =>
-      [...(doc.querySelector(`[aria-label="${group}"]`)?.querySelectorAll("line:not([data-hit])") ?? [])]
+      [...(doc.querySelector(`[aria-label="${group}"] svg[data-price-chart]`)?.querySelectorAll("line:not([data-hit])") ?? [])]
         .map((node) => node.getAttribute("data-code") ?? "")
     expect(new Set(codesOf(open))).toEqual(new Set([asus, gigabyte]))
 
@@ -240,7 +240,8 @@ describe("每個晶片分組一張圖", () => {
     const forty = documentOf(renderPage(series, [{ type: "setGeneration", name: "40" }]))
     expect(pressed(forty)).toEqual(["40系列"])
     expect(forty.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
-    expect(forty.querySelector(`[aria-label="${ti}"]`)).not.toBeNull()
+    expect(forty.querySelector(`[aria-label="${older}"] [aria-label="價格趨勢"]`)).not.toBeNull()
+    expect(forty.querySelector(`[aria-label="${ti}"] [aria-label="價格趨勢"]`)).not.toBeNull()
     expect(forty.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
     expect(forty.querySelector(`[aria-label="${thirty}"]`)).toBeNull()
 
@@ -261,7 +262,7 @@ describe("每個晶片分組一張圖", () => {
     const doc = documentOf(renderPage(series, []))
     const chart = doc.querySelector(`[aria-label="${twelveG}"]`)
 
-    expect(chart?.querySelectorAll("line:not([data-hit])")).toHaveLength(1)
+    expect(chart?.querySelector("svg[data-price-chart]")?.querySelectorAll("line:not([data-hit])")).toHaveLength(1)
     expect(chart?.querySelector("[data-date='2024-06-16']")).toBeNull()
     expect(chart?.textContent).not.toContain("2024-06-16")
   })
@@ -313,7 +314,7 @@ describe("每個晶片分組一張圖", () => {
       snapshot("2024-06-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
       snapshot("2024-08-02T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
     ])
-    const partialLabels = [...documentOf(renderPage(partial, [])).querySelectorAll(`[aria-label="${group}"] text[data-axis="x"]`)]
+    const partialLabels = [...documentOf(renderPage(partial, [])).querySelectorAll(`[aria-label="${group}"] svg[data-price-chart] text[data-axis="x"]`)]
       .map((node) => node.textContent)
     expect(partialLabels).toEqual(["2024-07"])
 
@@ -321,7 +322,7 @@ describe("每個晶片分組一張圖", () => {
       snapshot("2024-06-01T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
       snapshot("2024-07-31T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
     ])
-    const fullNodes = [...documentOf(renderPage(full, [])).querySelectorAll(`[aria-label="${group}"] text[data-axis="x"]`)]
+    const fullNodes = [...documentOf(renderPage(full, [])).querySelectorAll(`[aria-label="${group}"] svg[data-price-chart] text[data-axis="x"]`)]
     expect(fullNodes.map((node) => node.textContent)).toEqual(["2024-06", "2024-07"])
     expect(fullNodes.map((node) => node.getAttribute("text-anchor"))).toEqual(["middle", "middle"])
   })
@@ -335,7 +336,7 @@ describe("每個晶片分組一張圖", () => {
         snapshot(`${start}T02:00:00.000Z`, [{ label: group, rows: [row(18990)] }]),
         snapshot(`${end}T02:00:00.000Z`, [{ label: group, rows: [row(17990)] }]),
       ])
-      return [...documentOf(renderPage(series, [])).querySelectorAll(`[aria-label="${group}"] text[data-axis="x"]`)]
+      return [...documentOf(renderPage(series, [])).querySelectorAll(`[aria-label="${group}"] svg[data-price-chart] text[data-axis="x"]`)]
         .map((node) => node.textContent)
     }
 
@@ -400,7 +401,8 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     ])
     const doc = documentOf(renderPage(series, []))
     const chart = doc.querySelector(`[aria-label="${modelGroup}"]`)
-    const points = [...(chart?.querySelectorAll("[data-date]") ?? [])].map((node) => ({
+    const price = chart?.querySelector("svg[data-price-chart]")
+    const points = [...(price?.querySelectorAll("[data-date]") ?? [])].map((node) => ({
       date: node.getAttribute("data-date"),
       x: Number(node.getAttribute("cx")),
     }))
@@ -408,8 +410,8 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     const twoDays = (points[2]?.x ?? 0) - (points[1]?.x ?? 0)
 
     expect(points.map((point) => point.date)).toEqual(["2024-06-15", "2024-06-16", "2024-06-18"])
-    expect(chart?.querySelectorAll("line:not([data-hit])")).toHaveLength(2)
-    expect(chart?.querySelector("[data-date='2024-06-17']")).toBeNull()
+    expect(price?.querySelectorAll("line:not([data-hit])")).toHaveLength(2)
+    expect(price?.querySelector("[data-date='2024-06-17']")).toBeNull()
     expect(chart?.textContent).not.toContain("2024-06-17")
     expect(twoDays).toBeCloseTo(oneDay * 2, 5)
   })
@@ -512,7 +514,7 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     expect(strokeOf("藍寶石 CARD")).toBe(strokeOf("華擎 CARD"))
 
     const filtered = documentOf(renderPage(series, [{ type: "setBrand", group: modelGroup, name: "其他" }]))
-    const codes = [...(filtered.querySelector(`[aria-label="${modelGroup}"]`)?.querySelectorAll("line:not([data-hit])") ?? [])]
+    const codes = [...(filtered.querySelector(`[aria-label="${modelGroup}"] svg[data-price-chart]`)?.querySelectorAll("line:not([data-hit])") ?? [])]
       .map((node) => node.getAttribute("data-code"))
     expect(codes).toEqual(["藍寶石 CARD", "華擎 CARD"])
   })

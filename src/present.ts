@@ -639,7 +639,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     onSaleOnly,
     generation,
     modelCharts,
-    trend: trendOf(chosenGroups, prepared, recordedPosts, queryRange),
+    trend: trendOf(shownGroups, prepared, recordedPosts, queryRange),
   }
 }
 
