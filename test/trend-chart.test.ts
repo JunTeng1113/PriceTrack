@@ -61,7 +61,9 @@ test("只選一個代號時，售價與二手開價各自連成面積", () => {
   const chart = doc.querySelector('[aria-label="價格趨勢"]')
   const used = [...(chart?.querySelectorAll("[data-used-price]") ?? [])]
 
-  expect(chart?.querySelector("h2")?.textContent).toBe("NVIDIA RTX4070")
+  expect(chart?.querySelector("h2")?.textContent).toBe("價格趨勢")
+  expect(chart?.parentElement?.getAttribute("aria-label")).toBe("NVIDIA RTX4070")
+  expect([...(chart?.parentElement?.children ?? [])].map((node) => node.getAttribute("aria-label") ?? node.tagName)).toEqual(["H3", "svg", "價格趨勢", "二手行情"])
   expect(chart?.querySelector("[data-selling-price]")).toBeNull()
   expect(chart?.querySelector("path[data-selling-band]")?.getAttribute("d")?.startsWith("M")).toBe(true)
   expect(chart?.querySelector("path[data-used-band]")?.getAttribute("d")?.startsWith("M")).toBe(true)
@@ -172,7 +174,8 @@ test("搜尋晶片分組後直接畫同一晶片圖，選代號不影響", () =>
     { type: "select", code: other },
   ], posts))
 
-  expect(searched.querySelector('[aria-label="價格趨勢"] h2')?.textContent).toBe("NVIDIA RTX4070")
+  expect(searched.querySelector('[aria-label="價格趨勢"] h2')?.textContent).toBe("價格趨勢")
+  expect(searched.querySelector('[aria-label="NVIDIA RTX4070"] [aria-label="價格趨勢"]')).not.toBeNull()
   expect(selectedToo.querySelectorAll('[aria-label="價格趨勢"]')).toHaveLength(1)
   expect(documentOf(renderPage(series, [{ type: "select", code }], posts)).querySelector('[aria-label="價格趨勢"]')).toBeNull()
   expect(present(series, []).trend).toEqual([])

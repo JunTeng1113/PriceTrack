@@ -368,8 +368,9 @@ function chipGroupNames(actions: readonly Action[]): string[] {
   return names
 }
 
-function trendSection(view: View): string {
-  return view.trend.map((trend) => trendChart(trend)).join("")
+function trendFor(view: View, group: string): string {
+  const trend = view.trend.find((item) => item.group === group)
+  return trend === undefined ? "" : trendChart(trend)
 }
 
 function trendChart(trend: View["trend"][number]): string {
@@ -387,7 +388,7 @@ function trendChart(trend: View["trend"][number]): string {
     trendAverage(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="mb-6 flex flex-col gap-2 text-sm"><h2 class="font-medium">${escapeHtml(trend.group)}</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的半月均線。</p>${chartSvg(marks, "", "data-trend-chart")}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的半月均線。</p>${chartSvg(marks, "", "data-trend-chart")}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -650,7 +651,7 @@ function filterSection(view: View, actions: readonly Action[]): string {
       ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
       ${candidates}
       <ul aria-label="已選">${selected}</ul>
-    </section>${trendSection(view)}`
+    </section>`
 }
 
 export function selectedListMarkup(codes: readonly string[]): string {
@@ -753,8 +754,8 @@ function modelSvg(
   }, true, focus))
 }
 
-function chartSection(group: string, svg: string, used: string): string {
-  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3>${svg}${used}</section>`
+function chartSection(group: string, svg: string, used: string, trend = ""): string {
+  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3>${svg}${trend}${used}</section>`
 }
 
 export function brandCacheKey(names: readonly string[]): string {
@@ -789,7 +790,7 @@ function modelSection(view: View, chart: View["modelCharts"][number]): string {
   stored.set(chartCacheKey(chart.selectedBrands, view.onSaleOnly), visible)
   const selling = chart.allSeries.filter((line) => line.onSale)
   stored.set(chartCacheKey([], true), modelSvg(view, selling, "", chart.used))
-  return chartSection(chart.group, visible, usedStrip(lines, chart.used))
+  return chartSection(chart.group, visible, usedStrip(lines, chart.used), trendFor(view, chart.group))
 }
 
 export function clearPreparedCharts(): void {
@@ -858,7 +859,7 @@ export function visibleChart(
     trend: [],
   }, true, chart.focus)
   const frame = marks[0] ?? ""
-  return { section: chartSection(chart.group, chartSvg(frame), usedStrip(lines, chart.used)), marks: marks.slice(1) }
+  return { section: chartSection(chart.group, chartSvg(frame), usedStrip(lines, chart.used), trendFor(view, chart.group)), marks: marks.slice(1) }
 }
 
 function extraPrices(lines: readonly { code: string }[], used: readonly UsedBox[]): number[] {

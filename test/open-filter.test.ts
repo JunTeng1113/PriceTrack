@@ -28,7 +28,7 @@ test("選了晶片分組後候選出現代號，點下去圖上有售價", () =>
   const button = document.querySelector<HTMLButtonElement>('[aria-label="候選"] button')
   button?.click()
 
-  const point = document.querySelector('[aria-label="NVIDIA RTX4070"] [data-date="2024-06-15"]')
+  const point = document.querySelector('[aria-label="NVIDIA RTX4070"] svg[data-price-chart] [data-date="2024-06-15"]')
   expect(point?.getAttribute("data-code")).toBe("華碩 DUAL-RTX4070-O12G")
   expect(point?.getAttribute("data-price")).toBe("18990")
 
