@@ -134,7 +134,7 @@ describe("單日單卡頁面", () => {
   test("內容和畫面邊界留有間距", () => {
     const series = update(emptySeries(), [snapshot])
     const doc = documentOf(renderPage(series, []))
-    const frame = doc.body.firstElementChild
+    const frame = doc.querySelector(".p-4")
 
     expect(frame?.classList.contains("p-4")).toBe(true)
     expect(frame?.classList.contains("md:p-6")).toBe(true)

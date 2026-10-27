@@ -1,4 +1,4 @@
-import { brandCacheKey, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
+import { chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -423,10 +423,10 @@ export function start(series: PriceSeries): {
   const cacheSignature = (view: View, list: readonly Action[]): string => {
     const groups = new Set(view.modelCharts.map((chart) => chart.group))
     const relevant = list.filter((action) => {
-      if (action.type === "setRange" || action.type === "setKeyword") {
+      if (action.type === "setRange" || action.type === "setKeyword" || action.type === "setBrand" || action.type === "setOnSale") {
         return true
       }
-      if (action.type === "setBrand" || action.type === "setFocus") {
+      if (action.type === "setFocus") {
         return groups.has(action.group)
       }
       return false
@@ -447,7 +447,7 @@ export function start(series: PriceSeries): {
     const parsed = new DOMParser().parseFromString(html, "text/html")
     const svg = parsed.querySelector("svg[data-price-chart]")
     if (isSvg(svg)) {
-      storeBrandChart(chart.group, brandCacheKey(chart.selectedBrands), svg.outerHTML)
+      storeBrandChart(chart.group, chartCacheKey(chart.selectedBrands, view.onSaleOnly), svg.outerHTML)
     }
     return html
   }
@@ -723,56 +723,69 @@ export function start(series: PriceSeries): {
       }
     }
 
-    const bindOnSale = (scope: ParentNode): void => {
-      const buttons = scope.querySelectorAll<HTMLButtonElement>('button[aria-label="僅顯示在售"]')
-      for (const button of buttons) {
-        button.addEventListener("click", () => {
-          const section = button.closest("section")
-          if (section === null) {
-            return
-          }
-          const next = button.getAttribute("aria-pressed") !== "true"
-          const brands = [...section.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
-            .filter((peer) => peer.getAttribute("aria-pressed") === "true")
-            .map((peer) => peer.textContent ?? "")
-            .filter((text) => text !== "")
-          if (!showPreparedBrand(section, brands, next)) {
-            return
-          }
-          button.setAttribute("aria-pressed", next ? "true" : "false")
-          snapshotVisible()
-        })
+    const pressedBrands = (): string[] =>
+      [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+        .filter((peer) => peer.getAttribute("aria-pressed") === "true")
+        .map((peer) => peer.textContent ?? "")
+        .filter((text) => text !== "")
+
+    const onSalePressed = (): boolean =>
+      document.querySelector('button[aria-label="僅顯示在售"]')?.getAttribute("aria-pressed") === "true"
+
+    const chartSections = (): HTMLElement[] =>
+      [...document.querySelectorAll("section")].filter(
+        (section): section is HTMLElement => section.querySelector("svg[data-price-chart]") !== null,
+      )
+
+    const applyShared = (brands: readonly string[], onSaleOnly: boolean): boolean => {
+      const sections = chartSections()
+      for (const section of sections) {
+        if (!showPreparedBrand(section, brands, onSaleOnly)) {
+          return false
+        }
       }
+      return true
     }
 
-    const bindBrands = (scope: ParentNode): void => {
-      const brandButtons = scope.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
+    const bindOnSale = (): void => {
+      const button = document.querySelector<HTMLButtonElement>('button[aria-label="僅顯示在售"]')
+      button?.addEventListener("click", () => {
+        const next = button.getAttribute("aria-pressed") !== "true"
+        if (!applyShared(pressedBrands(), next)) {
+          return
+        }
+        button.setAttribute("aria-pressed", next ? "true" : "false")
+        actions = [
+          ...actions.filter((action) => action.type !== "setOnSale"),
+          ...(next ? [{ type: "setOnSale" as const, on: true }] : []),
+        ]
+        snapshotVisible()
+      })
+    }
+
+    const bindBrands = (): void => {
+      const brandButtons = document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')
       for (const button of brandButtons) {
         button.addEventListener("click", () => {
-          const section = button.closest("section")
           const name = button.textContent ?? ""
-          if (section === null || name === "") {
+          if (name === "") {
             return
           }
-          const group = section.getAttribute("aria-label") ?? ""
           const wasPressed = button.getAttribute("aria-pressed") === "true"
-          const selected = [...section.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+          const selected = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
             .filter((peer) => peer !== button && peer.getAttribute("aria-pressed") === "true")
             .map((peer) => peer.textContent ?? "")
             .filter((text) => text !== "")
           if (!wasPressed) {
             selected.push(name)
           }
-          const onSale = section.querySelector('button[aria-label="僅顯示在售"]')?.getAttribute("aria-pressed") === "true"
-          if (!showPreparedBrand(section, selected, onSale)) {
+          if (!applyShared(selected, onSalePressed())) {
             return
           }
           button.setAttribute("aria-pressed", wasPressed ? "false" : "true")
           actions = [
-            ...actions.filter((action) =>
-              (action.type !== "setBrand" && action.type !== "setFocus") || action.group !== group,
-            ),
-            ...selected.map((brand) => ({ type: "setBrand" as const, group, name: brand })),
+            ...actions.filter((action) => action.type !== "setBrand" && action.type !== "setFocus"),
+            ...selected.map((brand) => ({ type: "setBrand" as const, group: "", name: brand })),
           ]
         })
       }
@@ -801,8 +814,6 @@ export function start(series: PriceSeries): {
           continue
         }
         host.append(section)
-        bindBrands(section)
-        bindOnSale(section)
         const svg = section.querySelector("svg[data-price-chart]")
         if (isSvg(svg)) {
           bindChart(svg)
@@ -832,8 +843,8 @@ export function start(series: PriceSeries): {
         item.setAttribute("aria-selected", next)
         trigger.textContent = selectedChipGroups().join("、")
       })
-      bindBrands(document)
-      bindOnSale(document)
+      bindBrands()
+      bindOnSale()
 
     const search = document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')
     search?.addEventListener("click", () => {
@@ -967,8 +978,6 @@ export function start(series: PriceSeries): {
           return
         }
         host.append(section)
-        bindBrands(section)
-        bindOnSale(section)
         const pump = (offset: number): void => {
           if (generation !== renderToken || !svg.isConnected) {
             return
@@ -990,8 +999,10 @@ export function start(series: PriceSeries): {
             setTimeout(() => pump(offset + markBatch), 0)
             return
           }
-          rememberChart(chart.group, brandCacheKey(chart.selectedBrands), svg)
-          bindChart(svg)
+          rememberChart(chart.group, chartCacheKey(chart.selectedBrands, view.onSaleOnly), svg)
+          if (!showPreparedBrand(section, pressedBrands(), onSalePressed())) {
+            bindChart(svg)
+          }
           setTimeout(() => appendChart(index + 1), 0)
         }
         setTimeout(() => pump(0), 0)

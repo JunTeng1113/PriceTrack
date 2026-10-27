@@ -36,6 +36,7 @@ export type View = {
   }[]
   axis: { lower: number; upper: number } | null
   readout: { date: string; code: string; sellingPrice: number } | null
+  onSaleOnly: boolean
   generation: Generation
   modelCharts: readonly {
     group: string
@@ -69,6 +70,7 @@ export type Action =
   | { type: "setChipGroup"; name: string }
   | { type: "setGeneration"; name: Generation }
   | { type: "setBrand"; group: string; name: string }
+  | { type: "setOnSale"; on: boolean }
   | { type: "setFocus"; group: string; code: string }
   | { type: "point"; date: string; code: string }
 
@@ -385,7 +387,8 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
   let keyword = ""
   let generation: Generation = "50"
   const chosenGroups: string[] = []
-  const brandsByGroup = new Map<string, string[]>()
+  const selectedBrands: string[] = []
+  let onSaleOnly = false
   const focusByGroup = new Map<string, string>()
   const selected: string[] = []
   let rangeOverride: { start: string; end: string } | null = null
@@ -407,12 +410,16 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       continue
     }
     if (action.type === "setBrand") {
-      const chosen = action.name === "" ? [] : brandsByGroup.get(action.group) ?? []
-      if (action.name !== "" && !chosen.includes(action.name)) {
-        chosen.push(action.name)
+      focusByGroup.clear()
+      if (action.name === "") {
+        selectedBrands.splice(0, selectedBrands.length)
+      } else if (!selectedBrands.includes(action.name)) {
+        selectedBrands.push(action.name)
       }
-      brandsByGroup.set(action.group, chosen)
-      focusByGroup.delete(action.group)
+      continue
+    }
+    if (action.type === "setOnSale") {
+      onSaleOnly = action.on
       continue
     }
     if (action.type === "setFocus") {
@@ -478,7 +485,6 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     }
   }
   const modelCharts = shownGroups.map((group) => {
-    const selectedBrands = brandsByGroup.get(group) ?? []
     const focus = focusByGroup.get(group) ?? ""
     const allSeries = uniqueCodes(stored.filter((quote) => quote.group === group)).flatMap((code) => {
       const quotes = lineQuotes(byCode.get(code) ?? [], dates, queryRange)
@@ -489,8 +495,9 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     })
     const groupCodes = allSeries.map((line) => line.code)
     const branded = allSeries.filter((line) => selectedBrands.length === 0 || selectedBrands.includes(brandGroup(line.brand)))
-    const activeFocus = branded.some((line) => line.code === focus) ? focus : ""
-    const lines = branded.map((line, index) => ({
+    const shown = onSaleOnly ? branded.filter((line) => line.onSale) : branded
+    const activeFocus = shown.some((line) => line.code === focus) ? focus : ""
+    const lines = shown.map((line, index) => ({
       code: line.code,
       colorIndex: index,
       quotes: line.quotes,
@@ -500,7 +507,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
       selectedBrands,
       focus: activeFocus,
       brands: brandsInOrder(groupCodes),
-      legend: branded.map((line) => line.code),
+      legend: shown.map((line) => line.code),
       series: lines,
       allSeries,
       readout: readoutFor(lines, pointer),
@@ -517,6 +524,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     series: plotted,
     axis: priceAxis(plotted),
     readout: readoutFor(plotted, pointer),
+    onSaleOnly,
     generation,
     modelCharts,
   }

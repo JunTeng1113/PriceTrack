@@ -89,6 +89,69 @@ test("僅顯示在售只留最新快照裡沒有售罄的代號", () => {
   expect(new Set(codes())).toEqual(new Set([prime, windforce, gone]))
 })
 
+test("按下品牌或僅顯示在售時，每一張圖一起篩", () => {
+  const otherGroup = "NVIDIA RTX5070-12GB(GDDR7)"
+  const asus5070 = "華碩 PRIME-RTX5070-12G"
+  const msi5070 = "微星 RTX5070 12G VENTUS"
+  const page = (capturedAt: string, rows: readonly { group: string; options: readonly string[] }[]): Snapshot => {
+    const groups = rows.map((row) => {
+      const options = row.options.map((option) => `<option>${option}</option>`).join("")
+      return `<optgroup label="${row.group}">${options}</optgroup>`
+    }).join("")
+    return {
+      capturedAt,
+      html: `<tr><td>顯示卡VGA</td><td><select name="n12">${groups}</select></td></tr>`,
+    }
+  }
+  const series = update(emptySeries(), [
+    page("2024-06-15T02:00:00.000Z", [
+      { group: modelGroup, options: [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`] },
+      { group: otherGroup, options: [`${asus5070}(2500MHz), $28990`, `${msi5070}(2490MHz), $27990`] },
+    ]),
+    page("2024-06-16T02:00:00.000Z", [
+      { group: modelGroup, options: [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $18990 售罄`] },
+      { group: otherGroup, options: [`${asus5070}(2500MHz), $29990`] },
+    ]),
+  ])
+  start(series)
+
+  const brand = (name: string): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+      .find((node) => node.textContent === name)
+  const codes = (group: string): string[] =>
+    [...document.querySelectorAll(`[aria-label="${group}"] [data-code]`)]
+      .map((node) => node.getAttribute("data-code") ?? "")
+  const bar = document.querySelector('[aria-label="圖表篩選"]')
+
+  expect(document.querySelectorAll('button[aria-label="僅顯示在售"]')).toHaveLength(1)
+  expect(document.querySelectorAll('[aria-label="品牌"]')).toHaveLength(1)
+  expect(bar?.classList.contains("sticky")).toBe(true)
+  expect(bar?.classList.contains("top-0")).toBe(true)
+  expect(bar?.classList.contains("h-dvh")).toBe(true)
+  expect(document.querySelector(`[aria-label="${modelGroup}"] [aria-label="品牌"]`)).toBeNull()
+
+  brand("華碩")?.click()
+  expect(brand("華碩")?.getAttribute("aria-pressed")).toBe("true")
+  expect(new Set(codes(modelGroup))).toEqual(new Set([prime]))
+  expect(new Set(codes(otherGroup))).toEqual(new Set([asus5070]))
+
+  const sale = document.querySelector<HTMLButtonElement>('button[aria-label="僅顯示在售"]')
+  sale?.click()
+  expect(sale?.getAttribute("aria-pressed")).toBe("true")
+  expect(new Set(codes(modelGroup))).toEqual(new Set([prime]))
+  expect(new Set(codes(otherGroup))).toEqual(new Set([asus5070]))
+
+  brand("華碩")?.click()
+  expect(brand("華碩")?.getAttribute("aria-pressed")).toBe("false")
+  expect(new Set(codes(modelGroup))).toEqual(new Set([prime]))
+  expect(new Set(codes(otherGroup))).toEqual(new Set([asus5070]))
+
+  sale?.click()
+  expect(sale?.getAttribute("aria-pressed")).toBe("false")
+  expect(new Set(codes(modelGroup))).toEqual(new Set([prime, windforce]))
+  expect(new Set(codes(otherGroup))).toEqual(new Set([asus5070, msi5070]))
+})
+
 test("品牌可以複選，再點一次就取消", () => {
   const series = update(emptySeries(), [
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),

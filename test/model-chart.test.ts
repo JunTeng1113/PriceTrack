@@ -460,16 +460,15 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     const doc = documentOf(renderPage(series, []))
     const strokeOf = (group: string, code: string): string | null =>
       doc.querySelector(`[aria-label="${group}"] line[data-code="${code}"]`)?.getAttribute("stroke") ?? null
-    const swatch = (group: string, name: string): string => {
-      const button = [...(doc.querySelectorAll(`[aria-label="${group}"] [aria-label="品牌"] button`) ?? [])]
+    const swatch = (name: string): string => {
+      const button = [...(doc.querySelectorAll('[aria-label="品牌"] button') ?? [])]
         .find((node) => node.textContent === name)
       return button?.querySelector("span[aria-hidden]")?.getAttribute("style") ?? ""
     }
 
     expect(strokeOf(modelGroup, gigabyte)).toBe(strokeOf(onlyGigabyte, gigabyte5090))
-    expect(swatch(modelGroup, "技嘉")).toContain(strokeOf(modelGroup, gigabyte) ?? "")
-    expect(swatch(onlyGigabyte, "技嘉")).toBe(swatch(modelGroup, "技嘉"))
-    expect(swatch(modelGroup, "華碩")).not.toBe(swatch(modelGroup, "技嘉"))
+    expect(swatch("技嘉")).toContain(strokeOf(modelGroup, gigabyte) ?? "")
+    expect(swatch("華碩")).not.toBe(swatch("技嘉"))
   })
 
   test("五個主要品牌各一色，其餘品牌合併為其他", () => {
@@ -498,11 +497,11 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     const strokeOf = (code: string): string | null =>
       chart?.querySelector(`line[data-code="${code}"]`)?.getAttribute("stroke") ?? null
     const swatch = (name: string): string => {
-      const button = [...(chart?.querySelectorAll('[aria-label="品牌"] button') ?? [])]
+      const button = [...(doc.querySelectorAll('[aria-label="品牌"] button') ?? [])]
         .find((node) => node.textContent === name)
       return button?.querySelector("span[aria-hidden]")?.getAttribute("style") ?? ""
     }
-    const names = [...(chart?.querySelectorAll('[aria-label="品牌"] button') ?? [])].map((node) => node.textContent)
+    const names = [...(doc.querySelectorAll('[aria-label="品牌"] button') ?? [])].map((node) => node.textContent)
 
     expect(names).toEqual(["華碩", "技嘉", "微星", "INNO3D", "ZOTAC", "其他"])
     for (const [code, color] of cards) {
@@ -589,15 +588,20 @@ describe("RTX5060Ti-8GB 型號圖", () => {
     const open = documentOf(renderPage(series, []))
     const openChart = open.querySelector(`[aria-label="${modelGroup}"]`)
     const openCodes = [...(openChart?.querySelectorAll("[data-code]") ?? [])].map((node) => node.getAttribute("data-code"))
-    const brandOptions = [...(openChart?.querySelectorAll('[aria-label="品牌"] button') ?? [])]
+    const brandOptions = [...(open.querySelectorAll('[aria-label="品牌"] button') ?? [])]
       .map((item) => item.textContent)
 
     expect(new Set(openCodes)).toEqual(new Set([prime, windforce]))
     expect(brandOptions).toEqual(["華碩", "技嘉"])
-    const brandRow = openChart?.querySelector('[aria-label="品牌"]')
-    expect(brandRow?.classList.contains("flex")).toBe(true)
-    expect(brandRow?.classList.contains("flex-wrap")).toBe(true)
+    const bar = open.querySelector('[aria-label="圖表篩選"]')
+    const brandRow = open.querySelector('[aria-label="品牌"]')
+    expect(bar?.classList.contains("sticky")).toBe(true)
+    expect(bar?.classList.contains("top-0")).toBe(true)
+    expect(bar?.classList.contains("h-dvh")).toBe(true)
+    expect(brandRow?.classList.contains("flex-col")).toBe(true)
     expect(brandRow?.classList.contains("gap-2")).toBe(true)
+    expect(openChart?.querySelector('[aria-label="品牌"]')).toBeNull()
+    expect(openChart?.querySelector('button[aria-label="僅顯示在售"]')).toBeNull()
 
     const filtered = documentOf(renderPage(series, [{ type: "setBrand", group: modelGroup, name: "華碩" }]))
     const filteredChart = filtered.querySelector(`[aria-label="${modelGroup}"]`)

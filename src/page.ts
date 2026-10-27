@@ -394,26 +394,56 @@ function filterSection(view: View, actions: readonly Action[]): string {
     </section>`
 }
 
-function documentHtml(body: string): string {
+function sharedBrandNames(view: View): string[] {
+  const names: string[] = []
+  for (const chart of view.modelCharts) {
+    for (const name of chart.brands) {
+      if (!names.includes(name)) {
+        names.push(name)
+      }
+    }
+  }
+  const rank = ["華碩", "技嘉", "微星", "INNO3D", "ZOTAC", "其他"]
+  return names.sort((left, right) => {
+    const leftRank = rank.indexOf(left)
+    const rightRank = rank.indexOf(right)
+    return (leftRank < 0 ? rank.length : leftRank) - (rightRank < 0 ? rank.length : rightRank)
+  })
+}
+
+function chartControlMarkup(view: View): string {
+  const selected = view.modelCharts[0]?.selectedBrands ?? []
+  const onSale = buttonMarkup("僅顯示在售", {
+    "aria-pressed": view.onSaleOnly ? "true" : "false",
+    "aria-label": "僅顯示在售",
+  })
+  const brands = brandMarkup(sharedBrandNames(view), selected)
+  return `<aside class="sticky top-0 z-20 flex h-dvh shrink-0 items-center bg-white" aria-label="圖表篩選"><div class="flex flex-col gap-2 px-3 [&_button]:whitespace-nowrap">${onSale}<div aria-label="品牌" class="flex flex-col gap-2">${brands}</div></div></aside>`
+}
+
+function documentHtml(body: string, controls: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
   <body>
-    <div class="p-4 md:p-6">
-    ${body}
+    <div class="flex items-start">
+      ${controls}
+      <div class="min-w-0 flex-1 p-4 md:p-6">
+      ${body}
+      </div>
     </div>
   </body>
 </html>`
 }
 
 export function renderShell(view: View, actions: readonly Action[]): string {
-  return documentHtml(filterSection(view, actions))
+  return documentHtml(filterSection(view, actions), chartControlMarkup(view))
 }
 
 export function renderPage(series: PriceSeries, actions: readonly Action[], usedPosts: readonly UsedPost[] = []): string {
   preparedBrandSvgs.clear()
   const view = present(series, actions, usedPosts)
   const charts = view.modelCharts.map((chart) => modelSection(view, chart)).join("")
-  return documentHtml(`${filterSection(view, actions)}${charts}`)
+  return documentHtml(`${filterSection(view, actions)}${charts}`, chartControlMarkup(view))
 }
 
 function formatSellingPrice(price: number): string {
@@ -451,14 +481,14 @@ function modelSvg(
     series,
     axis: priceBounds(series, extraPrices(lines, used)),
     readout: null,
+    onSaleOnly: false,
     generation: "50",
     modelCharts: [],
   }, true, focus))
 }
 
-function chartSection(group: string, brands: string, svg: string, used: string): string {
-  const onSale = buttonMarkup("僅顯示在售", { "aria-pressed": "false", "aria-label": "僅顯示在售" })
-  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3><div class="flex flex-wrap items-center gap-2">${onSale}<div aria-label="品牌" class="flex flex-wrap gap-2">${brands}</div></div>${svg}${used}</section>`
+function chartSection(group: string, svg: string, used: string): string {
+  return `<section class="flex flex-col gap-2 text-sm" aria-label="${escapeAttribute(group)}"><h3 class="font-medium">${escapeHtml(group)}</h3>${svg}${used}</section>`
 }
 
 export function brandCacheKey(names: readonly string[]): string {
@@ -470,11 +500,14 @@ export function chartCacheKey(names: readonly string[], onSaleOnly = false): str
   return onSaleOnly ? `${brands}\u0001在售` : brands
 }
 
-function visibleLines(chart: View["modelCharts"][number]): View["modelCharts"][number]["allSeries"] {
-  if (chart.selectedBrands.length === 0) {
-    return chart.allSeries
+function visibleLines(chart: View["modelCharts"][number], onSaleOnly: boolean): View["modelCharts"][number]["allSeries"] {
+  const branded = chart.selectedBrands.length === 0
+    ? chart.allSeries
+    : chart.allSeries.filter((line) => chart.selectedBrands.includes(brandGroup(line.brand)))
+  if (!onSaleOnly) {
+    return branded
   }
-  return chart.allSeries.filter((line) => chart.selectedBrands.includes(brandGroup(line.brand)))
+  return branded.filter((line) => line.onSale)
 }
 
 function modelSection(view: View, chart: View["modelCharts"][number]): string {
@@ -485,13 +518,12 @@ function modelSection(view: View, chart: View["modelCharts"][number]): string {
     stored.set(name, modelSvg(view, lines, "", chart.used))
   }
   preparedBrandSvgs.set(chart.group, stored)
-  const brands = brandMarkup(chart.brands, chart.selectedBrands)
-  const lines = visibleLines(chart)
+  const lines = visibleLines(chart, view.onSaleOnly)
   const visible = modelSvg(view, lines, chart.focus, chart.used)
-  stored.set(brandCacheKey(chart.selectedBrands), visible)
+  stored.set(chartCacheKey(chart.selectedBrands, view.onSaleOnly), visible)
   const selling = chart.allSeries.filter((line) => line.onSale)
   stored.set(chartCacheKey([], true), modelSvg(view, selling, "", chart.used))
-  return chartSection(chart.group, brands, visible, usedStrip(lines, chart.used))
+  return chartSection(chart.group, visible, usedStrip(lines, chart.used))
 }
 
 export function clearPreparedCharts(): void {
@@ -539,7 +571,7 @@ export function visibleChart(
   view: View,
   chart: View["modelCharts"][number],
 ): { section: string; marks: string[] } {
-  const lines = visibleLines(chart)
+  const lines = visibleLines(chart, view.onSaleOnly)
   const series = lines.map((line) => ({
     code: line.code,
     colorIndex: brandColorIndex(line.brand),
@@ -554,12 +586,12 @@ export function visibleChart(
     series,
     axis: priceBounds(series, extraPrices(lines, chart.used)),
     readout: null,
+    onSaleOnly: false,
     generation: "50",
     modelCharts: [],
   }, true, chart.focus)
   const frame = marks[0] ?? ""
-  const brands = brandMarkup(chart.brands, chart.selectedBrands)
-  return { section: chartSection(chart.group, brands, chartSvg(frame), usedStrip(lines, chart.used)), marks: marks.slice(1) }
+  return { section: chartSection(chart.group, chartSvg(frame), usedStrip(lines, chart.used)), marks: marks.slice(1) }
 }
 
 function extraPrices(lines: readonly { code: string }[], used: readonly UsedBox[]): number[] {

@@ -89,7 +89,7 @@ test("品牌按鈕只留該品牌的盒鬚圖，而且不重畫整頁", () => {
   document.body.append(marker)
 
   const button = (name: string): HTMLButtonElement | undefined =>
-    [...document.querySelectorAll<HTMLButtonElement>(`[aria-label="${group}"] [aria-label="品牌"] button`)]
+    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
       .find((node) => node.textContent === name)
   const boxCodes = (): string[] =>
     [...document.querySelectorAll(`[aria-label="${group}"] [data-used] [data-code]`)]
