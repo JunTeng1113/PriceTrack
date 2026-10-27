@@ -267,13 +267,16 @@ function formatTooltipPrice(price: string): string {
   return negative ? `-$${grouped}` : `$${grouped}`
 }
 
-function showTooltip(date: string, code: string, price: string, event: MouseEvent, delisted = false): void {
+function showTooltip(date: string, code: string, price: string, event: MouseEvent, delisted = false, note = ""): void {
   if (date === "" || code === "" || price === "") {
     return
   }
   const tip = ensureTooltip()
   tip.replaceChildren()
   const rows = [date, code, formatTooltipPrice(price)]
+  if (note !== "") {
+    rows.push(note)
+  }
   if (delisted) {
     rows.push("下架")
   }
@@ -691,6 +694,32 @@ export function start(series: PriceSeries): {
         })
         line.addEventListener("mouseout", (event) => {
           leaveLine(line, event)
+        })
+      }
+
+      const usedDots = svg.closest("section")?.querySelectorAll("[data-used-price]") ?? []
+      for (const dot of usedDots) {
+        if (dot.getAttribute("data-bound") === "true") {
+          continue
+        }
+        dot.setAttribute("data-bound", "true")
+        const showUsed = (event: Event): void => {
+          if (!(event instanceof MouseEvent)) {
+            return
+          }
+          showTooltip(
+            dot.getAttribute("data-date") ?? "",
+            dot.getAttribute("data-code") ?? "",
+            dot.getAttribute("data-price") ?? "",
+            event,
+            false,
+            "二手開價",
+          )
+        }
+        dot.addEventListener("mouseover", showUsed)
+        dot.addEventListener("mousemove", showUsed)
+        dot.addEventListener("mouseout", () => {
+          hideTooltip()
         })
       }
 

@@ -701,11 +701,10 @@ function trendChart(trend: View["trend"][number]): string {
   const marks = [
     chartFrame(bounds.start, bounds.end, axis),
     priceArea(sellingBands(trend.series), "data-selling-band", "#1d4ed8", startDay, daySpan, axis),
-    priceArea(usedHalfBands(trend.used, bounds.start, bounds.end), "data-used-band", "#c2410c", startDay, daySpan, axis),
     trendAverage(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，橘色面積是半月二手開價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -782,45 +781,6 @@ function sellingBands(
   return bands
 }
 
-function usedHalfBands(
-  used: readonly { date: string; price: number }[],
-  start: string,
-  end: string,
-): { date: string; low: number; high: number }[] {
-  const ranges = new Map<string, { low: number; high: number }>()
-  for (const post of used) {
-    const key = halfMonthKey(post.date)
-    const range = ranges.get(key)
-    if (range === undefined) {
-      ranges.set(key, { low: post.price, high: post.price })
-      continue
-    }
-    if (post.price < range.low) {
-      range.low = post.price
-    }
-    if (post.price > range.high) {
-      range.high = post.price
-    }
-  }
-  const bands: { date: string; low: number; high: number }[] = []
-  if (ranges.size === 0 || start > end) {
-    return bands
-  }
-  let cursor = start
-  while (cursor <= end) {
-    const range = ranges.get(halfMonthKey(cursor))
-    if (range !== undefined) {
-      bands.push({ date: cursor, low: range.low, high: range.high })
-    }
-    const next = addDays(cursor, 1)
-    if (next <= cursor) {
-      break
-    }
-    cursor = next
-  }
-  return bands
-}
-
 function priceArea(
   bands: readonly { date: string; low: number; high: number }[],
   attribute: string,
@@ -866,11 +826,6 @@ function usedDayPrices(used: readonly { date: string; price: number }[]): { date
   }
   days.sort((left, right) => left.date.localeCompare(right.date))
   return days
-}
-
-function halfMonthKey(isoDate: string): string {
-  const day = Number(isoDate.slice(8, 10))
-  return `${isoDate.slice(0, 7)}-${day <= 15 ? "01" : "16"}`
 }
 
 function usedQuarterAverage(
@@ -949,8 +904,10 @@ function trendUsedMarks(
   return used.map((post) => {
     const x = xAt(post.date, startDay, daySpan)
     const y = yAt(post.price, axis)
-    const circle = `<circle data-used-price="true" data-code="${escapeAttribute(post.code)}" data-date="${escapeAttribute(post.date)}" data-price="${post.price}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.2" fill="#c2410c" stroke="#ffffff" stroke-width="0.3" />`
-    return `<a href="${escapeAttribute(post.link)}" target="_blank" rel="noreferrer">${circle}</a>`
+    const point = `cx="${x.toFixed(2)}" cy="${y.toFixed(2)}"`
+    const hit = `<circle data-used-price="true" data-code="${escapeAttribute(post.code)}" data-date="${escapeAttribute(post.date)}" data-price="${post.price}" ${point} r="3.2" fill="transparent" stroke="none" />`
+    const dot = `<circle ${point} r="1.2" fill="#c2410c" stroke="#ffffff" stroke-width="0.3" pointer-events="none" />`
+    return `<a href="${escapeAttribute(post.link)}" target="_blank" rel="noreferrer">${hit}${dot}</a>`
   }).join("")
 }
 
