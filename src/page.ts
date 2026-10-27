@@ -631,7 +631,7 @@ function usedStrip(
     ).join("")
     return `<figure class="flex w-36 flex-col items-center gap-1"><svg viewBox="0 0 28 100" width="56" height="200" aria-label="盒鬚圖">${boxMarks(box, axis)}</svg><figcaption class="w-full text-xs"><div class="font-medium">${escapeHtml(box.code)}</div>${links}</figcaption></figure>`
   }).join("")
-  return `<div data-used aria-label="二手行情" class="flex flex-col gap-2"><p class="font-medium">二手行情</p><div class="flex items-start gap-3 overflow-x-auto">${axisSvg}${figures}</div></div>`
+  return `<div data-used aria-label="二手行情" class="my-6 flex flex-col gap-2"><p class="font-medium">二手行情</p><div class="flex items-start gap-3 overflow-x-auto">${axisSvg}${figures}</div></div>`
 }
 
 function boxMarks(box: UsedBox, axis: { lower: number; upper: number }): string {
