@@ -71,8 +71,8 @@ test("售價連成面積，二手開價只留散佈點", () => {
   expect(chart?.textContent).not.toContain("橘色面積")
   expect(bands(chart, "data-selling-band")).toEqual([
     ["2024-06-15", "9000", "10000"],
-    ["2024-06-16", "9100", "9100"],
-    ["2024-06-17", "9200", "12000"],
+    ["2024-06-16", "9000", "10000"],
+    ["2024-06-17", "9000", "12000"],
   ])
   expect(used.map((node) => [node.getAttribute("data-code"), node.getAttribute("data-date"), node.getAttribute("data-price")])).toEqual([
     [other, "2024-06-15", "7000"],
@@ -80,6 +80,7 @@ test("售價連成面積，二手開價只留散佈點", () => {
     [code, "2024-06-17", "15000"],
   ])
   expect(used[1]?.closest("a")?.getAttribute("href")).toBe("https://example.com/posts/8000")
+  expect(chart?.textContent).toContain("過去 7 日售價的最高價到最低價")
   expect(chart?.textContent).toContain("季均線")
   expect(chart?.textContent).not.toContain("半月均線")
   expect(averages(chart).map(([date, price]) => [date, Number(price)])).toEqual([
@@ -88,6 +89,24 @@ test("售價連成面積，二手開價只留散佈點", () => {
     ["2024-06-17", 11250],
   ])
   expect(doc.querySelector("svg[data-trend-chart]")?.getAttribute("data-price-chart")).toBeNull()
+})
+
+test("售價面積的每日高低是過去 7 日的滑動極值", () => {
+  const rolled = update(emptySeries(), [
+    snapshot("2024-06-01T02:00:00.000Z", [`｛${code}｝, $5000`, `｛${other}｝, $8000`]),
+    snapshot("2024-06-07T02:00:00.000Z", [`｛${code}｝, $9000`]),
+    snapshot("2024-06-08T02:00:00.000Z", [`｛${code}｝, $7000`]),
+  ])
+  const doc = documentOf(renderPage(rolled, [
+    { type: "setChipGroup", name: "NVIDIA RTX4070" },
+    { type: "setRange", start: "2024-06-01", end: "2024-06-30" },
+  ]))
+
+  expect(bands(doc, "data-selling-band")).toEqual([
+    ["2024-06-01", "5000", "8000"],
+    ["2024-06-07", "5000", "9000"],
+    ["2024-06-08", "7000", "9000"],
+  ])
 })
 
 test("季均線只平均三個月內的每日二手開價", () => {
@@ -167,7 +186,7 @@ function averages(root: ParentNode | null): string[][] {
 
 test("滑鼠停在二手開價點上時顯示該筆資訊", () => {
   const listing = "華碩 PRIME-RTX5060TI-8G"
-  const group = "NVIDIA RTX5060Ti-8GB(GDDR7)"
+  const group = "NVIDIA RTX5060Ti-8GB"
   const priced = update(emptySeries(), [
     snapshot("2024-06-15T02:00:00.000Z", [`｛${listing}｝, $10000`], group),
     snapshot("2024-06-16T02:00:00.000Z", [`｛${listing}｝, $11000`], group),

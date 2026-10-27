@@ -86,12 +86,11 @@ describe("代號與排除", () => {
     const view = present(series, [])
 
     expect(view.chipGroups).toEqual([
-      "NVIDIA RTX5090-32GB(GDDR7)",
-      "NVIDIA RTX5070Ti-16GB(GDDR7)",
-      "NVIDIA RTX5070-12GB(GDDR7)",
+      "NVIDIA RTX5090-32GB",
+      "NVIDIA RTX5070Ti-16GB",
+      "NVIDIA RTX5070-12GB",
       "NVIDIA RTX4080-16GB",
-      "NVIDIA RTX4070-12GB (GDDR6X)",
-      "NVIDIA RTX4070-12GB (GDDR6)",
+      "NVIDIA RTX4070-12GB",
       "NVIDIA RTX4070 SUPER 12GB",
       "NVIDIA RTX3080-10GB",
       "NVIDIA RTX3070",
@@ -117,9 +116,9 @@ describe("代號與排除", () => {
       `),
     ])
     const view = present(series, [])
-    const chart = view.modelCharts.find((item) => item.group === "NVIDIA RTX5090-32GB(GDDR7)")
+    const chart = view.modelCharts.find((item) => item.group === "NVIDIA RTX5090-32GB")
 
-    expect(view.chipGroups).toEqual(["NVIDIA RTX5090-32GB(GDDR7)"])
+    expect(view.chipGroups).toEqual(["NVIDIA RTX5090-32GB"])
     expect(chart?.series.map((line) => line.code)).toEqual([
       "華碩 ROG-ASTRAL-RTX5090-O32G-GAMING",
       "微星 RTX5090 32G VENTUS 3X OC",
@@ -205,15 +204,14 @@ describe("代號與排除", () => {
     expect(view.chipGroups).toEqual([
       "NVIDIA RTX4070Ti-12GB",
       "NVIDIA RTX3080-10GB",
-      "NVIDIA RTX3060Ti-8GB(GDDR6X)",
-      "NVIDIA RTX3060Ti-8GB(GDDR6)",
+      "NVIDIA RTX3060Ti-8GB",
       "NVIDIA RTX3060-8GB",
       "NVIDIA RTX3060-12GB",
       "NVIDIA RTX2060-12GB",
     ])
   })
 
-  test("RTX3060 Ti 沒寫 GDDR6X 的是同一分組", () => {
+  test("同一核心規格的 GDDR6 與 GDDR6X 畫在同一張圖、各自一條線", () => {
     const series = update(emptySeries(), [
       vgaSnapshot(`
         <optgroup label="NVIDIA RTX3060TI">
@@ -232,17 +230,16 @@ describe("代號與排除", () => {
       `),
     ])
     const view = present(series, [{ type: "setGeneration", name: "30" }])
-    const gddr6 = view.modelCharts.find((item) => item.group === "NVIDIA RTX3060Ti-8GB(GDDR6)")
-    const gddr6x = view.modelCharts.find((item) => item.group === "NVIDIA RTX3060Ti-8GB(GDDR6X)")
+    const chart = view.modelCharts.find((item) => item.group === "NVIDIA RTX3060Ti-8GB")
 
-    expect(view.chipGroups).toEqual(["NVIDIA RTX3060Ti-8GB(GDDR6X)", "NVIDIA RTX3060Ti-8GB(GDDR6)"])
-    expect(gddr6?.series.map((line) => line.code)).toEqual([
+    expect(view.chipGroups).toEqual(["NVIDIA RTX3060Ti-8GB"])
+    expect(chart?.series.map((line) => line.code)).toEqual([
       "華碩 DUAL-RTX3060Ti-O8G",
       "技嘉 RTX3060Ti EAGLE OC 8G",
       "微星 RTX3060Ti VENTUS 2X 8G",
       "ZOTAC RTX3060Ti Twin Edge LHR",
+      "華碩 DUAL-RTX3060TI-O8GD6X",
     ])
-    expect(gddr6x?.series.map((line) => line.code)).toEqual(["華碩 DUAL-RTX3060TI-O8GD6X"])
   })
 
   test("晶片分組名稱含周邊的列不出現在候選", () => {

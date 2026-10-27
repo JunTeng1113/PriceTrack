@@ -704,7 +704,7 @@ function trendChart(trend: View["trend"][number]): string {
     trendAverage(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是每日售價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是過去 7 日售價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -778,7 +778,33 @@ function sellingBands(
     bands.push({ date, low, high })
   }
   bands.sort((left, right) => left.date.localeCompare(right.date))
-  return bands
+  return bands.map((band, index) => rollingExtreme(bands, index))
+}
+
+function rollingExtreme(
+  bands: readonly { date: string; low: number; high: number }[],
+  index: number,
+): { date: string; low: number; high: number } {
+  const band = bands[index]
+  if (band === undefined) {
+    return { date: "", low: 0, high: 0 }
+  }
+  const windowStart = addDays(band.date, -6)
+  let low = band.low
+  let high = band.high
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const earlier = bands[cursor]
+    if (earlier === undefined || earlier.date < windowStart) {
+      break
+    }
+    if (earlier.low < low) {
+      low = earlier.low
+    }
+    if (earlier.high > high) {
+      high = earlier.high
+    }
+  }
+  return { date: band.date, low, high }
 }
 
 function priceArea(
@@ -928,7 +954,7 @@ function filterSection(view: View, actions: readonly Action[]): string {
       ${generationMarkup(generation)}
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
-      <div>晶片分組 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</div>
+      <div>核心規格 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</div>
       ${buttonMarkup("搜尋", { "aria-label": "搜尋" })}
       ${candidates}
       <ul aria-label="已選">${selected}</ul>

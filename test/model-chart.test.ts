@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest"
 import { applyChartMode, renderPage } from "../src/page.ts"
 import { emptySeries, update, type Snapshot } from "../src/present.ts"
 
-const modelGroup = "NVIDIA RTX5060Ti-8GB(GDDR7)"
+const modelGroup = "NVIDIA RTX5060Ti-8GB"
 
 function snapshot(capturedAt: string, groups: readonly { label: string; rows: readonly string[] }[]): Snapshot {
   const blocks = groups
@@ -170,14 +170,15 @@ describe("每個晶片分組一張圖", () => {
 
   test("沒選分組時只畫 RTX 50 系列，選了其他分組才顯示該圖", () => {
     const older = "NVIDIA RTX4070"
-    const fifty = "NVIDIA RTX5090-32GB(GDDR7)"
+    const fiftyLabel = "NVIDIA RTX5090-32GB(GDDR7)"
+    const fifty = "NVIDIA RTX5090-32GB"
     const sale = "NVIDIA RTX5070-12GB(GDDR7) 3/5-10點開賣"
-    const saleModel = "NVIDIA RTX5070-12GB(GDDR7)"
+    const saleModel = "NVIDIA RTX5070-12GB"
     const decoy = "NVIDIA RTX3050-8GB"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [
         { label: older, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
-        { label: fifty, rows: ["華碩 TUF-RTX5090-O32G-GAMING(2520MHz), $99990"] },
+        { label: fiftyLabel, rows: ["華碩 TUF-RTX5090-O32G-GAMING(2520MHz), $99990"] },
         { label: sale, rows: ["技嘉 RTX5070 GAMING OC 12G(2520MHz), $24990"] },
         { label: decoy, rows: ["微星 RTX3050 VENTUS 2X 8G(1807MHz), $5990"] },
       ]),
@@ -204,21 +205,22 @@ describe("每個晶片分組一張圖", () => {
     const marked = [...both.querySelectorAll('[data-slot="select-item"][aria-selected="true"]')]
       .map((item) => item.textContent)
     expect(marked).toEqual([older, decoy])
-    expect(both.querySelector('[aria-label="晶片分組"]')?.textContent).toBe(`${older}、${decoy}`)
+    expect(both.querySelector('[aria-label="核心規格"]')?.textContent).toBe(`${older}、${decoy}`)
   })
 
   test("世代按鈕預設是 50系列，改看 30 或 40 系列時只畫該世代", () => {
     const older = "NVIDIA RTX4070 SUPER 12GB"
     const ti = "NVIDIA RTX4070Ti SUPER 16GB"
     const thirtyLabel = "NVIDIA RTX3060TI"
-    const thirty = "NVIDIA RTX3060Ti-8GB(GDDR6)"
-    const fifty = "NVIDIA RTX5090-32GB(GDDR7)"
+    const thirty = "NVIDIA RTX3060Ti-8GB"
+    const fiftyLabel = "NVIDIA RTX5090-32GB(GDDR7)"
+    const fifty = "NVIDIA RTX5090-32GB"
     const series = update(emptySeries(), [
       snapshot("2024-06-15T02:00:00.000Z", [
         { label: older, rows: ["華碩 DUAL-RTX4070-O12G(2535MHz), $18990"] },
         { label: ti, rows: ["華碩 TUF-RTX4070TI-O16G(2610MHz), $28990"] },
         { label: thirtyLabel, rows: ["微星 RTX3060 VENTUS 2X 8G(1807MHz), $9990"] },
-        { label: fifty, rows: ["華碩 TUF-RTX5090-O32G-GAMING(2520MHz), $99990"] },
+        { label: fiftyLabel, rows: ["華碩 TUF-RTX5090-O32G-GAMING(2520MHz), $99990"] },
       ]),
     ])
     const pressed = (doc: Document): string[] =>

@@ -378,7 +378,7 @@ function selectedChipGroups(): string[] {
 function readFilterDraft(): FilterDraft | null {
   const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
   const end = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')
-  const chip = document.querySelector('[aria-label="晶片分組"]')
+  const chip = document.querySelector('[aria-label="核心規格"]')
   if (start === null || end === null || chip === null) {
     return null
   }
@@ -394,7 +394,7 @@ function readFilterDraft(): FilterDraft | null {
 function writeFilterDraft(draft: FilterDraft): void {
   const start = document.querySelector<HTMLInputElement>('input[aria-label="起日"]')
   const end = document.querySelector<HTMLInputElement>('input[aria-label="迄日"]')
-  const chip = document.querySelector('[aria-label="晶片分組"]')
+  const chip = document.querySelector('[aria-label="核心規格"]')
   if (start !== null) {
     start.value = draft.start
   }
@@ -900,7 +900,7 @@ export function start(series: PriceSeries): {
       for (const item of document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')) {
         item.setAttribute("aria-selected", "false")
       }
-      const trigger = document.querySelector('[aria-label="晶片分組"]')
+      const trigger = document.querySelector('[aria-label="核心規格"]')
       if (trigger !== null) {
         trigger.textContent = ""
       }
@@ -935,8 +935,8 @@ export function start(series: PriceSeries): {
     }
 
     const bindShell = (): void => {
-      bindSelect("晶片分組", (item) => {
-        const trigger = document.querySelector('[aria-label="晶片分組"]')
+      bindSelect("核心規格", (item) => {
+        const trigger = document.querySelector('[aria-label="核心規格"]')
         if (trigger === null) {
           return
         }

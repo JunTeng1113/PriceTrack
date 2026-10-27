@@ -50,7 +50,7 @@ function chipVendor(group: string): string {
 function ChipGroupSelect({
   groups,
   selected,
-  label = "晶片分組",
+  label = "核心規格",
 }: {
   groups: readonly string[]
   selected: readonly string[]

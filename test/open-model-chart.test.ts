@@ -4,7 +4,7 @@ import { expect, test, vi } from "vitest"
 import { start } from "../src/browse.ts"
 import { emptySeries, update, type Snapshot } from "../src/present.ts"
 
-const modelGroup = "NVIDIA RTX5060Ti-8GB(GDDR7)"
+const modelGroup = "NVIDIA RTX5060Ti-8GB"
 const prime = "華碩 PRIME-RTX5060TI-8G"
 const windforce = "技嘉 RTX5060Ti WINDFORCE 8G"
 
@@ -90,7 +90,7 @@ test("僅顯示在售只留最新快照裡沒有售罄的代號", () => {
 })
 
 test("按下品牌或僅顯示在售時，每一張圖一起篩", () => {
-  const otherGroup = "NVIDIA RTX5070-12GB(GDDR7)"
+  const otherGroup = "NVIDIA RTX5070-12GB"
   const asus5070 = "華碩 PRIME-RTX5070-12G"
   const msi5070 = "微星 RTX5070 12G VENTUS"
   const page = (capturedAt: string, rows: readonly { group: string; options: readonly string[] }[]): Snapshot => {
@@ -410,7 +410,7 @@ test("晶片分組可以複選，搜尋後留下勾選的圖", () => {
   expect(item(other)?.getAttribute("aria-selected")).toBe("true")
 
   expect(document.querySelector('[data-slot="select-content"]')?.classList.contains("hidden")).toBe(false)
-  expect(document.querySelector('[aria-label="晶片分組"]')?.textContent).toBe(`${older}、${other}`)
+  expect(document.querySelector('[aria-label="核心規格"]')?.textContent).toBe(`${older}、${other}`)
   document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
 
   expect(document.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
@@ -472,7 +472,7 @@ test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分�
   expect(generation("30系列")?.getAttribute("aria-pressed")).toBe("true")
   expect(document.querySelector(`[aria-label="${other}"]`)).not.toBeNull()
   expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
-  expect(document.querySelector('[aria-label="晶片分組"]')?.textContent).toBe("")
+  expect(document.querySelector('[aria-label="核心規格"]')?.textContent).toBe("")
 })
 
 test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
@@ -522,5 +522,5 @@ test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
   expect(document.getElementById("keep")).not.toBeNull()
   expect(document.querySelector(`[aria-label="${other}"]`)).not.toBeNull()
   expect(document.querySelector(`[aria-label="${older}"]`)).toBeNull()
-  expect(document.querySelector('[aria-label="晶片分組"]')?.textContent).toBe("")
+  expect(document.querySelector('[aria-label="核心規格"]')?.textContent).toBe("")
 })

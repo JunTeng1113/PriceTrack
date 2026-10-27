@@ -284,10 +284,11 @@ function chipModelName(group: string): string | null {
   return sameCapacitySpelling(trimmed)
 }
 
+function coreSpec(name: string): string {
+  return name.replace(/\s*\((?:GDDR\d+X?|DDR\d+)\)/gi, "").replace(/\s{2,}/g, " ").trim()
+}
+
 function canonicalGroup(named: string, code: string): string {
-  if (named === "NVIDIA RTX3060Ti-8GB(GDDR6X)" && !/GDDR6X|D6X/i.test(code)) {
-    return "NVIDIA RTX3060Ti-8GB(GDDR6)"
-  }
   if (named === "NVIDIA RTX3060") {
     return /8G/i.test(code) ? "NVIDIA RTX3060-8GB" : "NVIDIA RTX3060-12GB"
   }
@@ -297,7 +298,7 @@ function canonicalGroup(named: string, code: string): string {
   if (named === "NVIDIA RTX2060") {
     return /12G/i.test(code) ? "NVIDIA RTX2060-12GB" : "NVIDIA RTX2060-6GB"
   }
-  return named
+  return coreSpec(named)
 }
 
 function sameCapacitySpelling(name: string): string {
