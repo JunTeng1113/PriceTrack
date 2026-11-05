@@ -1,5 +1,7 @@
 import { update, type PriceSeries, type Snapshot } from "./present.ts"
 
+const memoryLabel = "記憶體 RAM"
+
 const pageUrl = "https://www.coolpc.com.tw/evaluate.php"
 const checkIntervalMs = 6 * 60 * 60 * 1000
 
@@ -120,6 +122,53 @@ type ComparedQuote = {
   rowText: string
 }
 
+export type MemoryIngest =
+  | { status: "no-menu"; prepared: PreparedSeries }
+  | { status: "already"; prepared: PreparedSeries; capturedAt: string }
+  | { status: "saved"; prepared: PreparedSeries; capturedAt: string; quotes: number }
+
+export function ingestMemory(prepared: PreparedSeries, html: string, capturedAt: string): MemoryIngest {
+  if (prepared.done.includes(capturedAt)) {
+    return { status: "already", prepared, capturedAt }
+  }
+  const selectHtml = memorySelectHtml(html)
+  if (selectHtml === null) {
+    return { status: "no-menu", prepared }
+  }
+  const date = taipeiDay(capturedAt)
+  const quotes = prepared.quotes.map((quote) => ({ ...quote }))
+  if (date !== null) {
+    const rows = rowsInSelect(selectHtml)
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex]
+      if (row === undefined) {
+        continue
+      }
+      const code = memoryCode(row.text)
+      const sellingPrice = sellingPriceOf(row.text)
+      if (code === null || sellingPrice === null) {
+        continue
+      }
+      remember(quotes, {
+        code,
+        date,
+        sellingPrice,
+        group: row.group,
+        rowText: row.text,
+        capturedAt,
+        rowIndex,
+        source: "估價頁",
+      })
+    }
+  }
+  return {
+    status: "saved",
+    prepared: { quotes, done: [...prepared.done, capturedAt] },
+    capturedAt,
+    quotes: quotes.length,
+  }
+}
+
 export function changesAgainstPrevious(
   before: PreparedSeries,
   after: PreparedSeries,
@@ -189,10 +238,120 @@ function quoteStatus(rowText: string): string {
   if (rowText.includes("售罄")) {
     return "售罄"
   }
-  if (rowText.includes("裝機價") || rowText.includes("限搭機") || rowText.includes("組裝價")) {
+  if (rowText.includes("裝機價") || rowText.includes("限搭機") || rowText.includes("組裝價") || rowText.includes("搭機價")) {
     return "裝機價"
   }
   return "一般"
+}
+
+function taipeiDay(capturedAt: string): string | null {
+  const parsed = new Date(capturedAt)
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+  const parts = taipeiParts(parsed)
+  if (parts === null) {
+    return null
+  }
+  const month = String(parts.month).padStart(2, "0")
+  const day = String(parts.day).padStart(2, "0")
+  return `${parts.year}-${month}-${day}`
+}
+
+function memorySelectHtml(html: string): string | null {
+  const labelAt = html.indexOf(memoryLabel)
+  if (labelAt < 0) {
+    return null
+  }
+  const lower = html.toLowerCase()
+  const selectAt = lower.indexOf("<select", labelAt)
+  if (selectAt < 0) {
+    return null
+  }
+  const endAt = lower.indexOf("</select>", selectAt)
+  if (endAt < 0) {
+    return null
+  }
+  return html.slice(selectAt, endAt + "</select>".length)
+}
+
+function rowsInSelect(selectHtml: string): { text: string; group: string }[] {
+  const rows: { text: string; group: string }[] = []
+  let group = ""
+  const pattern = /<optgroup\b([^>]*)>|<\/optgroup>|<option\b[^>]*>([^<]*)/gi
+  for (const match of selectHtml.matchAll(pattern)) {
+    const tag = match[0]
+    if (tag.toLowerCase().startsWith("</optgroup")) {
+      group = ""
+      continue
+    }
+    if (tag.toLowerCase().startsWith("<optgroup")) {
+      const label = /label=["']([^"']*)["']/i.exec(match[1] ?? "")
+      group = label === null ? "" : (label[1] ?? "")
+      continue
+    }
+    const text = (match[2] ?? "").replace(/\s+/g, " ").trim()
+    if (text.length > 0) {
+      rows.push({ text, group })
+    }
+  }
+  return rows
+}
+
+function memoryCode(text: string): string | null {
+  const commaAt = text.search(/[,，]\s*\$/)
+  if (commaAt < 0) {
+    return null
+  }
+  const stripped = text.slice(0, commaAt).replace(/~(?:組裝價|搭機價|限搭機)~/g, " ").replace(/[｛｝]/g, " ")
+  const code = stripped.replace(/\s+/g, " ").trim()
+  if (code === "") {
+    return null
+  }
+  return code
+}
+
+function sellingPriceOf(text: string): number | null {
+  const arrow = text.indexOf("↘")
+  const region = arrow >= 0 ? text.slice(arrow + 1) : text
+  const amounts = [...region.matchAll(/\$([0-9,]+)/g)]
+  const last = amounts.at(-1)
+  if (last === undefined) {
+    return null
+  }
+  const digits = (last[1] ?? "").replaceAll(",", "")
+  if (!/^[0-9]+$/.test(digits)) {
+    return null
+  }
+  return Number(digits)
+}
+
+function remember(quotes: PreparedSeries["quotes"][number][], next: PreparedSeries["quotes"][number]): void {
+  const existing = quotes.findIndex((quote) => quote.code === next.code && quote.date === next.date)
+  const previous = existing >= 0 ? quotes[existing] : undefined
+  if (previous === undefined) {
+    quotes.push(next)
+    return
+  }
+  if (replacesMemoryQuote(previous, next)) {
+    quotes[existing] = next
+  }
+}
+
+function replacesMemoryQuote(previous: PreparedSeries["quotes"][number], next: PreparedSeries["quotes"][number]): boolean {
+  const order = previous.capturedAt.localeCompare(next.capturedAt)
+  if (order < 0) {
+    return true
+  }
+  if (order > 0) {
+    return false
+  }
+  const previousInstall = quoteStatus(previous.rowText) === "裝機價"
+  const nextInstall = quoteStatus(next.rowText) === "裝機價"
+  if (previousInstall !== nextInstall) {
+    return previousInstall
+  }
+  return next.sellingPrice < previous.sellingPrice
 }
 
 function money(price: number): string {

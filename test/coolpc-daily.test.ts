@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { ingestCoolpc, changesAgainstPrevious, nextCheck, siteCapturedAt, type PreparedSeries } from "../src/coolpc-daily.ts"
+import { ingestCoolpc, ingestMemory, changesAgainstPrevious, nextCheck, siteCapturedAt, type PreparedSeries } from "../src/coolpc-daily.ts"
 
 function atUtc(iso: string): Date {
   return new Date(iso)
@@ -87,5 +87,83 @@ describe("每六小時", () => {
     }
     expect(changesAgainstPrevious(saved.prepared, unchanged.prepared, unchanged.result.capturedAt).lines).toEqual([])
     expect(changesAgainstPrevious(empty, morning.prepared, "2026-10-24T10:05:00.000Z").previousAt).toBeNull()
+  })
+})
+
+const capturedAt = "2026-10-24T10:05:00.000Z"
+
+const memoryPage = `
+  記憶體 RAM
+  <select name="n6">
+    <option>共有商品 2 樣，熱賣 1</option>
+    <optgroup label="桌上型記憶體 DDR4">
+      <option>｛UMAX 16GB DDR4-2666｝(1024*8)CL19, $3750</option>
+      <option>｛UMAX 16GB DDR4-2666｝(2048*8)(CL19, $3950</option>
+      <option>｛UMAX NB 16GB DDR5 5600｝/CL46, $7500 ◆ ★ 熱賣</option>
+      <option>｛UMAX NB 16GB DDR5 5600｝/CL46~搭機價~, $7150 ◆ ★ 熱賣</option>
+    </optgroup>
+    <optgroup label="伺服器專用記憶體 DDR5 RDIMM">
+      <option>芝奇G5 64G(64G*1) D5-5600 C46 ECC REG(F5-5600R4645A64GX1-G5), $92200</option>
+      <option>芝奇G5 64G(64G*1) D5-6400 C52 ECC REG(F5-6400R5252A64GX1-G5), $98000</option>
+    </optgroup>
+  </select>
+`
+
+describe("記憶體報價列", () => {
+  test("括號外的差別各自留著，裝機價併進一般價，統計列不算", () => {
+    const empty: PreparedSeries = { quotes: [], done: [] }
+    const saved = ingestMemory(empty, memoryPage, capturedAt)
+    expect(saved.status).toBe("saved")
+    if (saved.status !== "saved") {
+      return
+    }
+    expect(saved.prepared.quotes.map((quote) => [quote.code, quote.sellingPrice])).toEqual([
+      ["UMAX 16GB DDR4-2666 (1024*8)CL19", 3750],
+      ["UMAX 16GB DDR4-2666 (2048*8)(CL19", 3950],
+      ["UMAX NB 16GB DDR5 5600 /CL46", 7500],
+      ["芝奇G5 64G(64G*1) D5-5600 C46 ECC REG(F5-5600R4645A64GX1-G5)", 92200],
+      ["芝奇G5 64G(64G*1) D5-6400 C52 ECC REG(F5-6400R5252A64GX1-G5)", 98000],
+    ])
+    expect(ingestMemory(saved.prepared, memoryPage, capturedAt).status).toBe("already")
+    expect(ingestMemory(empty, "顯示卡VGA", capturedAt)).toEqual({ status: "no-menu", prepared: empty })
+  })
+
+  test("同一代號沒有一般價時，兩個售價取較低者", () => {
+    const html = `
+      記憶體 RAM
+      <select>
+        <option>｛Biwin DDR5-6000｝CL28 黑, $21890</option>
+        <option>｛Biwin DDR5-6000｝CL28 黑, $21800</option>
+      </select>
+    `
+    const saved = ingestMemory({ quotes: [], done: [] }, html, capturedAt)
+    expect(saved.status).toBe("saved")
+    if (saved.status !== "saved") {
+      return
+    }
+    expect(saved.prepared.quotes.map((quote) => quote.sellingPrice)).toEqual([21800])
+  })
+
+  test("記下後比對上一份記憶體快照", () => {
+    const empty: PreparedSeries = { quotes: [], done: [] }
+    const morning = ingestMemory(empty, memoryPage, capturedAt)
+    const eveningHtml = memoryPage
+      .replace("(1024*8)CL19, $3750", "(1024*8)CL19, $3600")
+      .replace("芝奇G5 64G(64G*1) D5-6400 C52 ECC REG(F5-6400R5252A64GX1-G5), $98000", "｛金士頓 單條16GB DDR5-5600｝/CL46, $8500")
+    const eveningAt = "2026-10-24T11:05:00.000Z"
+    const evening = ingestMemory(morning.prepared, eveningHtml, eveningAt)
+    expect(evening.status).toBe("saved")
+    if (morning.status !== "saved" || evening.status !== "saved") {
+      return
+    }
+    expect(changesAgainstPrevious(morning.prepared, evening.prepared, eveningAt)).toEqual({
+      previousAt: capturedAt,
+      lines: [
+        "售價 UMAX 16GB DDR4-2666 (1024*8)CL19 $3,750 → $3,600",
+        "新增 金士頓 單條16GB DDR5-5600 /CL46 $8,500",
+        "移除 芝奇G5 64G(64G*1) D5-6400 C52 ECC REG(F5-6400R5252A64GX1-G5) $98,000",
+      ],
+    })
+    expect(changesAgainstPrevious(empty, morning.prepared, capturedAt).previousAt).toBeNull()
   })
 })

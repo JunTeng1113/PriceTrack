@@ -1,18 +1,20 @@
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import { readFile, rename, writeFile } from "node:fs/promises"
-import { resolve } from "node:path"
+import { dirname, resolve } from "node:path"
 import { decodePage } from "./page-bytes.ts"
 import { isQuote } from "./quote.ts"
 import {
   changesAgainstPrevious,
   coolpcPageUrl,
   ingestCoolpc,
+  ingestMemory,
   nextCheck,
   taipeiParts,
   type PreparedSeries,
 } from "./coolpc-daily.ts"
 
 const preparedPath = resolve("public/data/series.json")
+const memoryPath = resolve("data/memory-series.json")
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolveWait) => {
@@ -42,11 +44,11 @@ function isPrepared(value: unknown): value is PreparedSeries {
   return value.quotes.every((quote) => isQuote(quote)) && value.done.every((item) => typeof item === "string")
 }
 
-async function readPrepared(): Promise<PreparedSeries | null> {
-  if (!existsSync(preparedPath)) {
+async function readPrepared(path: string): Promise<PreparedSeries | null> {
+  if (!existsSync(path)) {
     return { quotes: [], done: [] }
   }
-  const text = await readFile(preparedPath, "utf8")
+  const text = await readFile(path, "utf8")
   if (!text.startsWith("{")) {
     return null
   }
@@ -57,10 +59,30 @@ async function readPrepared(): Promise<PreparedSeries | null> {
   return { quotes: parsed.quotes, done: parsed.done }
 }
 
-async function save(prepared: PreparedSeries): Promise<void> {
-  const temporary = `${preparedPath}.tmp`
+async function save(path: string, prepared: PreparedSeries): Promise<void> {
+  const directory = dirname(path)
+  if (!existsSync(directory)) {
+    mkdirSync(directory)
+  }
+  const temporary = `${path}.tmp`
   await writeFile(temporary, JSON.stringify(prepared))
-  await rename(temporary, preparedPath)
+  await rename(temporary, path)
+}
+
+function reportChanges(label: string, before: PreparedSeries, after: PreparedSeries, capturedAt: string): void {
+  const compared = changesAgainstPrevious(before, after, capturedAt)
+  if (compared.previousAt === null) {
+    console.log(`${label}沒有上一份快照可比較`)
+    return
+  }
+  console.log(`${label}跟上一次 ${compared.previousAt}`)
+  if (compared.lines.length === 0) {
+    console.log(`${label}沒有不同`)
+    return
+  }
+  for (const line of compared.lines) {
+    console.log(line)
+  }
 }
 
 async function fetchPage(): Promise<{ ok: boolean; status: number; text: string } | null> {
@@ -83,7 +105,7 @@ async function fetchPage(): Promise<{ ok: boolean; status: number; text: string 
 }
 
 async function fetchOnce(): Promise<void> {
-  const prepared = await readPrepared()
+  const prepared = await readPrepared(preparedPath)
   if (prepared === null) {
     console.error("價格檔讀不起來，這次沒有寫入。")
     return
@@ -104,25 +126,39 @@ async function fetchOnce(): Promise<void> {
     console.error("頁面上沒有更新時間。")
     return
   }
-  if (ingested.result.status === "already") {
-    console.log(`這份快照已經記過 ${ingested.result.capturedAt}`)
+  const capturedAt = ingested.result.capturedAt
+  if (ingested.result.status === "saved") {
+    await save(preparedPath, ingested.prepared)
+    console.log(`已記下顯示卡 ${capturedAt}，報價 ${ingested.result.quotes}`)
+    reportChanges("顯示卡", prepared, ingested.prepared, capturedAt)
+  }
+  await recordMemory(fetched.text, capturedAt, ingested.result.status === "already")
+}
+
+async function recordMemory(html: string, capturedAt: string, gpuAlready: boolean): Promise<void> {
+  const prepared = await readPrepared(memoryPath)
+  if (prepared === null) {
+    console.error("記憶體報價讀不起來，這次沒有寫入記憶體。")
+    if (gpuAlready) {
+      console.log(`這份快照已經記過 ${capturedAt}`)
+    }
     return
   }
-  await save(ingested.prepared)
-  console.log(`已記下 ${ingested.result.capturedAt}，報價 ${ingested.result.quotes}`)
-  const compared = changesAgainstPrevious(prepared, ingested.prepared, ingested.result.capturedAt)
-  if (compared.previousAt === null) {
-    console.log("沒有上一份快照可比較")
+  const ingested = ingestMemory(prepared, html, capturedAt)
+  if (ingested.status === "no-menu") {
+    console.error("這頁沒有記憶體選單。")
+    if (gpuAlready) {
+      console.log(`這份快照已經記過 ${capturedAt}`)
+    }
     return
   }
-  console.log(`跟上一次 ${compared.previousAt}`)
-  if (compared.lines.length === 0) {
-    console.log("沒有不同")
+  if (ingested.status === "already") {
+    console.log(gpuAlready ? `這份快照已經記過 ${capturedAt}` : `記憶體這份快照已經記過 ${capturedAt}`)
     return
   }
-  for (const line of compared.lines) {
-    console.log(line)
-  }
+  await save(memoryPath, ingested.prepared)
+  console.log(`已記下記憶體 ${capturedAt}，報價 ${ingested.quotes}`)
+  reportChanges("記憶體", prepared, ingested.prepared, capturedAt)
 }
 
 console.log("原價屋一開就檢查一次，之後每 6 小時再檢查。程式開著才會抓。")
