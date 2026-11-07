@@ -22,7 +22,26 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
-  }
+  },
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JunTeng1113/PriceTrack.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JunTeng1113/PriceTrack/issues"
+  },
+  "homepage": "https://github.com/JunTeng1113/PriceTrack#readme",
+  "description": ""
 }

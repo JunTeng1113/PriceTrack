@@ -86,6 +86,7 @@ function addMonths(isoDate: string, count: number): string {
 }
 
 export type ChartRange = "fit" | "12" | "6" | "3"
+export type IndicatorWindow = "month" | "quarter"
 
 const rangeMonths: Record<Exclude<ChartRange, "fit">, number> = {
   "12": 12,
@@ -686,14 +687,17 @@ function retargetSellingBand(svg: SVGSVGElement, axis: { lower: number; upper: n
 }
 
 function retargetAverage(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
-  retargetLine(svg.querySelector("path[data-trend]"), [...svg.querySelectorAll("circle[data-average]")], axis)
-  retargetLine(svg.querySelector('path[data-percentile="50"]'), [...svg.querySelectorAll('circle[data-percentile="50"]')], axis)
-  retargetLine(svg.querySelector('path[data-percentile="25"]'), [...svg.querySelectorAll('circle[data-percentile="25"]')], axis)
+  for (const window of ["month", "quarter"] as const) {
+    retargetLine(svg.querySelector(`path[data-trend][data-window="${window}"]`), [...svg.querySelectorAll(`circle[data-average][data-window="${window}"]`)], axis)
+    retargetLine(svg.querySelector(`path[data-percentile="50"][data-window="${window}"]`), [...svg.querySelectorAll(`circle[data-percentile="50"][data-window="${window}"]`)], axis)
+    retargetLine(svg.querySelector(`path[data-percentile="25"][data-window="${window}"]`), [...svg.querySelectorAll(`circle[data-percentile="25"][data-window="${window}"]`)], axis)
+    retargetSweetZone(svg, axis, window)
+  }
 }
 
-function retargetSweetZone(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
-  const path = svg.querySelector("path[data-sweet-zone]")
-  const lines = [...svg.querySelectorAll("line[data-sweet-zone]")]
+function retargetSweetZone(svg: SVGSVGElement, axis: { lower: number; upper: number }, window: IndicatorWindow): void {
+  const path = svg.querySelector(`path[data-sweet-zone][data-window="${window}"]`)
+  const lines = [...svg.querySelectorAll(`line[data-sweet-zone][data-window="${window}"]`)]
   if (path === null || lines.length === 0) {
     return
   }
@@ -829,7 +833,6 @@ function retargetPriceMarks(svg: SVGSVGElement, axis: { lower: number; upper: nu
   }
   retargetSellingBand(svg, axis)
   retargetAverage(svg, axis)
-  retargetSweetZone(svg, axis)
   retargetSeriesLabels(svg)
 }
 
@@ -1023,7 +1026,7 @@ function trendChart(trend: View["trend"][number]): string {
     trendLines(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是過去 7 日售價的最高價到最低價，琥珀色面積是甜蜜區，圓點是二手開價，深色線是二手開價的季均線，青線是同一季窗口的 50% 區間，紫線是 25% 區間。50% 與 25% 區間價差 2,000 元以上時，該區段 25% 區間線以下是甜蜜區，適合買來賺價差。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p data-indicator-caption>${indicatorCaption("month")}</p>${chartSvg(marks, "", 'data-trend-chart data-indicator="month"', { start: bounds.start, end: bounds.end })}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -1064,6 +1067,14 @@ function trendBounds(trend: View["trend"][number]): { start: string; end: string
   }
   if (!seen) {
     return null
+  }
+  for (const months of [1, 3]) {
+    for (const point of usedQuarterAverage(trend.used, start, end, months)) {
+      const ceiling = sweetCeiling(point)
+      if (ceiling < low) {
+        low = ceiling
+      }
+    }
   }
   return { start, end, low, high }
 }
@@ -1177,6 +1188,7 @@ function usedQuarterAverage(
   used: readonly { date: string; price: number }[],
   start: string,
   end: string,
+  months = 3,
 ): { date: string; price: number; p25: number; p50: number }[] {
   const days = usedDayPrices(used)
   const points: { date: string; price: number; p25: number; p50: number }[] = []
@@ -1185,7 +1197,7 @@ function usedQuarterAverage(
   }
   let cursor = start
   while (cursor <= end) {
-    const windowStart = addMonths(cursor, -3)
+    const windowStart = addMonths(cursor, -months)
     const prices: number[] = []
     let posts = 0
     for (const day of days) {
@@ -1244,6 +1256,13 @@ function rankedSlice(sorted: readonly number[], start: number, end: number): num
 
 const sweetGap = 2000
 
+function sweetCeiling(point: { p25: number; p50: number }): number {
+  if (point.p50 - point.p25 < sweetGap) {
+    return point.p25 - sweetGap
+  }
+  return point.p25
+}
+
 function trendLines(
   used: readonly { date: string; price: number }[],
   start: string,
@@ -1252,12 +1271,46 @@ function trendLines(
   daySpan: number,
   axis: { lower: number; upper: number },
 ): string {
-  const points = usedQuarterAverage(used, start, end)
   return [
-    sweetArea(points, startDay, daySpan, axis),
-    trendPath(points, (point) => point.price, "data-average", "data-trend", "#1e3a5f", "", startDay, daySpan, axis),
-    trendPath(points, (point) => point.p50, 'data-percentile="50"', 'data-percentile="50"', "#0f766e", "", startDay, daySpan, axis),
-    trendPath(points, (point) => point.p25, 'data-percentile="25"', 'data-percentile="25"', "#7c3aed", ' stroke-dasharray="1.4 0.9"', startDay, daySpan, axis),
+    indicatorSeries(usedQuarterAverage(used, start, end, 1), "month", startDay, daySpan, axis),
+    indicatorSeries(usedQuarterAverage(used, start, end, 3), "quarter", startDay, daySpan, axis),
+  ].join("")
+}
+
+function indicatorCaption(window: IndicatorWindow): string {
+  const average = window === "month" ? "月均線" : "季均線"
+  const span = window === "month" ? "一個月" : "一季"
+  return `藍色面積是過去 7 日售價的最高價到最低價，琥珀色面積是甜蜜區，圓點是二手開價，深色線是二手開價的${average}，青線是同${span}窗口的 50% 區間，紫線是 25% 區間。價差 2,000 元以上時，甜蜜區在 25% 區間線以下；未達 2,000 元時，甜蜜區在 25% 區間再低 2,000 元以下。`
+}
+
+export function applyIndicator(root: ParentNode, window: IndicatorWindow): void {
+  for (const svg of root.querySelectorAll("svg[data-trend-chart]")) {
+    svg.setAttribute("data-indicator", window)
+    for (const node of svg.querySelectorAll("[data-window]")) {
+      if (node.getAttribute("data-window") === window) {
+        node.removeAttribute("hidden")
+      } else {
+        node.setAttribute("hidden", "")
+      }
+    }
+  }
+  for (const caption of root.querySelectorAll("[data-indicator-caption]")) {
+    caption.textContent = indicatorCaption(window)
+  }
+}
+
+function indicatorSeries(
+  points: readonly { date: string; price: number; p25: number; p50: number }[],
+  window: IndicatorWindow,
+  startDay: number,
+  daySpan: number,
+  axis: { lower: number; upper: number },
+): string {
+  return [
+    sweetArea(points, startDay, daySpan, axis, window),
+    trendPath(points, (point) => point.price, "data-average", "data-trend", "#1e3a5f", "", startDay, daySpan, axis, window),
+    trendPath(points, (point) => point.p50, 'data-percentile="50"', 'data-percentile="50"', "#0f766e", "", startDay, daySpan, axis, window),
+    trendPath(points, (point) => point.p25, 'data-percentile="25"', 'data-percentile="25"', "#7c3aed", ' stroke-dasharray="1.4 0.9"', startDay, daySpan, axis, window),
   ].join("")
 }
 
@@ -1266,6 +1319,7 @@ function sweetArea(
   startDay: number,
   daySpan: number,
   axis: { lower: number; upper: number },
+  window: IndicatorWindow,
 ): string {
   const floor = plotBottom.toFixed(2)
   const commands: string[] = []
@@ -1285,20 +1339,16 @@ function sweetArea(
     lower = []
   }
   for (const point of points) {
-    if (point.p50 - point.p25 < sweetGap) {
-      flush()
-      previous = ""
-      continue
-    }
     if (previous !== "" && addDays(previous, 1) !== point.date) {
       flush()
     }
+    const ceiling = sweetCeiling(point)
     const x = xAt(point.date, startDay, daySpan).toFixed(2)
-    const y = yAt(point.p25, axis).toFixed(2)
+    const y = yAt(ceiling, axis).toFixed(2)
     upper.push(`${x} ${y}`)
     lower.push(`${x} ${floor}`)
     spans.push(
-      `<line data-sweet-zone="true" data-date="${escapeAttribute(point.date)}" data-price="${point.p25}" x1="${x}" y1="${y}" x2="${x}" y2="${floor}" stroke="transparent" stroke-width="0" pointer-events="none" />`,
+      `<line data-sweet-zone="true" data-window="${window}"${window === "quarter" ? " hidden" : ""} data-date="${escapeAttribute(point.date)}" data-price="${ceiling}" x1="${x}" y1="${y}" x2="${x}" y2="${floor}" stroke="transparent" stroke-width="0" pointer-events="none" />`,
     )
     previous = point.date
   }
@@ -1306,7 +1356,8 @@ function sweetArea(
   if (commands.length === 0) {
     return ""
   }
-  return `<path data-sweet-zone="true" d="${commands.join("")}" fill="#d97706" fill-opacity="0.45" stroke="#d97706" stroke-width="0.35" pointer-events="none" />${spans.join("")}`
+  const hidden = window === "quarter" ? " hidden" : ""
+  return `<path data-sweet-zone="true" data-window="${window}"${hidden} d="${commands.join("")}" fill="#d97706" fill-opacity="0.45" stroke="#d97706" stroke-width="0.35" pointer-events="none" />${spans.join("")}`
 }
 
 function trendPath(
@@ -1319,6 +1370,7 @@ function trendPath(
   startDay: number,
   daySpan: number,
   axis: { lower: number; upper: number },
+  window: IndicatorWindow,
 ): string {
   if (points.length === 0) {
     return ""
@@ -1334,10 +1386,11 @@ function trendPath(
     path += `${command}${x} ${y}`
     previous = point.date
     marks.push(
-      `<circle ${markAttribute} data-date="${escapeAttribute(point.date)}" data-price="${price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
+      `<circle ${markAttribute} data-window="${window}"${window === "quarter" ? " hidden" : ""} data-date="${escapeAttribute(point.date)}" data-price="${price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
     )
   }
-  return `<path ${pathAttribute} d="${path}" fill="none" stroke="${color}" stroke-width="0.7"${dash} pointer-events="none" />${marks.join("")}`
+  const hidden = window === "quarter" ? " hidden" : ""
+  return `<path ${pathAttribute} data-window="${window}"${hidden} d="${path}" fill="none" stroke="${color}" stroke-width="0.7"${dash} pointer-events="none" />${marks.join("")}`
 }
 
 function trendUsedMarks(
@@ -1419,6 +1472,20 @@ function chartRangeMarkup(): string {
   return `<div role="group" aria-label="圖表日期範圍" class="flex flex-col gap-2">${buttons}</div>`
 }
 
+function indicatorMarkup(): string {
+  const options: { label: string; window: IndicatorWindow }[] = [
+    { label: "月均線", window: "month" },
+    { label: "季均線", window: "quarter" },
+  ]
+  const buttons = options
+    .map((option) => buttonMarkup(option.label, {
+      "aria-pressed": option.window === "month" ? "true" : "false",
+      "aria-label": option.label,
+    }))
+    .join("")
+  return `<div role="group" aria-label="指標" class="flex flex-col gap-2">${buttons}</div>`
+}
+
 function chartControlMarkup(view: View): string {
   const selected = view.modelCharts[0]?.selectedBrands ?? []
   const onSale = buttonMarkup("僅顯示在售", {
@@ -1427,7 +1494,8 @@ function chartControlMarkup(view: View): string {
   })
   const brands = brandMarkup(sharedBrandNames(view), selected)
   const collapse = buttonMarkup("收合", { "aria-label": "收合側邊欄" })
-  return `<aside class="sticky top-0 z-20 flex h-dvh shrink-0 bg-white" aria-label="側邊欄"><div class="flex h-full max-h-dvh flex-col gap-2 overflow-y-auto px-3 py-3 [&_button]:whitespace-nowrap">${collapse}<div data-sidebar-panel class="flex flex-col gap-2">${chartRangeMarkup()}<div role="separator" class="my-4 w-full border-t border-slate-300"></div>${onSale}<div aria-label="品牌" class="flex flex-col gap-2">${brands}</div></div></div></aside>`
+  const separator = `<div role="separator" class="my-4 w-full border-t border-slate-300"></div>`
+  return `<aside class="sticky top-0 z-20 flex h-dvh shrink-0 bg-white" aria-label="側邊欄"><div class="flex h-full max-h-dvh flex-col gap-2 overflow-y-auto px-3 py-3 [&_button]:whitespace-nowrap">${collapse}<div data-sidebar-panel class="flex flex-col gap-2">${chartRangeMarkup()}${separator}${indicatorMarkup()}${separator}${onSale}<div aria-label="品牌" class="flex flex-col gap-2">${brands}</div></div></div></aside>`
 }
 
 function documentHtml(body: string, controls: string): string {

@@ -554,14 +554,14 @@ test("側邊欄的日期範圍同時套到每一張圖，而且側邊欄可以�
   const yearWidth = widthOf(modelGroup)
   const otherYear = widthOf(otherGroup)
 
-  expect(document.querySelector<HTMLButtonElement>('button[aria-label="十二個月"]')?.getAttribute("aria-pressed")).toBe("true")
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="12 個月"]')?.getAttribute("aria-pressed")).toBe("true")
   expect(yearWidth).toBeGreaterThan(400)
   expect(otherYear).toBeGreaterThan(400)
 
-  document.querySelector<HTMLButtonElement>('button[aria-label="三個月"]')?.click()
+  document.querySelector<HTMLButtonElement>('button[aria-label="3 個月"]')?.click()
   expect(widthOf(modelGroup)).toBeGreaterThan(yearWidth)
   expect(widthOf(otherGroup)).toBeGreaterThan(otherYear)
-  expect(document.querySelector<HTMLButtonElement>('button[aria-label="三個月"]')?.getAttribute("aria-pressed")).toBe("true")
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="3 個月"]')?.getAttribute("aria-pressed")).toBe("true")
 
   document.querySelector<HTMLButtonElement>('button[aria-label="整張"]')?.click()
   expect(widthOf(modelGroup)).toBe(400)
@@ -578,6 +578,6 @@ test("側邊欄的日期範圍同時套到每一張圖，而且側邊欄可以�
 
   document.querySelector<HTMLButtonElement>('button[aria-label="展開側邊欄"]')?.click()
   expect(document.querySelector("[data-sidebar-panel]")?.classList.contains("hidden")).toBe(false)
-  expect(document.querySelector<HTMLButtonElement>('button[aria-label="三個月"]')?.getAttribute("aria-pressed")).toBe("false")
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="3 個月"]')?.getAttribute("aria-pressed")).toBe("false")
   expect(document.querySelector<HTMLButtonElement>('button[aria-label="整張"]')?.getAttribute("aria-pressed")).toBe("true")
 })

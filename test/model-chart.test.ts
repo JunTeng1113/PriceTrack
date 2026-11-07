@@ -693,8 +693,10 @@ describe("圖表日期範圍", () => {
     expect(buttons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["false", "true", "false", "false"])
     expect(panel?.children[0]?.getAttribute("aria-label")).toBe("圖表日期範圍")
     expect(panel?.children[1]?.getAttribute("role")).toBe("separator")
-    expect(panel?.children[2]?.getAttribute("aria-label")).toBe("僅顯示在售")
-    expect(panel?.children[3]?.getAttribute("aria-label")).toBe("品牌")
+    expect(panel?.children[2]?.getAttribute("aria-label")).toBe("指標")
+    expect(panel?.children[3]?.getAttribute("role")).toBe("separator")
+    expect(panel?.children[4]?.getAttribute("aria-label")).toBe("僅顯示在售")
+    expect(panel?.children[5]?.getAttribute("aria-label")).toBe("品牌")
     expect(svg?.getAttribute("viewBox")).toBe("0 0 400 100")
     if (!(svg instanceof SVGSVGElement)) {
       throw new Error("缺少售價圖")

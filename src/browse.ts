@@ -1,4 +1,4 @@
-import { adoptChartMark, applyChartMode, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart, type ChartRange } from "./page.ts"
+import { adoptChartMark, applyChartMode, applyIndicator, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart, type ChartRange, type IndicatorWindow } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -432,6 +432,7 @@ export function start(series: PriceSeries): {
   let cacheToken = 0
   let actions: Action[] = []
   let chartRange: ChartRange = "12"
+  let indicator: IndicatorWindow = "month"
   let sidebarCollapsed = false
   const generationCache = new Map<Generation, { view: View; html: string; signature: string }>()
   const generationNames: readonly Generation[] = ["30", "40", "50"]
@@ -621,10 +622,34 @@ export function start(series: PriceSeries): {
         toggle.textContent = sidebarCollapsed ? "展開" : "收合"
       }
       pressRange(chartRange)
+      pressIndicator(indicator)
+      applyIndicator(document, indicator)
+    }
+
+    const pressIndicator = (window: IndicatorWindow): void => {
+      const selected = window === "month" ? "月均線" : "季均線"
+      for (const button of document.querySelectorAll<HTMLButtonElement>('[aria-label="指標"] button')) {
+        button.setAttribute("aria-pressed", button.getAttribute("aria-label") === selected ? "true" : "false")
+      }
     }
 
     const bindSidebar = (): void => {
       syncSidebar()
+      const indicatorGroup = document.querySelector<HTMLElement>('[aria-label="指標"]')
+      if (indicatorGroup !== null && indicatorGroup.dataset.bound !== "true") {
+        indicatorGroup.dataset.bound = "true"
+        for (const button of indicatorGroup.querySelectorAll<HTMLButtonElement>("button")) {
+          button.addEventListener("click", () => {
+            const label = button.getAttribute("aria-label") ?? ""
+            if (label !== "月均線" && label !== "季均線") {
+              return
+            }
+            indicator = label === "月均線" ? "month" : "quarter"
+            pressIndicator(indicator)
+            applyIndicator(document, indicator)
+          })
+        }
+      }
       const toggle = document.querySelector<HTMLButtonElement>('button[aria-label="收合側邊欄"], button[aria-label="展開側邊欄"]')
       toggle?.addEventListener("click", () => {
         sidebarCollapsed = !sidebarCollapsed
