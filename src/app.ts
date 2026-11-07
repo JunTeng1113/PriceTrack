@@ -1,5 +1,6 @@
 import "./index.css"
 import { start } from "./browse.ts"
+import { readThroughCache } from "./cached-fetch.ts"
 import { demoSeries } from "./main.ts"
 import { emptySeries, type PriceSeries } from "./present.ts"
 import { isQuote } from "./quote.ts"
@@ -46,6 +47,10 @@ worker.addEventListener("message", (event: MessageEvent<unknown>) => {
   if (typeof data !== "object" || data === null || !("type" in data) || typeof data.type !== "string") {
     return
   }
+  if (data.type === "reset") {
+    quotes.length = 0
+    return
+  }
   if (data.type === "batch" && "quotes" in data && Array.isArray(data.quotes)) {
     for (const quote of data.quotes) {
       if (isQuote(quote)) {
@@ -74,21 +79,21 @@ worker.addEventListener("error", () => {
   publish()
 })
 
+function applyUsed(text: string): void {
+  if (!text.startsWith("{")) {
+    return
+  }
+  nextPosts = usedPostsFrom(JSON.parse(text))
+  usedReady = true
+  publish()
+}
+
 function loadUsedPosts(): void {
-  void fetch(`${import.meta.env.BASE_URL}data/used.json`, { cache: "no-store" }).then(async (response) => {
-    if (response.ok) {
-      const text = await response.text()
-      if (text.startsWith("{")) {
-        nextPosts = usedPostsFrom(JSON.parse(text))
-      }
+  void readThroughCache(`${import.meta.env.BASE_URL}data/used.json`, applyUsed).then((delivered) => {
+    if (!delivered) {
+      usedReady = true
+      publish()
     }
-    return nextPosts
-  }).then(() => {
-    usedReady = true
-    publish()
-  }, () => {
-    usedReady = true
-    publish()
   })
 }
 
