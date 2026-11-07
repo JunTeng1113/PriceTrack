@@ -121,7 +121,7 @@ test("按下品牌或僅顯示在售時，每一張圖一起篩", () => {
   const codes = (group: string): string[] =>
     [...document.querySelectorAll(`[aria-label="${group}"] [data-code]`)]
       .map((node) => node.getAttribute("data-code") ?? "")
-  const bar = document.querySelector('[aria-label="圖表篩選"]')
+  const bar = document.querySelector('[aria-label="側邊欄"]')
 
   expect(document.querySelectorAll('button[aria-label="僅顯示在售"]')).toHaveLength(1)
   expect(document.querySelectorAll('[aria-label="品牌"]')).toHaveLength(1)
@@ -531,4 +531,53 @@ test("跨很多天的圖不為每個缺日各做一個節點", () => {
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
   expect(svg?.querySelectorAll("[data-day]").length).toBe(0)
   expect(svg?.querySelectorAll("circle[data-date]").length).toBe(4)
+})
+
+test("側邊欄的日期範圍同時套到每一張圖，而且側邊欄可以收合", () => {
+  const otherGroup = "NVIDIA RTX5070-12GB"
+  const other = "華碩 DUAL-RTX5070-O12G"
+  const rows = (price: number, soldOut = false): string =>
+    `<option>${prime}(2505MHz), $${price}</option><option>${windforce}(2497MHz), $${price - 1000}${soldOut ? " 售罄" : ""}</option>`
+  const page = (capturedAt: string): Snapshot => ({
+    capturedAt,
+    html: `
+      <tr><td>顯示卡VGA</td><td><select name="n12">
+        <optgroup label="${modelGroup}">${rows(18990)}</optgroup>
+        <optgroup label="${otherGroup}"><option>${other}(2500MHz), $28990</option></optgroup>
+      </select></td></tr>
+    `,
+  })
+  start(update(emptySeries(), [page("2023-01-15T02:00:00.000Z"), page("2025-06-15T02:00:00.000Z")]))
+
+  const widthOf = (group: string): number =>
+    Number(document.querySelector(`[aria-label="${group}"] svg[data-price-chart]`)?.getAttribute("viewBox")?.split(" ")[2])
+  const yearWidth = widthOf(modelGroup)
+  const otherYear = widthOf(otherGroup)
+
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="十二個月"]')?.getAttribute("aria-pressed")).toBe("true")
+  expect(yearWidth).toBeGreaterThan(400)
+  expect(otherYear).toBeGreaterThan(400)
+
+  document.querySelector<HTMLButtonElement>('button[aria-label="三個月"]')?.click()
+  expect(widthOf(modelGroup)).toBeGreaterThan(yearWidth)
+  expect(widthOf(otherGroup)).toBeGreaterThan(otherYear)
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="三個月"]')?.getAttribute("aria-pressed")).toBe("true")
+
+  document.querySelector<HTMLButtonElement>('button[aria-label="整張"]')?.click()
+  expect(widthOf(modelGroup)).toBe(400)
+  expect(widthOf(otherGroup)).toBe(400)
+
+  document.querySelector<HTMLButtonElement>('button[aria-label="收合側邊欄"]')?.click()
+  expect(document.querySelector("[data-sidebar-panel]")?.classList.contains("hidden")).toBe(true)
+  expect(document.querySelector('button[aria-label="展開側邊欄"]')?.textContent).toBe("展開")
+
+  const older = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')]
+    .find((button) => button.textContent === "30系列")
+  older?.click()
+  expect(document.querySelector("[data-sidebar-panel]")?.classList.contains("hidden")).toBe(true)
+
+  document.querySelector<HTMLButtonElement>('button[aria-label="展開側邊欄"]')?.click()
+  expect(document.querySelector("[data-sidebar-panel]")?.classList.contains("hidden")).toBe(false)
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="三個月"]')?.getAttribute("aria-pressed")).toBe("false")
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="整張"]')?.getAttribute("aria-pressed")).toBe("true")
 })

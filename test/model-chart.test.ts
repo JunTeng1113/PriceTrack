@@ -597,7 +597,7 @@ describe("RTX5060Ti-8GB 型號圖", () => {
 
     expect(new Set(openCodes)).toEqual(new Set([prime, windforce]))
     expect(brandOptions).toEqual(["華碩", "技嘉"])
-    const bar = open.querySelector('[aria-label="圖表篩選"]')
+    const bar = open.querySelector('[aria-label="側邊欄"]')
     const brandRow = open.querySelector('[aria-label="品牌"]')
     expect(bar?.classList.contains("sticky")).toBe(true)
     expect(bar?.classList.contains("top-0")).toBe(true)
@@ -653,23 +653,29 @@ function pathYs(path: string): number[] {
   return ys
 }
 
-describe("超過十二個月的圖表寬度", () => {
+describe("圖表日期範圍", () => {
   const group = "NVIDIA RTX5070-12GB"
   const code = "華碩 DUAL-RTX4070-O12G"
   const row = (price: number): string => `${code}(2535MHz), $${price}`
 
-  test("未超過十二個月時不提供寬度切換", () => {
+  test("未超過十二個月時，十二個月不會把圖拉寬", () => {
     const series = update(emptySeries(), [
       snapshot("2024-01-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
       snapshot("2025-01-15T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
     ])
     const doc = documentOf(renderPage(series, []))
+    const svg = doc.querySelector(`[aria-label="${group}"] svg[data-price-chart]`)
 
     expect(doc.querySelector('[aria-label="圖表寬度"]')).toBeNull()
-    expect(doc.querySelector(`[aria-label="${group}"] svg[data-price-chart]`)?.getAttribute("viewBox")).toBe("0 0 400 100")
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 400 100")
+    if (!(svg instanceof SVGSVGElement)) {
+      throw new Error("缺少售價圖")
+    }
+    applyChartMode(svg, "12")
+    expect(svg.getAttribute("viewBox")).toBe("0 0 400 100")
   })
 
-  test("超過十二個月時可以在整張與十二個月之間切換", () => {
+  test("側邊欄預設十二個月，並可改成六個月、三個月或整張", () => {
     const series = update(emptySeries(), [
       snapshot("2024-01-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
       snapshot("2025-01-16T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
@@ -677,19 +683,25 @@ describe("超過十二個月的圖表寬度", () => {
     const doc = documentOf(renderPage(series, []))
     const section = doc.querySelector(`[aria-label="${group}"]`)
     const svg = section?.querySelector("svg[data-price-chart]")
-    const buttons = [...(section?.querySelectorAll('[aria-label="圖表寬度"] button') ?? [])]
+    const panel = doc.querySelector("[data-sidebar-panel]")
+    const buttons = [...(doc.querySelectorAll('[aria-label="圖表日期範圍"] button') ?? [])]
     const early = svg?.querySelector('[data-date="2024-01-15"]')
     const late = svg?.querySelector('[data-date="2025-01-16"]')
     const earlyX = Number(early?.getAttribute("cx"))
     const lateX = Number(late?.getAttribute("cx"))
 
-    expect(buttons.map((button) => button.textContent)).toEqual(["整張", "十二個月", "整張", "十二個月"])
-    expect(buttons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["true", "false", "true", "false"])
+    expect(doc.querySelectorAll('[aria-label="圖表日期範圍"]')).toHaveLength(1)
+    expect(buttons.map((button) => button.textContent)).toEqual(["整張", "十二個月", "六個月", "三個月"])
+    expect(buttons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["false", "true", "false", "false"])
+    expect(panel?.children[0]?.getAttribute("aria-label")).toBe("圖表日期範圍")
+    expect(panel?.children[1]?.getAttribute("role")).toBe("separator")
+    expect(panel?.children[2]?.getAttribute("aria-label")).toBe("僅顯示在售")
+    expect(panel?.children[3]?.getAttribute("aria-label")).toBe("品牌")
     expect(svg?.getAttribute("viewBox")).toBe("0 0 400 100")
     if (!(svg instanceof SVGSVGElement)) {
       throw new Error("缺少售價圖")
     }
-    applyChartMode(svg, "months")
+    applyChartMode(svg, "12")
 
     const spread = svg.getAttribute("viewBox") ?? ""
     const width = Number(spread.split(" ")[2])
@@ -712,7 +724,16 @@ describe("超過十二個月的圖表寬度", () => {
       throw new Error("缺少價格趨勢")
     }
     expect(trendYs.length).toBeGreaterThan(0)
-    applyChartMode(trend, "months")
+    const yearWidth = Number((svg.getAttribute("viewBox") ?? "").split(" ")[2])
+    applyChartMode(svg, "6")
+    const halfWidth = Number((svg.getAttribute("viewBox") ?? "").split(" ")[2])
+    applyChartMode(svg, "3")
+    const quarterWidth = Number((svg.getAttribute("viewBox") ?? "").split(" ")[2])
+    expect(halfWidth).toBeGreaterThan(yearWidth)
+    expect(quarterWidth).toBeGreaterThan(halfWidth)
+    applyChartMode(svg, "12")
+
+    applyChartMode(trend, "12")
     const spreadTrend = trend.querySelector("path[data-selling-band]")?.getAttribute("d") ?? ""
     expect(pathYs(spreadTrend)).toEqual(trendYs)
     expect(trend.getAttribute("viewBox")?.startsWith("0 0 400")).toBe(false)

@@ -1,4 +1,4 @@
-import { adoptChartMark, applyChartMode, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart } from "./page.ts"
+import { adoptChartMark, applyChartMode, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart, type ChartRange } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -431,6 +431,8 @@ export function start(series: PriceSeries): {
   let renderToken = 0
   let cacheToken = 0
   let actions: Action[] = []
+  let chartRange: ChartRange = "12"
+  let sidebarCollapsed = false
   const generationCache = new Map<Generation, { view: View; html: string; signature: string }>()
   const generationNames: readonly Generation[] = ["30", "40", "50"]
 
@@ -574,24 +576,75 @@ export function start(series: PriceSeries): {
       }
     }
 
-    const bindChartWidths = (root: ParentNode): void => {
-      const groups = root.querySelectorAll<HTMLElement>('[aria-label="圖表寬度"]')
-      for (const group of groups) {
-        if (group.dataset.bound === "true") {
-          continue
-        }
-        group.dataset.bound = "true"
-        const buttons = group.querySelectorAll<HTMLButtonElement>("button")
-        for (const button of buttons) {
-          button.addEventListener("click", () => {
-            const plotted = group.parentElement?.querySelector("svg[data-price-chart], svg[data-trend-chart]") ?? null
-            if (!isSvg(plotted)) {
-              return
-            }
-            const mode = button.getAttribute("aria-label") === "十二個月" ? "months" : "fit"
-            applyChartMode(plotted, mode)
-          })
-        }
+    const rangeFromLabel = (label: string): ChartRange | null => {
+      if (label === "整張") {
+        return "fit"
+      }
+      if (label === "十二個月") {
+        return "12"
+      }
+      if (label === "六個月") {
+        return "6"
+      }
+      if (label === "三個月") {
+        return "3"
+      }
+      return null
+    }
+
+    const pressRange = (mode: ChartRange): void => {
+      const selected = mode === "fit" ? "整張" : mode === "12" ? "十二個月" : mode === "6" ? "六個月" : "三個月"
+      for (const button of document.querySelectorAll<HTMLButtonElement>('[aria-label="圖表日期範圍"] button')) {
+        button.setAttribute("aria-pressed", button.getAttribute("aria-label") === selected ? "true" : "false")
+      }
+    }
+
+    const plottedSvgs = (root: ParentNode): SVGSVGElement[] =>
+      [...root.querySelectorAll("svg[data-price-chart], svg[data-trend-chart]")].filter((node) => isSvg(node))
+
+    const applyRange = (root: ParentNode, mode: ChartRange): void => {
+      for (const svg of plottedSvgs(root)) {
+        applyChartMode(svg, mode)
+      }
+    }
+
+    const syncSidebar = (): void => {
+      const aside = document.querySelector('[aria-label="側邊欄"]')
+      const panel = aside?.querySelector<HTMLElement>("[data-sidebar-panel]")
+      const toggle = aside?.querySelector<HTMLButtonElement>("button")
+      if (panel !== null && panel !== undefined) {
+        panel.classList.toggle("hidden", sidebarCollapsed)
+      }
+      if (toggle !== null && toggle !== undefined && toggle.getAttribute("aria-label")?.endsWith("側邊欄") === true) {
+        toggle.setAttribute("aria-expanded", sidebarCollapsed ? "false" : "true")
+        toggle.setAttribute("aria-label", sidebarCollapsed ? "展開側邊欄" : "收合側邊欄")
+        toggle.textContent = sidebarCollapsed ? "展開" : "收合"
+      }
+      pressRange(chartRange)
+    }
+
+    const bindSidebar = (): void => {
+      syncSidebar()
+      const toggle = document.querySelector<HTMLButtonElement>('button[aria-label="收合側邊欄"], button[aria-label="展開側邊欄"]')
+      toggle?.addEventListener("click", () => {
+        sidebarCollapsed = !sidebarCollapsed
+        syncSidebar()
+      })
+      const group = document.querySelector<HTMLElement>('[aria-label="圖表日期範圍"]')
+      if (group === null || group.dataset.bound === "true") {
+        return
+      }
+      group.dataset.bound = "true"
+      for (const button of group.querySelectorAll<HTMLButtonElement>("button")) {
+        button.addEventListener("click", () => {
+          const mode = rangeFromLabel(button.getAttribute("aria-label") ?? "")
+          if (mode === null) {
+            return
+          }
+          chartRange = mode
+          pressRange(mode)
+          applyRange(document, mode)
+        })
       }
     }
 
@@ -762,15 +815,8 @@ export function start(series: PriceSeries): {
         lockedCode = null
         lockedSvg = null
       }
-      const year = current.closest("[data-chart-width]")?.querySelector('[aria-label="十二個月"]')
-      const wantMonths = year?.getAttribute("aria-pressed") === "true"
-      if (wantMonths) {
-        applyChartMode(current, "fit")
-      }
       current.replaceWith(nextSvg)
-      if (wantMonths) {
-        applyChartMode(nextSvg, "months")
-      }
+      applyChartMode(nextSvg, chartRange)
       bindChart(nextSvg)
       if (latestView !== null) {
         paintUsed(section, usedMarkup(latestView, group, brands, onSaleOnly))
@@ -887,9 +933,8 @@ export function start(series: PriceSeries): {
           continue
         }
         host.append(section)
-        bindChartWidths(section)
-        const svg = section.querySelector("svg[data-price-chart]")
-        if (isSvg(svg)) {
+        applyRange(section, chartRange)
+        for (const svg of plottedSvgs(section)) {
           bindChart(svg)
         }
       }
@@ -935,6 +980,7 @@ export function start(series: PriceSeries): {
     }
 
     const bindShell = (): void => {
+      bindSidebar()
       bindSelect("核心規格", (item) => {
         const trigger = document.querySelector('[aria-label="核心規格"]')
         if (trigger === null) {
@@ -1027,7 +1073,7 @@ export function start(series: PriceSeries): {
     }
 
     const bindDrawnCharts = (): void => {
-      bindChartWidths(document)
+      applyRange(document, chartRange)
       const charts = document.querySelectorAll("svg[data-price-chart]")
       for (const chart of charts) {
         const svg = svgOf(chart)
@@ -1070,7 +1116,6 @@ export function start(series: PriceSeries): {
           return
         }
         host.append(section)
-        bindChartWidths(section)
         const pump = (offset: number): void => {
           if (session !== browseSession || generation !== renderToken || !pageIsOpen() || !svg.isConnected) {
             return
@@ -1096,12 +1141,13 @@ export function start(series: PriceSeries): {
             setTimeout(() => pump(offset + markBatch), 0)
             return
           }
-          if (svg.getAttribute("data-mode") !== "months") {
+          if ((svg.getAttribute("data-mode") ?? "fit") === "fit") {
             rememberChart(chart.group, chartCacheKey(chart.selectedBrands, view.onSaleOnly), svg)
           }
           if (!showPreparedBrand(section, pressedBrands(), onSalePressed())) {
             bindChart(svg)
           }
+          applyRange(section, chartRange)
           setTimeout(() => appendChart(index + 1), 0)
         }
         setTimeout(() => pump(0), 0)

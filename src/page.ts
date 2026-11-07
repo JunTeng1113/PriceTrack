@@ -85,21 +85,37 @@ function addMonths(isoDate: string, count: number): string {
   ].join("-")
 }
 
-function longerThanYear(start: string, end: string): boolean {
-  const limit = addMonths(start, 12)
+export type ChartRange = "fit" | "12" | "6" | "3"
+
+const rangeMonths: Record<Exclude<ChartRange, "fit">, number> = {
+  "12": 12,
+  "6": 6,
+  "3": 3,
+}
+
+function longerThanMonths(start: string, end: string, months: number): boolean {
+  const limit = addMonths(start, months)
   return limit !== "" && end > limit
 }
 
-function yearScale(start: string, end: string): number | null {
-  if (!longerThanYear(start, end)) {
+function windowScale(start: string, end: string, months: number): number | null {
+  if (!longerThanMonths(start, end, months)) {
     return null
   }
-  const windowDays = dayNumber(addMonths(start, 12)) - dayNumber(start)
+  const windowDays = dayNumber(addMonths(start, months)) - dayNumber(start)
   const span = dayNumber(end) - dayNumber(start)
   if (windowDays <= 0 || span <= windowDays) {
     return null
   }
   return span / windowDays
+}
+
+function readChartRange(svg: SVGSVGElement): ChartRange {
+  const value = svg.getAttribute("data-mode") ?? "fit"
+  if (value === "12" || value === "6" || value === "3" || value === "fit") {
+    return value
+  }
+  return "fit"
 }
 
 function spanOf(lines: readonly { quotes: readonly { date: string }[] }[]): { start: string; end: string } | null {
@@ -341,12 +357,10 @@ function chartSvg(
   const named = label === "" ? "" : ` aria-label="${label}"`
   const dated = span === null ? "" : ` data-chart-start="${escapeAttribute(span.start)}" data-chart-end="${escapeAttribute(span.end)}" data-mode="fit"`
   const svg = `<svg ${chartAttribute}${named}${dated} viewBox="0 0 400 100" width="100%" style="display:block;width:100%;height:auto;aspect-ratio:4/1">${marks}</svg>`
-  if (span === null || !longerThanYear(span.start, span.end)) {
+  if (span === null || !longerThanMonths(span.start, span.end, 3)) {
     return svg
   }
-  const fit = buttonMarkup("整張", { "aria-pressed": "true", "aria-label": "整張" })
-  const months = buttonMarkup("十二個月", { "aria-pressed": "false", "aria-label": "十二個月" })
-  return `<div data-chart-width data-mode="fit"><div role="group" aria-label="圖表寬度" class="flex flex-wrap gap-2">${fit}${months}</div><div data-chart-window class="w-full max-w-full overflow-x-auto">${svg}</div></div>`
+  return `<div data-chart-width data-mode="fit"><div data-chart-window class="w-full max-w-full overflow-x-auto">${svg}</div></div>`
 }
 
 const plotSpan = plotRight - plotLeft
@@ -531,58 +545,60 @@ function restoreAxis(svg: SVGSVGElement): void {
   }
 }
 
-function pressWidth(svg: Element, mode: "fit" | "months"): void {
-  const host = chartHost(svg)
-  if (host === null) {
-    return
-  }
-  host.setAttribute("data-mode", mode)
-  const selected = mode === "months" ? "十二個月" : "整張"
-  for (const button of host.querySelectorAll("button")) {
-    button.setAttribute("aria-pressed", button.getAttribute("aria-label") === selected ? "true" : "false")
-  }
+function showFit(svg: SVGSVGElement): void {
+  svg.setAttribute("viewBox", "0 0 400 100")
+  svg.setAttribute("width", "100%")
+  svg.setAttribute("style", "display:block;width:100%;height:auto;aspect-ratio:4/1")
+  svg.setAttribute("data-mode", "fit")
+  chartHost(svg)?.setAttribute("data-mode", "fit")
 }
 
-export function applyChartMode(svg: SVGSVGElement, mode: "fit" | "months"): void {
-  const start = svg.getAttribute("data-chart-start") ?? ""
-  const end = svg.getAttribute("data-chart-end") ?? ""
-  const scale = yearScale(start, end)
-  if (scale === null) {
-    return
-  }
-  const current = svg.getAttribute("data-mode") ?? "fit"
-  if (current === mode) {
-    return
-  }
-  if (mode === "fit") {
-    restoreAxis(svg)
-    scaleTree(svg, scale, false)
-    svg.setAttribute("viewBox", "0 0 400 100")
-    svg.setAttribute("width", "100%")
-    svg.setAttribute("style", "display:block;width:100%;height:auto;aspect-ratio:4/1")
-    svg.setAttribute("data-mode", "fit")
-    pressWidth(svg, "fit")
-    return
-  }
+function showWindow(svg: SVGSVGElement, mode: Exclude<ChartRange, "fit">, scale: number): void {
   scaleTree(svg, scale, true)
   parkAxis(svg, scale)
   const plotWidth = plotLeft + plotSpan * scale
   svg.setAttribute("viewBox", `0 0 ${plotWidth} 100`)
   svg.setAttribute("width", `${(plotWidth / 270) * 100}%`)
   svg.setAttribute("style", `display:block;width:${(plotWidth / 270) * 100}%;height:auto;aspect-ratio:${plotWidth}/100`)
-  svg.setAttribute("data-mode", "months")
-  pressWidth(svg, "months")
+  svg.setAttribute("data-mode", mode)
+  chartHost(svg)?.setAttribute("data-mode", mode)
   const windowEl = svg.closest("[data-chart-window]")
   if (windowEl instanceof HTMLElement) {
     windowEl.scrollLeft = windowEl.scrollWidth
   }
 }
 
-export function adoptChartMark(svg: SVGSVGElement, node: Element): void {
-  if ((svg.getAttribute("data-mode") ?? "fit") !== "months") {
+export function applyChartMode(svg: SVGSVGElement, mode: ChartRange): void {
+  const start = svg.getAttribute("data-chart-start") ?? ""
+  const end = svg.getAttribute("data-chart-end") ?? ""
+  const current = readChartRange(svg)
+  if (current === mode) {
     return
   }
-  const scale = yearScale(svg.getAttribute("data-chart-start") ?? "", svg.getAttribute("data-chart-end") ?? "")
+  if (current !== "fit") {
+    const scale = windowScale(start, end, rangeMonths[current])
+    if (scale !== null) {
+      restoreAxis(svg)
+      scaleTree(svg, scale, false)
+    }
+    showFit(svg)
+  }
+  if (mode === "fit") {
+    return
+  }
+  const scale = windowScale(start, end, rangeMonths[mode])
+  if (scale === null) {
+    return
+  }
+  showWindow(svg, mode, scale)
+}
+
+export function adoptChartMark(svg: SVGSVGElement, node: Element): void {
+  const mode = readChartRange(svg)
+  if (mode === "fit") {
+    return
+  }
+  const scale = windowScale(svg.getAttribute("data-chart-start") ?? "", svg.getAttribute("data-chart-end") ?? "", rangeMonths[mode])
   if (scale === null) {
     return
   }
@@ -972,6 +988,22 @@ function sharedBrandNames(view: View): string[] {
   })
 }
 
+function chartRangeMarkup(): string {
+  const options: { label: string; mode: ChartRange }[] = [
+    { label: "整張", mode: "fit" },
+    { label: "十二個月", mode: "12" },
+    { label: "六個月", mode: "6" },
+    { label: "三個月", mode: "3" },
+  ]
+  const buttons = options
+    .map((option) => buttonMarkup(option.label, {
+      "aria-pressed": option.mode === "12" ? "true" : "false",
+      "aria-label": option.label,
+    }))
+    .join("")
+  return `<div role="group" aria-label="圖表日期範圍" class="flex flex-col gap-2">${buttons}</div>`
+}
+
 function chartControlMarkup(view: View): string {
   const selected = view.modelCharts[0]?.selectedBrands ?? []
   const onSale = buttonMarkup("僅顯示在售", {
@@ -979,7 +1011,8 @@ function chartControlMarkup(view: View): string {
     "aria-label": "僅顯示在售",
   })
   const brands = brandMarkup(sharedBrandNames(view), selected)
-  return `<aside class="sticky top-0 z-20 flex h-dvh shrink-0 items-center bg-white" aria-label="圖表篩選"><div class="flex flex-col gap-2 px-3 [&_button]:whitespace-nowrap">${onSale}<div aria-label="品牌" class="flex flex-col gap-2">${brands}</div></div></aside>`
+  const collapse = buttonMarkup("收合", { "aria-label": "收合側邊欄" })
+  return `<aside class="sticky top-0 z-20 flex h-dvh shrink-0 bg-white" aria-label="側邊欄"><div class="flex h-full max-h-dvh flex-col gap-2 overflow-y-auto px-3 py-3 [&_button]:whitespace-nowrap">${collapse}<div data-sidebar-panel class="flex flex-col gap-2">${chartRangeMarkup()}<div role="separator" class="my-4 w-full border-t border-slate-300"></div>${onSale}<div aria-label="品牌" class="flex flex-col gap-2">${brands}</div></div></div></aside>`
 }
 
 function documentHtml(body: string, controls: string): string {
