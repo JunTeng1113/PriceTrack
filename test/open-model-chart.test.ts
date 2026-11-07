@@ -308,11 +308,7 @@ test("每一條折線懸停都會出現 Tooltip", () => {
   start(series)
 
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
-  const gaps = [...(svg?.querySelectorAll("[data-day]") ?? [])]
-  expect(gaps.length).toBeGreaterThan(0)
-  for (const gap of gaps) {
-    expect(gap.getAttribute("pointer-events")).toBe("none")
-  }
+  expect(svg?.querySelectorAll("[data-day]").length).toBe(0)
 
   for (const code of [prime, windforce]) {
     const line = svg?.querySelector(`line[data-hit="true"][data-code="${code}"]`)
@@ -523,4 +519,16 @@ test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
   expect(document.querySelector(`[aria-label="${other}"]`)).not.toBeNull()
   expect(document.querySelector(`[aria-label="${older}"]`)).toBeNull()
   expect(document.querySelector('[aria-label="核心規格"]')?.textContent).toBe("")
+})
+
+test("跨很多天的圖不為每個缺日各做一個節點", () => {
+  const series = update(emptySeries(), [
+    vga("2024-01-01T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
+    vga("2024-07-01T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`]),
+  ])
+  start(series)
+
+  const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
+  expect(svg?.querySelectorAll("[data-day]").length).toBe(0)
+  expect(svg?.querySelectorAll("circle[data-date]").length).toBe(4)
 })

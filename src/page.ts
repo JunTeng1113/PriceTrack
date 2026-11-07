@@ -611,20 +611,8 @@ function chartMarkList(view: View, connectGaps = false, focus = ""): string[] {
   const endDay = dayNumber(end)
   const daySpan = endDay - startDay
   const marks: string[] = [chartFrame(start, end, axis)]
-  const laneCount = view.series.length
-  const laneHeight = laneCount === 0 ? plotBottom - plotTop : (plotBottom - plotTop) / laneCount
   const labels: { code: string; paint: string; opacity: string; focused: string; y: number }[] = []
   for (const [seriesIndex, item] of view.series.entries()) {
-    const quoted = new Set(item.quotes.map((quote) => quote.date))
-    for (const date of dates) {
-      if (quoted.has(date)) {
-        continue
-      }
-      const x = xAt(date, startDay, daySpan)
-      marks.push(
-        `<rect data-day="${escapeAttribute(date)}" data-code="${escapeAttribute(item.code)}" x="${x - 1}" y="${plotTop + seriesIndex * laneHeight}" width="2" height="${laneHeight}" fill="transparent" pointer-events="none" />`,
-      )
-    }
     const paint = connectGaps ? seriesColor(item.colorIndex ?? seriesIndex) : "currentColor"
     const opacity = focus !== "" && focus !== item.code ? "0.25" : "1"
     let previous: { date: string; price: number; x: number; y: number; dashed: boolean } | null = null
