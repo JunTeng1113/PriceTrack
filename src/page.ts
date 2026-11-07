@@ -691,6 +691,51 @@ function retargetAverage(svg: SVGSVGElement, axis: { lower: number; upper: numbe
   retargetLine(svg.querySelector('path[data-percentile="25"]'), [...svg.querySelectorAll('circle[data-percentile="25"]')], axis)
 }
 
+function retargetSweetZone(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
+  const path = svg.querySelector("path[data-sweet-zone]")
+  const lines = [...svg.querySelectorAll("line[data-sweet-zone]")]
+  if (path === null || lines.length === 0) {
+    return
+  }
+  const floor = plotBottom.toFixed(2)
+  const commands: string[] = []
+  let upper: string[] = []
+  let lower: string[] = []
+  let previous = ""
+  const flush = (): void => {
+    const start = upper[0]
+    if (start === undefined) {
+      return
+    }
+    const forward = upper.slice(1).map((point) => `L${point}`).join("")
+    const back = [...lower].reverse().map((point) => `L${point}`).join("")
+    commands.push(`M${start}${forward}${back}Z`)
+    upper = []
+    lower = []
+  }
+  for (const line of lines) {
+    const price = readNumber(line, "data-price")
+    const date = line.getAttribute("data-date") ?? ""
+    const x = line.getAttribute("x1") ?? ""
+    if (price === null || x === "") {
+      continue
+    }
+    if (previous !== "" && addDays(previous, 1) !== date) {
+      flush()
+    }
+    const y = yAt(price, axis).toFixed(2)
+    line.setAttribute("y1", y)
+    line.setAttribute("y2", floor)
+    upper.push(`${x} ${y}`)
+    lower.push(`${x} ${floor}`)
+    previous = date
+  }
+  flush()
+  if (commands.length > 0) {
+    path.setAttribute("d", commands.join(""))
+  }
+}
+
 function retargetLine(path: Element | null, circles: readonly Element[], axis: { lower: number; upper: number }): void {
   if (path === null || circles.length === 0) {
     return
@@ -784,6 +829,7 @@ function retargetPriceMarks(svg: SVGSVGElement, axis: { lower: number; upper: nu
   }
   retargetSellingBand(svg, axis)
   retargetAverage(svg, axis)
+  retargetSweetZone(svg, axis)
   retargetSeriesLabels(svg)
 }
 
@@ -977,7 +1023,7 @@ function trendChart(trend: View["trend"][number]): string {
     trendLines(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是過去 7 日售價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線，青線是同一季窗口的 50% 區間，紫線是 25% 區間。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是過去 7 日售價的最高價到最低價，琥珀色面積是甜蜜區，圓點是二手開價，深色線是二手開價的季均線，青線是同一季窗口的 50% 區間，紫線是 25% 區間。50% 與 25% 區間價差 2,000 元以上時，該區段 25% 區間線以下是甜蜜區，適合買來賺價差。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -1196,6 +1242,8 @@ function rankedSlice(sorted: readonly number[], start: number, end: number): num
   return (left + right) / 2
 }
 
+const sweetGap = 2000
+
 function trendLines(
   used: readonly { date: string; price: number }[],
   start: string,
@@ -1206,10 +1254,59 @@ function trendLines(
 ): string {
   const points = usedQuarterAverage(used, start, end)
   return [
+    sweetArea(points, startDay, daySpan, axis),
     trendPath(points, (point) => point.price, "data-average", "data-trend", "#1e3a5f", "", startDay, daySpan, axis),
     trendPath(points, (point) => point.p50, 'data-percentile="50"', 'data-percentile="50"', "#0f766e", "", startDay, daySpan, axis),
     trendPath(points, (point) => point.p25, 'data-percentile="25"', 'data-percentile="25"', "#7c3aed", ' stroke-dasharray="1.4 0.9"', startDay, daySpan, axis),
   ].join("")
+}
+
+function sweetArea(
+  points: readonly { date: string; price: number; p25: number; p50: number }[],
+  startDay: number,
+  daySpan: number,
+  axis: { lower: number; upper: number },
+): string {
+  const floor = plotBottom.toFixed(2)
+  const commands: string[] = []
+  const spans: string[] = []
+  let upper: string[] = []
+  let lower: string[] = []
+  let previous = ""
+  const flush = (): void => {
+    const start = upper[0]
+    if (start === undefined) {
+      return
+    }
+    const forward = upper.slice(1).map((point) => `L${point}`).join("")
+    const back = [...lower].reverse().map((point) => `L${point}`).join("")
+    commands.push(`M${start}${forward}${back}Z`)
+    upper = []
+    lower = []
+  }
+  for (const point of points) {
+    if (point.p50 - point.p25 < sweetGap) {
+      flush()
+      previous = ""
+      continue
+    }
+    if (previous !== "" && addDays(previous, 1) !== point.date) {
+      flush()
+    }
+    const x = xAt(point.date, startDay, daySpan).toFixed(2)
+    const y = yAt(point.p25, axis).toFixed(2)
+    upper.push(`${x} ${y}`)
+    lower.push(`${x} ${floor}`)
+    spans.push(
+      `<line data-sweet-zone="true" data-date="${escapeAttribute(point.date)}" data-price="${point.p25}" x1="${x}" y1="${y}" x2="${x}" y2="${floor}" stroke="transparent" stroke-width="0" pointer-events="none" />`,
+    )
+    previous = point.date
+  }
+  flush()
+  if (commands.length === 0) {
+    return ""
+  }
+  return `<path data-sweet-zone="true" d="${commands.join("")}" fill="#d97706" fill-opacity="0.45" stroke="#d97706" stroke-width="0.35" pointer-events="none" />${spans.join("")}`
 }
 
 function trendPath(
