@@ -299,11 +299,9 @@ describe("每個晶片分組一張圖", () => {
     expect(Number(name?.getAttribute("x"))).toBeGreaterThan(Number(yLabel?.getAttribute("x")))
     expect(svg?.querySelector('[data-axis="grid"]')).not.toBeNull()
     expect([...(svg?.querySelectorAll('text[data-axis="x"]') ?? [])].map((node) => node.textContent)).toEqual([])
-    expect(prices).toHaveLength(11)
-    expect(prices[0]).toBe(Math.round(17990 * 0.95))
-    expect(prices[10]).toBe(Math.round(18990 * 1.05))
-    expect(yTexts).toContain("$17,091")
-    expect(yTexts).toContain("$19,940")
+    expect(prices).toEqual([17700, 17900, 18100, 18300, 18500, 18700, 18900, 19100, 19300, 19500, 19700])
+    expect(yTexts).toContain("$17,700")
+    expect(yTexts).toContain("$19,700")
     expect(Number(name?.getAttribute("x"))).toBeGreaterThan(Number(lastPoint?.getAttribute("cx")))
     expect(svg?.querySelector('[aria-label="圖例"]')).toBeNull()
   })
@@ -658,7 +656,7 @@ describe("圖表日期範圍", () => {
   const code = "華碩 DUAL-RTX4070-O12G"
   const row = (price: number): string => `${code}(2535MHz), $${price}`
 
-  test("未超過十二個月時，十二個月不會把圖拉寬", () => {
+  test("未超過12 個月時，12 個月不會把圖拉寬", () => {
     const series = update(emptySeries(), [
       snapshot("2024-01-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
       snapshot("2025-01-15T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
@@ -675,7 +673,7 @@ describe("圖表日期範圍", () => {
     expect(svg.getAttribute("viewBox")).toBe("0 0 400 100")
   })
 
-  test("側邊欄預設十二個月，並可改成六個月、三個月或整張", () => {
+  test("側邊欄預設12 個月，並可改成6 個月、3 個月或整張", () => {
     const series = update(emptySeries(), [
       snapshot("2024-01-15T02:00:00.000Z", [{ label: group, rows: [row(18990)] }]),
       snapshot("2025-01-16T02:00:00.000Z", [{ label: group, rows: [row(17990)] }]),
@@ -691,7 +689,7 @@ describe("圖表日期範圍", () => {
     const lateX = Number(late?.getAttribute("cx"))
 
     expect(doc.querySelectorAll('[aria-label="圖表日期範圍"]')).toHaveLength(1)
-    expect(buttons.map((button) => button.textContent)).toEqual(["整張", "十二個月", "六個月", "三個月"])
+    expect(buttons.map((button) => button.textContent)).toEqual(["整張", "12 個月", "6 個月", "3 個月"])
     expect(buttons.map((button) => button.getAttribute("aria-pressed"))).toEqual(["false", "true", "false", "false"])
     expect(panel?.children[0]?.getAttribute("aria-label")).toBe("圖表日期範圍")
     expect(panel?.children[1]?.getAttribute("role")).toBe("separator")
@@ -735,16 +733,65 @@ describe("圖表日期範圍", () => {
 
     applyChartMode(trend, "12")
     const spreadTrend = trend.querySelector("path[data-selling-band]")?.getAttribute("d") ?? ""
-    expect(pathYs(spreadTrend)).toEqual(trendYs)
+    const trendLabels = [...(trend.closest("[data-chart-width]")?.querySelectorAll('text[data-axis="y"]') ?? [])]
+      .map((node) => Number((node.textContent ?? "").replaceAll("$", "").replaceAll(",", "")))
+      .sort((left, right) => left - right)
+    expect(pathYs(spreadTrend)).not.toEqual(trendYs)
+    expect(trendLabels[0]).toBe(17800)
+    expect(trendLabels[1]).toBe(17900)
+    expect(trendLabels[10]).toBe(18800)
     expect(trend.getAttribute("viewBox")?.startsWith("0 0 400")).toBe(false)
     expect(trend.closest("[data-chart-width]")?.querySelector("svg[data-chart-axis]")).not.toBeNull()
 
     applyChartMode(trend, "fit")
     applyChartMode(svg, "fit")
+    expect(pathYs(trend.querySelector("path[data-selling-band]")?.getAttribute("d") ?? "")).toEqual(trendYs)
 
     expect(svg.getAttribute("viewBox")).toBe("0 0 400 100")
     expect(section?.querySelector("svg[data-chart-axis]")).toBeNull()
+    const restored = [...(svg.querySelectorAll('text[data-axis="y"]') ?? [])]
+      .map((node) => Number((node.textContent ?? "").replaceAll("$", "").replaceAll(",", "")))
+      .sort((left, right) => left - right)
+    expect(restored[0]).toBe(17700)
+    expect(restored[1]).toBe(17900)
+    expect(restored[10]).toBe(19700)
     expect(svg.querySelector("text[data-series-label]")?.textContent).toBe(code)
     expect(Number(svg.querySelector('[data-date="2025-01-16"]')?.getAttribute("cx"))).toBeCloseTo(lateX, 5)
+  })
+
+  test("3 個月只看得到近期售價時，Step 與 Tick 1 依該段重算", () => {
+    const series = update(emptySeries(), [
+      snapshot("2023-01-15T02:00:00.000Z", [{ label: group, rows: [row(40000)] }]),
+      snapshot("2024-05-01T02:00:00.000Z", [{ label: group, rows: [row(12000)] }]),
+      snapshot("2024-06-20T02:00:00.000Z", [{ label: group, rows: [row(15000)] }]),
+    ])
+    const doc = documentOf(renderPage(series, []))
+    const svg = doc.querySelector(`[aria-label="${group}"] svg[data-price-chart]`)
+    if (!(svg instanceof SVGSVGElement)) {
+      throw new Error("缺少售價圖")
+    }
+    applyChartMode(svg, "3")
+    const prices = [...(svg.closest("[data-chart-width]")?.querySelectorAll('text[data-axis="y"]') ?? [])]
+      .map((node) => Number((node.textContent ?? "").replaceAll("$", "").replaceAll(",", "")))
+      .sort((left, right) => left - right)
+
+    expect(prices).toEqual([11600, 12000, 12400, 12800, 13200, 13600, 14000, 14400, 14800, 15200, 15600])
+  })
+
+  test("查詢區間改變後，金額軸依新區間的售價重算", () => {
+    const series = update(emptySeries(), [
+      snapshot("2024-01-15T02:00:00.000Z", [{ label: group, rows: [row(40000)] }]),
+      snapshot("2024-06-20T02:00:00.000Z", [{ label: group, rows: [row(15000)] }]),
+    ])
+    const wide = documentOf(renderPage(series, []))
+    const narrow = documentOf(renderPage(series, [{ type: "setRange", start: "2024-06-01", end: "2024-06-30" }]))
+    const labels = (doc: Document): number[] =>
+      [...doc.querySelectorAll(`[aria-label="${group}"] svg[data-price-chart] text[data-axis="y"]`)]
+        .map((node) => Number((node.textContent ?? "").replaceAll("$", "").replaceAll(",", "")))
+        .sort((left, right) => left - right)
+
+    expect(labels(wide)[0]).toBe(11800)
+    expect(labels(wide)[1]).toBe(15000)
+    expect(labels(narrow)).toEqual([14900, 15000, 15100, 15200, 15300, 15400, 15500, 15600, 15700, 15800, 15900])
   })
 })

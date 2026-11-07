@@ -759,7 +759,12 @@ function priceAxis(
 }
 
 export function steppedPriceBounds(min: number, max: number): { lower: number; upper: number } {
-  return { lower: min * 0.95, upper: max * 1.05 }
+  const baseMin = Math.floor(min / 100) * 100
+  const baseMax = Math.floor((max + 100) / 100) * 100
+  const hundredSteps = Math.ceil((baseMax - baseMin) / 800)
+  const step = hundredSteps > 0 ? hundredSteps * 100 : 100
+  const lower = baseMin - step
+  return { lower, upper: lower + step * 10 }
 }
 
 function vgaSelectHtml(html: string): string | null {

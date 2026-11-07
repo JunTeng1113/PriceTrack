@@ -568,6 +568,270 @@ function showWindow(svg: SVGSVGElement, mode: Exclude<ChartRange, "fit">, scale:
   }
 }
 
+function isoFromDayNumber(day: number): string {
+  const date = new Date(day * 86400000)
+  return [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-")
+}
+
+function visibleStart(start: string, end: string, mode: ChartRange): string {
+  if (mode === "fit" || start === "" || end === "") {
+    return start
+  }
+  const limit = addMonths(start, rangeMonths[mode])
+  if (limit === "" || end <= limit) {
+    return start
+  }
+  const windowDays = dayNumber(limit) - dayNumber(start)
+  if (windowDays <= 0) {
+    return start
+  }
+  return isoFromDayNumber(dayNumber(end) - windowDays)
+}
+
+function inWindow(date: string, start: string, end: string): boolean {
+  return date !== "" && date >= start && date <= end
+}
+
+function parseAxisPrice(text: string): number | null {
+  const digits = text.replaceAll("$", "").replaceAll(",", "")
+  if (!/^-?\d+(?:\.\d+)?$/.test(digits)) {
+    return null
+  }
+  const value = Number(digits)
+  return Number.isFinite(value) ? value : null
+}
+
+function fullPriceAxis(svg: SVGSVGElement): { lower: number; upper: number } | null {
+  const storedLower = readNumber(svg, "data-full-lower")
+  const storedUpper = readNumber(svg, "data-full-upper")
+  if (storedLower !== null && storedUpper !== null && storedUpper > storedLower) {
+    return { lower: storedLower, upper: storedUpper }
+  }
+  const prices: number[] = []
+  for (const label of svg.querySelectorAll('text[data-axis="y"]')) {
+    const price = parseAxisPrice(label.textContent ?? "")
+    if (price !== null) {
+      prices.push(price)
+    }
+  }
+  prices.sort((left, right) => left - right)
+  const lower = prices[0]
+  const upper = prices.at(-1)
+  if (lower === undefined || upper === undefined || upper <= lower) {
+    return null
+  }
+  svg.setAttribute("data-full-lower", String(lower))
+  svg.setAttribute("data-full-upper", String(upper))
+  return { lower, upper }
+}
+
+function pricesInWindow(svg: SVGSVGElement, start: string, end: string): number[] {
+  const prices: number[] = []
+  const push = (value: number | null): void => {
+    if (value !== null) {
+      prices.push(value)
+    }
+  }
+  for (const node of svg.querySelectorAll("[data-date]")) {
+    const date = node.getAttribute("data-date") ?? ""
+    if (!inWindow(date, start, end)) {
+      continue
+    }
+    push(readNumber(node, "data-price"))
+    push(readNumber(node, "data-low"))
+    push(readNumber(node, "data-high"))
+  }
+  for (const node of svg.querySelectorAll("line[data-from-date]")) {
+    const from = node.getAttribute("data-from-date") ?? ""
+    const to = node.getAttribute("data-to-date") ?? ""
+    if (inWindow(from, start, end)) {
+      push(readNumber(node, "data-from-price"))
+    }
+    if (inWindow(to, start, end)) {
+      push(readNumber(node, "data-to-price"))
+    }
+  }
+  return prices
+}
+
+function retargetSellingBand(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
+  const path = svg.querySelector("path[data-selling-band]")
+  const lines = [...svg.querySelectorAll("line[data-selling-band]")]
+  if (path === null || lines.length === 0) {
+    return
+  }
+  const upper: string[] = []
+  const lower: string[] = []
+  for (const line of lines) {
+    const x = line.getAttribute("x1") ?? ""
+    const high = readNumber(line, "data-high")
+    const low = readNumber(line, "data-low")
+    if (x === "" || high === null || low === null) {
+      continue
+    }
+    upper.push(`${x} ${yAt(high, axis).toFixed(2)}`)
+    lower.push(`${x} ${yAt(low, axis).toFixed(2)}`)
+  }
+  const start = upper[0]
+  if (start === undefined) {
+    return
+  }
+  const forward = upper.slice(1).map((point) => `L${point}`).join("")
+  const back = [...lower].reverse().map((point) => `L${point}`).join("")
+  path.setAttribute("d", `M${start}${forward}${back}Z`)
+}
+
+function retargetAverage(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
+  const path = svg.querySelector("path[data-trend]")
+  const circles = [...svg.querySelectorAll("circle[data-average]")]
+  if (path === null || circles.length === 0) {
+    return
+  }
+  let drawn = ""
+  let previous = ""
+  for (const circle of circles) {
+    const price = readNumber(circle, "data-price")
+    const date = circle.getAttribute("data-date") ?? ""
+    const x = circle.getAttribute("cx") ?? ""
+    if (price === null || x === "") {
+      continue
+    }
+    const y = yAt(price, axis).toFixed(2)
+    circle.setAttribute("cy", y)
+    const command = previous !== "" && addDays(previous, 1) === date ? "L" : "M"
+    drawn += `${command}${x} ${y}`
+    previous = date
+  }
+  if (drawn !== "") {
+    path.setAttribute("d", drawn)
+  }
+}
+
+function retargetSeriesLabels(svg: SVGSVGElement): void {
+  const labels = [...svg.querySelectorAll("text[data-series-label]")]
+  if (labels.length === 0) {
+    return
+  }
+  const circles = [...svg.querySelectorAll("circle[data-code][data-date]")]
+  const preferred = labels.map((label) => {
+    const code = label.getAttribute("data-code") ?? ""
+    let y = Number(label.getAttribute("y"))
+    for (const circle of circles) {
+      if (circle.getAttribute("data-code") !== code) {
+        continue
+      }
+      const next = readNumber(circle, "cy")
+      if (next !== null) {
+        y = next
+      }
+    }
+    return Number.isFinite(y) ? y : labelTop
+  })
+  const placed = spreadLabelYs(preferred, labelStyle(labels.length).gap)
+  for (const [index, label] of labels.entries()) {
+    const y = placed[index]
+    if (y !== undefined) {
+      label.setAttribute("y", String(y))
+    }
+  }
+}
+
+function retargetPriceMarks(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
+  for (const node of svg.querySelectorAll("circle[data-price]")) {
+    const price = readNumber(node, "data-price")
+    if (price === null) {
+      continue
+    }
+    const y = String(yAt(price, axis))
+    node.setAttribute("cy", y)
+    const twin = node.nextElementSibling
+    if (
+      twin !== null
+      && twin.tagName.toLowerCase() === "circle"
+      && twin.getAttribute("data-price") === null
+      && twin.getAttribute("data-date") === null
+    ) {
+      twin.setAttribute("cy", y)
+    }
+  }
+  for (const node of svg.querySelectorAll("line[data-from-price]")) {
+    const from = readNumber(node, "data-from-price")
+    const to = readNumber(node, "data-to-price")
+    if (from !== null) {
+      node.setAttribute("y1", String(yAt(from, axis)))
+    }
+    if (to !== null) {
+      node.setAttribute("y2", String(yAt(to, axis)))
+    }
+  }
+  for (const node of svg.querySelectorAll("line[data-high]")) {
+    const high = readNumber(node, "data-high")
+    const low = readNumber(node, "data-low")
+    if (high !== null) {
+      node.setAttribute("y1", String(yAt(high, axis)))
+    }
+    if (low !== null) {
+      node.setAttribute("y2", String(yAt(low, axis)))
+    }
+  }
+  retargetSellingBand(svg, axis)
+  retargetAverage(svg, axis)
+  retargetSeriesLabels(svg)
+}
+
+function retargetPriceGrid(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
+  const ticks = priceTicks(axis.lower, axis.upper)
+  const grid = svg.querySelector('[data-axis="grid"]')
+  if (grid !== null) {
+    const path = grid.getAttribute("d") ?? ""
+    const vertical = path.split(/(?=M)/i).filter((part) => /V/i.test(part)).join("").trim()
+    const horizontal = ticks.map((price) => `M${plotLeft} ${yAt(price, axis)} H${plotRight}`).join(" ")
+    grid.setAttribute("d", vertical === "" ? horizontal : `${horizontal} ${vertical}`)
+  }
+  const labels = [...svg.querySelectorAll('text[data-axis="y"]')]
+  for (const [index, label] of labels.entries()) {
+    const price = ticks[index]
+    if (price === undefined) {
+      continue
+    }
+    label.setAttribute("y", String(yAt(price, axis)))
+    label.textContent = formatPrice(price)
+  }
+}
+
+function applyVisiblePriceAxis(svg: SVGSVGElement, mode: ChartRange): void {
+  const full = fullPriceAxis(svg)
+  if (full === null) {
+    return
+  }
+  const start = svg.getAttribute("data-chart-start") ?? ""
+  const end = svg.getAttribute("data-chart-end") ?? ""
+  let axis = full
+  if (mode !== "fit") {
+    const prices = pricesInWindow(svg, visibleStart(start, end, mode), end)
+    const first = prices[0]
+    if (first !== undefined) {
+      let min = first
+      let max = first
+      for (const price of prices) {
+        if (price < min) {
+          min = price
+        }
+        if (price > max) {
+          max = price
+        }
+      }
+      axis = steppedPriceBounds(min, max)
+    }
+  }
+  retargetPriceGrid(svg, axis)
+  retargetPriceMarks(svg, axis)
+}
+
 export function applyChartMode(svg: SVGSVGElement, mode: ChartRange): void {
   const start = svg.getAttribute("data-chart-start") ?? ""
   const end = svg.getAttribute("data-chart-end") ?? ""
@@ -583,14 +847,15 @@ export function applyChartMode(svg: SVGSVGElement, mode: ChartRange): void {
     }
     showFit(svg)
   }
-  if (mode === "fit") {
-    return
+  if (mode !== "fit") {
+    const scale = windowScale(start, end, rangeMonths[mode])
+    if (scale !== null) {
+      applyVisiblePriceAxis(svg, mode)
+      showWindow(svg, mode, scale)
+      return
+    }
   }
-  const scale = windowScale(start, end, rangeMonths[mode])
-  if (scale === null) {
-    return
-  }
-  showWindow(svg, mode, scale)
+  applyVisiblePriceAxis(svg, "fit")
 }
 
 export function adoptChartMark(svg: SVGSVGElement, node: Element): void {
@@ -991,9 +1256,9 @@ function sharedBrandNames(view: View): string[] {
 function chartRangeMarkup(): string {
   const options: { label: string; mode: ChartRange }[] = [
     { label: "整張", mode: "fit" },
-    { label: "十二個月", mode: "12" },
-    { label: "六個月", mode: "6" },
-    { label: "三個月", mode: "3" },
+    { label: "12 個月", mode: "12" },
+    { label: "6 個月", mode: "6" },
+    { label: "3 個月", mode: "3" },
   ]
   const buttons = options
     .map((option) => buttonMarkup(option.label, {
