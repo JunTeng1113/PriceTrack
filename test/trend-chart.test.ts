@@ -82,11 +82,25 @@ test("售價連成面積，二手開價只留散佈點", () => {
   expect(used[1]?.closest("a")?.getAttribute("href")).toBe("https://example.com/posts/8000")
   expect(chart?.textContent).toContain("過去 7 日售價的最高價到最低價")
   expect(chart?.textContent).toContain("季均線")
+  expect(chart?.textContent).toContain("50% 區間")
+  expect(chart?.textContent).toContain("25% 區間")
+  expect(chart?.textContent).not.toContain("75%")
   expect(chart?.textContent).not.toContain("半月均線")
+  expect(chart?.querySelector('path[data-percentile="75"]')).toBeNull()
   expect(averages(chart).map(([date, price]) => [date, Number(price)])).toEqual([
     ["2024-06-15", 7500],
     ["2024-06-16", 7500],
     ["2024-06-17", 11250],
+  ])
+  expect(percentiles(chart, "50").map(([date, price]) => [date, Number(price)])).toEqual([
+    ["2024-06-15", 7500],
+    ["2024-06-16", 7500],
+    ["2024-06-17", 11250],
+  ])
+  expect(percentiles(chart, "25").map(([date, price]) => [date, Number(price)])).toEqual([
+    ["2024-06-15", 7500],
+    ["2024-06-16", 7500],
+    ["2024-06-17", 7500],
   ])
   expect(doc.querySelector("svg[data-trend-chart]")?.getAttribute("data-price-chart")).toBeNull()
 })
@@ -167,6 +181,11 @@ test("季均線隨日期滾動，滿一季後剔除窗口外的每日開價", ()
   expect(rows.find((row) => row[0] === "2024-06-10")?.[1]).toBe("13500")
   expect(Number(rows.find((row) => row[0] === "2024-06-20")?.[1])).toBeCloseTo(47000 / 3, 5)
   expect(rows.find((row) => row[0] === "2024-09-02")?.[1]).toBe("18000")
+  expect(percentiles(chart, "50").find((row) => row[0] === "2024-06-20")?.[1]).toBe("16000")
+  expect(percentiles(chart, "25").find((row) => row[0] === "2024-06-20")?.[1]).toBe("11000")
+  expect(percentiles(chart, "50").find((row) => row[0] === "2024-09-02")?.[1]).toBe("18000")
+  expect(percentiles(chart, "25").find((row) => row[0] === "2024-09-02")?.[1]).toBe("16000")
+  expect(chart?.querySelector('path[data-percentile="75"]')).toBeNull()
 })
 
 function bands(root: ParentNode | null, attribute: string): string[][] {
@@ -179,6 +198,13 @@ function bands(root: ParentNode | null, attribute: string): string[][] {
 
 function averages(root: ParentNode | null): string[][] {
   return [...(root?.querySelectorAll("[data-average]") ?? [])].map((node) => [
+    node.getAttribute("data-date") ?? "",
+    node.getAttribute("data-price") ?? "",
+  ])
+}
+
+function percentiles(root: ParentNode | null, share: "25" | "50"): string[][] {
+  return [...(root?.querySelectorAll(`circle[data-percentile="${share}"]`) ?? [])].map((node) => [
     node.getAttribute("data-date") ?? "",
     node.getAttribute("data-price") ?? "",
   ])

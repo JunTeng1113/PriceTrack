@@ -686,8 +686,12 @@ function retargetSellingBand(svg: SVGSVGElement, axis: { lower: number; upper: n
 }
 
 function retargetAverage(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
-  const path = svg.querySelector("path[data-trend]")
-  const circles = [...svg.querySelectorAll("circle[data-average]")]
+  retargetLine(svg.querySelector("path[data-trend]"), [...svg.querySelectorAll("circle[data-average]")], axis)
+  retargetLine(svg.querySelector('path[data-percentile="50"]'), [...svg.querySelectorAll('circle[data-percentile="50"]')], axis)
+  retargetLine(svg.querySelector('path[data-percentile="25"]'), [...svg.querySelectorAll('circle[data-percentile="25"]')], axis)
+}
+
+function retargetLine(path: Element | null, circles: readonly Element[], axis: { lower: number; upper: number }): void {
   if (path === null || circles.length === 0) {
     return
   }
@@ -970,10 +974,10 @@ function trendChart(trend: View["trend"][number]): string {
   const marks = [
     chartFrame(bounds.start, bounds.end, axis),
     priceArea(sellingBands(trend.series), "data-selling-band", "#1d4ed8", startDay, daySpan, axis),
-    trendAverage(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
+    trendLines(trend.used, bounds.start, bounds.end, startDay, daySpan, axis),
     trendUsedMarks(trend.used, startDay, daySpan, axis),
   ].join("")
-  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是過去 7 日售價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
+  return `<section aria-label="價格趨勢" class="flex flex-col gap-2"><h2 class="font-medium">價格趨勢</h2><p>藍色面積是過去 7 日售價的最高價到最低價，圓點是二手開價，深色線是二手開價的季均線，青線是同一季窗口的 50% 區間，紫線是 25% 區間。</p>${chartSvg(marks, "", "data-trend-chart", { start: bounds.start, end: bounds.end })}</section>`
 }
 
 function trendBounds(trend: View["trend"][number]): { start: string; end: string; low: number; high: number } | null {
@@ -1127,17 +1131,16 @@ function usedQuarterAverage(
   used: readonly { date: string; price: number }[],
   start: string,
   end: string,
-): { date: string; price: number }[] {
+): { date: string; price: number; p25: number; p50: number }[] {
   const days = usedDayPrices(used)
-  const points: { date: string; price: number }[] = []
+  const points: { date: string; price: number; p25: number; p50: number }[] = []
   if (days.length === 0 || start > end) {
     return points
   }
   let cursor = start
   while (cursor <= end) {
     const windowStart = addMonths(cursor, -3)
-    let sum = 0
-    let count = 0
+    const prices: number[] = []
     let posts = 0
     for (const day of days) {
       if (day.date < windowStart) {
@@ -1146,12 +1149,21 @@ function usedQuarterAverage(
       if (day.date > cursor) {
         break
       }
-      sum += day.price
-      count += 1
+      prices.push(day.price)
       posts += day.count
     }
-    if (posts >= 2 && count > 0) {
-      points.push({ date: cursor, price: sum / count })
+    if (posts >= 2 && prices.length > 0) {
+      let sum = 0
+      for (const price of prices) {
+        sum += price
+      }
+      const sorted = [...prices].sort((left, right) => left - right)
+      points.push({
+        date: cursor,
+        price: sum / prices.length,
+        p25: rankedPrice(sorted, 25),
+        p50: rankedPrice(sorted, 50),
+      })
     }
     const next = addDays(cursor, 1)
     if (next <= cursor) {
@@ -1162,7 +1174,29 @@ function usedQuarterAverage(
   return points
 }
 
-function trendAverage(
+function rankedPrice(sorted: readonly number[], share: 25 | 50): number {
+  const count = sorted.length
+  if (share === 50) {
+    return rankedSlice(sorted, 0, count)
+  }
+  return rankedSlice(sorted, 0, Math.floor(count / 2))
+}
+
+function rankedSlice(sorted: readonly number[], start: number, end: number): number {
+  const count = end - start
+  if (count <= 0) {
+    return sorted[start] ?? 0
+  }
+  const mid = start + Math.floor(count / 2)
+  if (count % 2 === 1) {
+    return sorted[mid] ?? 0
+  }
+  const left = sorted[mid - 1] ?? 0
+  const right = sorted[mid] ?? 0
+  return (left + right) / 2
+}
+
+function trendLines(
   used: readonly { date: string; price: number }[],
   start: string,
   end: string,
@@ -1171,6 +1205,24 @@ function trendAverage(
   axis: { lower: number; upper: number },
 ): string {
   const points = usedQuarterAverage(used, start, end)
+  return [
+    trendPath(points, (point) => point.price, "data-average", "data-trend", "#1e3a5f", "", startDay, daySpan, axis),
+    trendPath(points, (point) => point.p50, 'data-percentile="50"', 'data-percentile="50"', "#0f766e", "", startDay, daySpan, axis),
+    trendPath(points, (point) => point.p25, 'data-percentile="25"', 'data-percentile="25"', "#7c3aed", ' stroke-dasharray="1.4 0.9"', startDay, daySpan, axis),
+  ].join("")
+}
+
+function trendPath(
+  points: readonly { date: string; price: number; p25: number; p50: number }[],
+  priceOf: (point: { date: string; price: number; p25: number; p50: number }) => number,
+  markAttribute: string,
+  pathAttribute: string,
+  color: string,
+  dash: string,
+  startDay: number,
+  daySpan: number,
+  axis: { lower: number; upper: number },
+): string {
   if (points.length === 0) {
     return ""
   }
@@ -1178,16 +1230,17 @@ function trendAverage(
   let previous = ""
   const marks: string[] = []
   for (const point of points) {
+    const price = priceOf(point)
     const x = xAt(point.date, startDay, daySpan).toFixed(2)
-    const y = yAt(point.price, axis).toFixed(2)
+    const y = yAt(price, axis).toFixed(2)
     const command = previous !== "" && addDays(previous, 1) === point.date ? "L" : "M"
     path += `${command}${x} ${y}`
     previous = point.date
     marks.push(
-      `<circle data-average="true" data-date="${escapeAttribute(point.date)}" data-price="${point.price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
+      `<circle ${markAttribute} data-date="${escapeAttribute(point.date)}" data-price="${price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
     )
   }
-  return `<path data-trend="true" d="${path}" fill="none" stroke="#1e3a5f" stroke-width="0.7" pointer-events="none" />${marks.join("")}`
+  return `<path ${pathAttribute} d="${path}" fill="none" stroke="${color}" stroke-width="0.7"${dash} pointer-events="none" />${marks.join("")}`
 }
 
 function trendUsedMarks(
