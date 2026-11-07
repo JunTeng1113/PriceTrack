@@ -580,20 +580,20 @@ export function start(series: PriceSeries): {
       if (label === "整張") {
         return "fit"
       }
-      if (label === "十二個月") {
+      if (label === "12 個月") {
         return "12"
       }
-      if (label === "六個月") {
+      if (label === "6 個月") {
         return "6"
       }
-      if (label === "三個月") {
+      if (label === "3 個月") {
         return "3"
       }
       return null
     }
 
     const pressRange = (mode: ChartRange): void => {
-      const selected = mode === "fit" ? "整張" : mode === "12" ? "十二個月" : mode === "6" ? "六個月" : "三個月"
+      const selected = mode === "fit" ? "整張" : mode === "12" ? "12 個月" : mode === "6" ? "6 個月" : "3 個月"
       for (const button of document.querySelectorAll<HTMLButtonElement>('[aria-label="圖表日期範圍"] button')) {
         button.setAttribute("aria-pressed", button.getAttribute("aria-label") === selected ? "true" : "false")
       }
