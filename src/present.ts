@@ -1,3 +1,4 @@
+import { taipeiDate } from "./taipei-time.ts"
 import { usedBoxes, type UsedBox, type UsedPost } from "./used-post.ts"
 
 export type QuoteSource = "估價頁" | "快照"
@@ -759,19 +760,6 @@ function priceAxis(
 
 export function steppedPriceBounds(min: number, max: number): { lower: number; upper: number } {
   return { lower: min * 0.95, upper: max * 1.05 }
-}
-
-function taipeiDate(capturedAt: string): string {
-  const parsed = new Date(capturedAt)
-  if (Number.isNaN(parsed.getTime())) {
-    return ""
-  }
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Taipei",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(parsed)
 }
 
 function vgaSelectHtml(html: string): string | null {

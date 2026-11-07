@@ -23,7 +23,7 @@ describe("每六小時", () => {
   })
 
   test("更新時間用頁面上的標記，不採用秒數時鐘", () => {
-    expect(siteCapturedAt(page)).toBe("2026-10-24T10:05:00.000Z")
+    expect(siteCapturedAt(page)).toBe("2026-10-24T18:05:00")
     expect(siteCapturedAt("2026/10/24 18:06:28 顯示卡VGA")).toBeNull()
   })
 
@@ -32,14 +32,14 @@ describe("每六小時", () => {
     const saved = ingestCoolpc(empty, page)
     expect(saved.result).toEqual({
       status: "saved",
-      capturedAt: "2026-10-24T10:05:00.000Z",
+      capturedAt: "2026-10-24T18:05:00",
       quotes: 1,
     })
 
     expect(saved.prepared.quotes[0]?.source).toBe("估價頁")
 
     const again = ingestCoolpc(saved.prepared, page)
-    expect(again.result).toEqual({ status: "already", capturedAt: "2026-10-24T10:05:00.000Z" })
+    expect(again.result).toEqual({ status: "already", capturedAt: "2026-10-24T18:05:00" })
     expect(again.prepared.quotes).toHaveLength(1)
   })
 
@@ -72,7 +72,7 @@ describe("每六小時", () => {
       return
     }
     expect(changesAgainstPrevious(morning.prepared, saved.prepared, saved.result.capturedAt)).toEqual({
-      previousAt: "2026-10-24T10:05:00.000Z",
+      previousAt: "2026-10-24T18:05:00",
       lines: [
         "售價 華碩 TUF-RTX5090 $99,990 → $89,990 一般 → 售罄",
         "新增 技嘉 RTX5090 GAMING $79,990",

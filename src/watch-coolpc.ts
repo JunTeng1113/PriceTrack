@@ -9,9 +9,9 @@ import {
   ingestCoolpc,
   ingestMemory,
   nextCheck,
-  taipeiParts,
   type PreparedSeries,
 } from "./coolpc-daily.ts"
+import { formatCnsTaipei } from "./taipei-time.ts"
 
 const preparedPath = resolve("public/data/series.json")
 const memoryPath = resolve("data/memory-series.json")
@@ -20,18 +20,6 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolveWait) => {
     setTimeout(resolveWait, ms)
   })
-}
-
-function formatTaipei(now: Date): string {
-  const parts = taipeiParts(now)
-  if (parts === null) {
-    return ""
-  }
-  const month = String(parts.month).padStart(2, "0")
-  const day = String(parts.day).padStart(2, "0")
-  const hour = String(parts.hour).padStart(2, "0")
-  const minute = String(parts.minute).padStart(2, "0")
-  return `${parts.year}-${month}-${day} ${hour}:${minute}`
 }
 
 function isPrepared(value: unknown): value is PreparedSeries {
@@ -166,10 +154,10 @@ let due = new Date()
 while (true) {
   const delay = due.getTime() - Date.now()
   if (delay > 0) {
-    console.log(`下次抓取 ${formatTaipei(due)}`)
+    console.log(`下次抓取 ${formatCnsTaipei(due)}`)
     await wait(delay)
   }
-  console.log(`開始抓取 ${formatTaipei(new Date())}`)
+  console.log(`開始抓取 ${formatCnsTaipei(new Date())}`)
   await fetchOnce()
   due = nextCheck(new Date())
 }

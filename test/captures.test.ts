@@ -17,7 +17,7 @@ describe("Wayback 快照選擇", () => {
       {
         timestamp: "20200105120219",
         original: "http://coolpc.com.tw/evaluate.php",
-        capturedAt: "2020-01-05T12:02:19.000Z",
+        capturedAt: "2020-01-05T20:02:19",
         date: "2020-01-05",
       },
     ])

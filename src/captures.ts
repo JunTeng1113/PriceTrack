@@ -1,3 +1,5 @@
+import { formatCnsTaipei, taipeiDate } from "./taipei-time.ts"
+
 export type CaptureRow = {
   timestamp: string
   original: string
@@ -88,31 +90,23 @@ function capturedAtFromTimestamp(timestamp: string): string | null {
   if (!/^\d{14}$/.test(timestamp)) {
     return null
   }
-  return [
-    timestamp.slice(0, 4),
-    "-",
-    timestamp.slice(4, 6),
-    "-",
-    timestamp.slice(6, 8),
-    "T",
-    timestamp.slice(8, 10),
-    ":",
-    timestamp.slice(10, 12),
-    ":",
-    timestamp.slice(12, 14),
-    ".000Z",
-  ].join("")
-}
-
-function taipeiDate(capturedAt: string): string {
-  const parsed = new Date(capturedAt)
-  if (Number.isNaN(parsed.getTime())) {
-    return ""
+  const year = Number(timestamp.slice(0, 4))
+  const month = Number(timestamp.slice(4, 6))
+  const day = Number(timestamp.slice(6, 8))
+  const hour = Number(timestamp.slice(8, 10))
+  const minute = Number(timestamp.slice(10, 12))
+  const second = Number(timestamp.slice(12, 14))
+  const instant = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
+  if (
+    instant.getUTCFullYear() !== year
+    || instant.getUTCMonth() !== month - 1
+    || instant.getUTCDate() !== day
+    || instant.getUTCHours() !== hour
+    || instant.getUTCMinutes() !== minute
+    || instant.getUTCSeconds() !== second
+  ) {
+    return null
   }
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Taipei",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(parsed)
+  const capturedAt = formatCnsTaipei(instant)
+  return capturedAt === "" ? null : capturedAt
 }

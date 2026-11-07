@@ -1,4 +1,5 @@
 import { update, type PriceSeries, type Snapshot } from "./present.ts"
+import { formatCnsTaipei, taipeiDate, taipeiWallClock } from "./taipei-time.ts"
 
 const memoryLabel = "記憶體 RAM"
 
@@ -16,64 +17,8 @@ export type IngestStatus =
   | { status: "already"; capturedAt: string }
   | { status: "saved"; capturedAt: string; quotes: number }
 
-type TaipeiParts = {
-  year: number
-  month: number
-  day: number
-  hour: number
-  minute: number
-  second: number
-}
-
 export function coolpcPageUrl(): string {
   return pageUrl
-}
-
-export function taipeiParts(now: Date): TaipeiParts | null {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Taipei",
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(now)
-  const read = (type: Intl.DateTimeFormatPartTypes): number | null => {
-    const text = parts.find((part) => part.type === type)?.value
-    if (text === undefined || !/^\d+$/.test(text)) {
-      return null
-    }
-    return Number(text)
-  }
-  const year = read("year")
-  const month = read("month")
-  const day = read("day")
-  const hour = read("hour")
-  const minute = read("minute")
-  const second = read("second")
-  if (year === null || month === null || day === null || hour === null || minute === null || second === null) {
-    return null
-  }
-  return { year, month, day, hour, minute, second }
-}
-
-function taipeiWallClock(year: number, month: number, day: number, hour: number, minute: number, second: number): Date | null {
-  const candidate = new Date(Date.UTC(year, month - 1, day, hour - 8, minute, second))
-  const parts = taipeiParts(candidate)
-  if (
-    parts === null
-    || parts.year !== year
-    || parts.month !== month
-    || parts.day !== day
-    || parts.hour !== hour
-    || parts.minute !== minute
-    || parts.second !== second
-  ) {
-    return null
-  }
-  return candidate
 }
 
 export function nextCheck(after: Date): Date {
@@ -94,7 +39,8 @@ export function siteCapturedAt(html: string): string | null {
   if (clock === null) {
     return null
   }
-  return clock.toISOString()
+  const capturedAt = formatCnsTaipei(clock)
+  return capturedAt === "" ? null : capturedAt
 }
 
 export function ingestCoolpc(prepared: PreparedSeries, html: string): { prepared: PreparedSeries; result: IngestStatus } {
@@ -245,17 +191,8 @@ function quoteStatus(rowText: string): string {
 }
 
 function taipeiDay(capturedAt: string): string | null {
-  const parsed = new Date(capturedAt)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-  const parts = taipeiParts(parsed)
-  if (parts === null) {
-    return null
-  }
-  const month = String(parts.month).padStart(2, "0")
-  const day = String(parts.day).padStart(2, "0")
-  return `${parts.year}-${month}-${day}`
+  const date = taipeiDate(capturedAt)
+  return date === "" ? null : date
 }
 
 function memorySelectHtml(html: string): string | null {
