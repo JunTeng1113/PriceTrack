@@ -228,7 +228,7 @@ function ensureTooltip(): HTMLElement {
   }
   const tip = document.createElement("div")
   tip.setAttribute("role", "tooltip")
-  tip.className = "pointer-events-none fixed z-50 hidden rounded-md border bg-background px-3 py-2 text-sm leading-5 shadow-md"
+  tip.className = "pointer-events-none fixed z-50 hidden rounded-md border bg-white px-3 py-2 text-sm leading-5 shadow-md"
   document.body.append(tip)
   return tip
 }
@@ -267,7 +267,7 @@ function formatTooltipPrice(price: string): string {
   return negative ? `-$${grouped}` : `$${grouped}`
 }
 
-function showTooltip(date: string, code: string, price: string, event: MouseEvent, delisted = false, note = ""): void {
+function showTooltip(date: string, code: string, price: string, event: MouseEvent, delisted = false, note = "", extra = ""): void {
   if (date === "" || code === "" || price === "") {
     return
   }
@@ -276,6 +276,9 @@ function showTooltip(date: string, code: string, price: string, event: MouseEven
   const rows = [date, code, formatTooltipPrice(price)]
   if (note !== "") {
     rows.push(note)
+  }
+  if (extra !== "") {
+    rows.push(extra)
   }
   if (delisted) {
     rows.push("下架")
@@ -287,6 +290,19 @@ function showTooltip(date: string, code: string, price: string, event: MouseEven
   }
   tip.classList.remove("hidden")
   placeTooltip(tip, event)
+}
+
+function percentileRow(dot: Element, date: string): string {
+  const svg = dot.closest("svg")
+  if (svg === null || date === "") {
+    return ""
+  }
+  const window = svg.getAttribute("data-indicator") ?? "month"
+  const price = svg.querySelector(`circle[data-percentile="50"][data-window="${window}"][data-date="${date}"]`)?.getAttribute("data-price") ?? ""
+  if (price === "") {
+    return ""
+  }
+  return `50% 區間 ${formatTooltipPrice(price)}`
 }
 
 function hideTooltip(): void {
@@ -787,13 +803,15 @@ export function start(series: PriceSeries): {
           if (!(event instanceof MouseEvent)) {
             return
           }
+          const date = dot.getAttribute("data-date") ?? ""
           showTooltip(
-            dot.getAttribute("data-date") ?? "",
+            date,
             dot.getAttribute("data-code") ?? "",
             dot.getAttribute("data-price") ?? "",
             event,
             false,
             "二手開價",
+            percentileRow(dot, date),
           )
         }
         dot.addEventListener("mouseover", showUsed)

@@ -392,7 +392,7 @@ function readNumber(element: Element, name: string): number | null {
 }
 
 function scalePath(path: string, map: (x: number) => number): string {
-  const tokens = path.match(/[MLHVZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi)
+  const tokens = path.match(/[MLHVCZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi)
   if (tokens === null) {
     return path
   }
@@ -400,7 +400,7 @@ function scalePath(path: string, map: (x: number) => number): string {
   let expectX = true
   const parts: string[] = []
   for (const token of tokens) {
-    if (/^[MLHVZ]$/i.test(token)) {
+    if (/^[MLHVCZ]$/i.test(token)) {
       command = token.toUpperCase()
       expectX = true
       parts.push(token)
@@ -411,7 +411,7 @@ function scalePath(path: string, map: (x: number) => number): string {
       parts.push(token)
       continue
     }
-    if (command === "H" || ((command === "M" || command === "L") && expectX)) {
+    if (command === "H" || ((command === "M" || command === "L" || command === "C") && expectX)) {
       parts.push(String(map(value)))
       expectX = command === "H"
       continue
@@ -744,24 +744,56 @@ function retargetLine(path: Element | null, circles: readonly Element[], axis: {
   if (path === null || circles.length === 0) {
     return
   }
-  let drawn = ""
+  const runs: { x: number; y: number }[][] = []
+  let run: { x: number; y: number }[] = []
   let previous = ""
   for (const circle of circles) {
     const price = readNumber(circle, "data-price")
     const date = circle.getAttribute("data-date") ?? ""
-    const x = circle.getAttribute("cx") ?? ""
-    if (price === null || x === "") {
+    const x = readNumber(circle, "cx")
+    if (price === null || x === null) {
       continue
     }
-    const y = yAt(price, axis).toFixed(2)
-    circle.setAttribute("cy", y)
-    const command = previous !== "" && addDays(previous, 1) === date ? "L" : "M"
-    drawn += `${command}${x} ${y}`
+    const y = yAt(price, axis)
+    circle.setAttribute("cy", y.toFixed(2))
+    if (previous !== "" && addDays(previous, 1) !== date && run.length > 0) {
+      runs.push(run)
+      run = []
+    }
+    run.push({ x, y })
     previous = date
   }
+  if (run.length > 0) {
+    runs.push(run)
+  }
+  const drawn = runs.map((points) => smoothLine(points)).join("")
   if (drawn !== "") {
     path.setAttribute("d", drawn)
   }
+}
+
+function smoothLine(points: readonly { x: number; y: number }[]): string {
+  const first = points[0]
+  if (first === undefined) {
+    return ""
+  }
+  const format = (value: number): string => value.toFixed(2)
+  let path = `M${format(first.x)} ${format(first.y)}`
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const current = points[index]
+    const next = points[index + 1]
+    if (current === undefined || next === undefined) {
+      continue
+    }
+    const previous = points[index - 1] ?? current
+    const after = points[index + 2] ?? next
+    const startX = current.x + (next.x - previous.x) / 6
+    const startY = current.y + (next.y - previous.y) / 6
+    const endX = next.x - (after.x - current.x) / 6
+    const endY = next.y - (after.y - current.y) / 6
+    path += `C${format(startX)} ${format(startY)} ${format(endX)} ${format(endY)} ${format(next.x)} ${format(next.y)}`
+  }
+  return path
 }
 
 function retargetSeriesLabels(svg: SVGSVGElement): void {
@@ -1076,6 +1108,12 @@ function trendBounds(trend: View["trend"][number]): { start: string; end: string
       }
     }
   }
+  for (const point of usedHybridSeries(trend.used, start, end)) {
+    const ceiling = hybridSweetCeiling(point)
+    if (ceiling < low) {
+      low = ceiling
+    }
+  }
   return { start, end, low, high }
 }
 
@@ -1191,6 +1229,7 @@ function usedQuarterAverage(
   months = 3,
 ): { date: string; price: number; p25: number; p50: number; posts: number }[] {
   const days = usedDayPrices(used)
+  const inlierDays = usedDayPrices(withoutExtremeOutliers(used))
   const points: { date: string; price: number; p25: number; p50: number; posts: number }[] = []
   if (days.length === 0 || start > end) {
     return points
@@ -1210,15 +1249,25 @@ function usedQuarterAverage(
       prices.push(day.price)
       posts += day.count
     }
-    if (posts >= 2 && prices.length > 0) {
+    const inlierPrices: number[] = []
+    for (const day of inlierDays) {
+      if (day.date < windowStart) {
+        continue
+      }
+      if (day.date > cursor) {
+        break
+      }
+      inlierPrices.push(day.price)
+    }
+    if (posts >= 2 && prices.length > 0 && inlierPrices.length > 0) {
       let sum = 0
-      for (const price of prices) {
+      for (const price of inlierPrices) {
         sum += price
       }
       const sorted = [...prices].sort((left, right) => left - right)
       points.push({
         date: cursor,
-        price: sum / prices.length,
+        price: sum / inlierPrices.length,
         p25: rankedPrice(sorted, 25),
         p50: rankedPrice(sorted, 50),
         posts,
@@ -1231,6 +1280,38 @@ function usedQuarterAverage(
     cursor = next
   }
   return points
+}
+
+function withoutExtremeOutliers(
+  used: readonly { date: string; price: number }[],
+): { date: string; price: number }[] {
+  const fence = extremeFence(used.map((post) => post.price))
+  if (fence === null) {
+    return []
+  }
+  return used.filter((post) => post.price >= fence.lower && post.price <= fence.upper)
+}
+
+function extremeFence(prices: readonly number[]): { lower: number; upper: number } | null {
+  return quartileFence(prices, 3)
+}
+
+function quartileFence(prices: readonly number[], multiplier: number): { lower: number; upper: number } | null {
+  if (prices.length === 0) {
+    return null
+  }
+  const sorted = [...prices].sort((left, right) => left - right)
+  const count = sorted.length
+  if (count === 1) {
+    const only = sorted[0] ?? 0
+    return { lower: only, upper: only }
+  }
+  const lowerEnd = Math.floor(count / 2)
+  const upperStart = count % 2 === 1 ? lowerEnd + 1 : lowerEnd
+  const q1 = rankedSlice(sorted, 0, lowerEnd)
+  const q3 = rankedSlice(sorted, upperStart, count)
+  const reach = (q3 - q1) * multiplier
+  return { lower: q1 - reach, upper: q3 + reach }
 }
 
 function rankedPrice(sorted: readonly number[], share: 25 | 50): number {
@@ -1257,35 +1338,99 @@ function rankedSlice(sorted: readonly number[], start: number, end: number): num
 
 const sweetGap = 2000
 
-function sweetCeiling(point: { p25: number; p50: number }): number {
-  if (point.p50 - point.p25 < sweetGap) {
-    return point.p25 - sweetGap
+function sweetCeiling(point: { price: number; p25: number; p50: number }): number {
+  const intervalCeiling = point.p50 - point.p25 < sweetGap ? point.p50 - sweetGap : point.p25
+  const discounted = point.price * 100 / 105
+  if (discounted - point.p50 < sweetGap) {
+    return intervalCeiling
   }
-  return point.p25
+  const averageCeiling = discounted - sweetGap
+  if (averageCeiling > intervalCeiling) {
+    return averageCeiling
+  }
+  return intervalCeiling
 }
 
-const monthPostFloor = 5
+function hybridSweetCeiling(point: { p25: number }): number {
+  const share = point.p25 * 0.05
+  const floor = 1000
+  const deduction = share > floor ? share : floor
+  return point.p25 - deduction
+}
 
-function usedHybridAverage(
-  month: readonly { date: string; price: number; p25: number; p50: number; posts: number }[],
-  quarter: readonly { date: string; price: number; p25: number; p50: number; posts: number }[],
+const hybridRecentDays = 30
+const hybridHorizonDays = 90
+const hybridSampleFloor = 5
+
+function usedHybridSeries(
+  used: readonly { date: string; price: number }[],
+  start: string,
+  end: string,
 ): { date: string; price: number; p25: number; p50: number }[] {
-  const monthByDate = new Map(month.map((point) => [point.date, point]))
-  const seen = new Set<string>()
+  const posts = [...used].sort((left, right) => left.date.localeCompare(right.date) || left.price - right.price)
   const points: { date: string; price: number; p25: number; p50: number }[] = []
-  for (const point of quarter) {
-    const monthly = monthByDate.get(point.date)
-    const chosen = monthly !== undefined && monthly.posts >= monthPostFloor ? monthly : point
-    points.push({ date: chosen.date, price: chosen.price, p25: chosen.p25, p50: chosen.p50 })
-    seen.add(point.date)
+  if (posts.length === 0 || start > end) {
+    return points
   }
-  for (const point of month) {
-    if (point.posts >= monthPostFloor && !seen.has(point.date)) {
-      points.push({ date: point.date, price: point.price, p25: point.p25, p50: point.p50 })
+  let cursor = start
+  while (cursor <= end) {
+    const kept = hybridInliers(hybridSample(posts, cursor))
+    if (kept.length > 0) {
+      let sum = 0
+      for (const price of kept) {
+        sum += price
+      }
+      points.push({
+        date: cursor,
+        price: sum / kept.length,
+        p25: rankedPrice(kept, 25),
+        p50: rankedPrice(kept, 50),
+      })
     }
+    const next = addDays(cursor, 1)
+    if (next <= cursor) {
+      break
+    }
+    cursor = next
   }
-  points.sort((left, right) => left.date.localeCompare(right.date))
   return points
+}
+
+function hybridSample(
+  posts: readonly { date: string; price: number }[],
+  cursor: string,
+): number[] {
+  const recentStart = addDays(cursor, 1 - hybridRecentDays)
+  const horizon = addDays(cursor, 1 - hybridHorizonDays)
+  const recent: number[] = []
+  const older: number[] = []
+  for (const post of posts) {
+    if (post.date < horizon) {
+      continue
+    }
+    if (post.date > cursor) {
+      break
+    }
+    if (post.date >= recentStart) {
+      recent.push(post.price)
+      continue
+    }
+    older.push(post.price)
+  }
+  if (recent.length >= hybridSampleFloor) {
+    return recent
+  }
+  const need = hybridSampleFloor - recent.length
+  return [...older.slice(-need), ...recent]
+}
+
+function hybridInliers(prices: readonly number[]): number[] {
+  const fence = quartileFence(prices, 1.5)
+  if (fence === null) {
+    return []
+  }
+  const sorted = [...prices].sort((left, right) => left - right)
+  return sorted.filter((price) => price >= fence.lower && price <= fence.upper)
 }
 
 function trendLines(
@@ -1301,7 +1446,7 @@ function trendLines(
   return [
     indicatorSeries(month, "month", startDay, daySpan, axis),
     indicatorSeries(quarter, "quarter", startDay, daySpan, axis),
-    indicatorSeries(usedHybridAverage(month, quarter), "hybrid", startDay, daySpan, axis),
+    indicatorSeries(usedHybridSeries(used, start, end), "hybrid", startDay, daySpan, axis),
   ].join("")
 }
 
@@ -1312,18 +1457,18 @@ export function indicatorLabel(window: IndicatorWindow): string {
   if (window === "quarter") {
     return "季均線"
   }
-  return "月季均線"
+  return "混合均線"
 }
 
 function indicatorCaption(window: IndicatorWindow): string {
-  const sweet = "價差 2,000 元以上時，甜蜜區在 25% 區間線以下；未達 2,000 元時，甜蜜區在 25% 區間再低 2,000 元以下。"
-  const lead = "藍色面積是過去 7 日售價的最高價到最低價，琥珀色面積是甜蜜區，圓點是二手開價，"
+  const sweet = "價差 2,000 元以上時，甜蜜區在 25% 區間線以下；未達 2,000 元時，甜蜜區在 50% 區間再低 2,000 元以下。均線價格的 100/105 比 50% 區間高出至少 2,000 元時，該值再低 2,000 元以下也是甜蜜區。"
+  const lead = "藍色面積是過去 7 日售價的最高價到最低價，琥珀色面積是甜蜜區，圓點是二手開價。"
   if (window === "hybrid") {
-    return `${lead}深色線是二手開價的月季均線。月窗口滿 5 筆時，青線、紫線與甜蜜區用一個月窗口；未滿 5 筆時，改用一季窗口。${sweet}`
+    return `${lead}深色線是二手開價的混合均線。先看過去 30 天，不滿 5 筆就往前補到 5 筆，最長 90 天。這個窗口裡，高於 Q3 加 1.5 倍四分位距或低於 Q1 減 1.5 倍四分位距的開價不計入均線、50% 區間與 25% 區間。甜蜜區上限是 25% 區間減去 1,000 元與 25% 區間 5% 裡較大的那個。`
   }
   const average = indicatorLabel(window)
   const span = window === "month" ? "一個月" : "一季"
-  return `${lead}深色線是二手開價的${average}，青線是同${span}窗口的 50% 區間，紫線是 25% 區間。${sweet}`
+  return `${lead}超出 3 倍四分位距的極端離群值不計入均線。深色線是二手開價的${average}，青線是同${span}窗口的 50% 區間，紫線是 25% 區間。${sweet}`
 }
 
 export function applyIndicator(root: ParentNode, window: IndicatorWindow): void {
@@ -1385,7 +1530,7 @@ function sweetArea(
     if (previous !== "" && addDays(previous, 1) !== point.date) {
       flush()
     }
-    const ceiling = sweetCeiling(point)
+    const ceiling = window === "hybrid" ? hybridSweetCeiling(point) : sweetCeiling(point)
     const x = xAt(point.date, startDay, daySpan).toFixed(2)
     const y = yAt(ceiling, axis).toFixed(2)
     upper.push(`${x} ${y}`)
@@ -1419,18 +1564,26 @@ function trendPath(
   }
   let path = ""
   let previous = ""
+  let run: { x: number; y: number }[] = []
   const marks: string[] = []
+  const flush = (): void => {
+    path += smoothLine(run)
+    run = []
+  }
   for (const point of points) {
     const price = priceOf(point)
-    const x = xAt(point.date, startDay, daySpan).toFixed(2)
-    const y = yAt(price, axis).toFixed(2)
-    const command = previous !== "" && addDays(previous, 1) === point.date ? "L" : "M"
-    path += `${command}${x} ${y}`
+    const x = xAt(point.date, startDay, daySpan)
+    const y = yAt(price, axis)
+    if (previous !== "" && addDays(previous, 1) !== point.date) {
+      flush()
+    }
+    run.push({ x, y })
     previous = point.date
     marks.push(
-      `<circle ${markAttribute} data-window="${window}"${indicatorHidden(window)} data-date="${escapeAttribute(point.date)}" data-price="${price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
+      `<circle ${markAttribute} data-window="${window}"${indicatorHidden(window)} data-date="${escapeAttribute(point.date)}" data-price="${price}" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="0" fill="none" pointer-events="none" />`,
     )
   }
+  flush()
   return `<path ${pathAttribute} data-window="${window}"${indicatorHidden(window)} d="${path}" fill="none" stroke="${color}" stroke-width="0.7"${dash} pointer-events="none" />${marks.join("")}`
 }
 

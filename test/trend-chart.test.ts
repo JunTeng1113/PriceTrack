@@ -83,6 +83,8 @@ test("售價連成面積，二手開價只留散佈點", () => {
   expect(chart?.textContent).toContain("過去 7 日售價的最高價到最低價")
   expect(chart?.textContent).toContain("月均線")
   expect(chart?.querySelector('path[data-trend][data-window="month"]')?.hasAttribute("hidden")).toBe(false)
+  expect(chart?.querySelector('path[data-trend][data-window="month"]')?.getAttribute("d")).toMatch(/^M[\d.]+ [\d.]+C/)
+  expect(chart?.querySelector('path[data-trend][data-window="month"]')?.getAttribute("d")).not.toMatch(/L/)
   expect(chart?.querySelector('path[data-trend][data-window="quarter"]')?.hasAttribute("hidden")).toBe(true)
   expect(chart?.querySelector('path[data-trend][data-window="hybrid"]')?.hasAttribute("hidden")).toBe(true)
   expect(doc.querySelector('button[aria-label="月均線"]')?.getAttribute("aria-pressed")).toBe("true")
@@ -194,6 +196,30 @@ test("季均線隨日期滾動，滿一季後剔除窗口外的每日開價", ()
   expect(chart?.querySelector('path[data-percentile="75"]')).toBeNull()
 })
 
+test("均線排除 3 倍四分位距以外的極端離群值", () => {
+  const wide = update(emptySeries(), [
+    snapshot("2024-06-01T02:00:00.000Z", [`｛${code}｝, $18000`]),
+  ])
+  const doc = documentOf(renderPage(wide, [
+    { type: "setChipGroup", name: "NVIDIA RTX4070" },
+    { type: "setRange", start: "2024-06-01", end: "2024-06-06" },
+  ], [
+    post(10000, "2024-06-01", "https://example.com/a"),
+    post(11000, "2024-06-02", "https://example.com/b"),
+    post(12000, "2024-06-03", "https://example.com/c"),
+    post(13000, "2024-06-04", "https://example.com/d"),
+    post(14000, "2024-06-05", "https://example.com/e"),
+    post(500000, "2024-06-06", "https://example.com/outlier"),
+  ]))
+  const chart = doc.querySelector('[aria-label="價格趨勢"]')
+
+  expect(chart?.textContent).toContain("極端離群值不計入均線")
+  expect(chart?.querySelector('[data-used-price][data-price="500000"]')).not.toBeNull()
+  expect(averages(chart).find((row) => row[0] === "2024-06-06")?.[1]).toBe("12000")
+  expect(percentiles(chart, "50").find((row) => row[0] === "2024-06-06")?.[1]).toBe("12500")
+  expect(percentiles(chart, "25").find((row) => row[0] === "2024-06-06")?.[1]).toBe("11000")
+})
+
 function bands(root: ParentNode | null, attribute: string): string[][] {
   return [...(root?.querySelectorAll(`line[${attribute}]`) ?? [])].map((node) => [
     node.getAttribute("data-date") ?? "",
@@ -223,7 +249,7 @@ function sweetZone(root: ParentNode | null, window: "month" | "quarter" | "hybri
   ])
 }
 
-test("價差未達 2000 元時，甜蜜區改畫在 25% 區間再低 2000 元以下", () => {
+test("價差未達 2000 元時，甜蜜區改畫在 50% 區間再低 2000 元以下", () => {
   const wide = update(emptySeries(), [
     snapshot("2024-06-01T02:00:00.000Z", [`｛${code}｝, $18000`]),
   ])
@@ -239,17 +265,17 @@ test("價差未達 2000 元時，甜蜜區改畫在 25% 區間再低 2000 元以
     post(20000, "2024-06-07", "https://example.com/f"),
   ]))
   const chart = doc.querySelector('[aria-label="價格趨勢"]')
-  const area = chart?.querySelector("path[data-sweet-zone]")
+  const area = chart?.querySelector('path[data-sweet-zone][data-window="quarter"]')
   const selling = chart?.querySelector("path[data-selling-band]")
-  const lines = [...(chart?.querySelectorAll("line[data-sweet-zone]") ?? [])]
+  const lines = [...(chart?.querySelectorAll('line[data-sweet-zone][data-window="quarter"]') ?? [])]
 
   expect(chart?.textContent).toContain("甜蜜區")
   expect(sweetZone(chart)).toEqual([
-    ["2024-06-02", "8000"],
+    ["2024-06-02", "9000"],
     ["2024-06-03", "10000"],
     ["2024-06-04", "11000"],
-    ["2024-06-05", "8500"],
-    ["2024-06-06", "8500"],
+    ["2024-06-05", "10000"],
+    ["2024-06-06", "10000"],
     ["2024-06-07", "11000"],
   ])
   expect(area?.getAttribute("fill")).toBe("#d97706")
@@ -264,43 +290,96 @@ test("價差未達 2000 元時，甜蜜區改畫在 25% 區間再低 2000 元以
   }
 })
 
-test("月季均線在月窗口滿 5 筆時改用月均線", () => {
+test("混合均線不滿 5 筆時往前補到 5 筆，最長 90 天", () => {
+  const wide = update(emptySeries(), [
+    snapshot("2024-06-15T02:00:00.000Z", [`｛${code}｝, $18000`]),
+  ])
+  const doc = documentOf(renderPage(wide, [
+    { type: "setChipGroup", name: "NVIDIA RTX4070" },
+    { type: "setRange", start: "2024-03-01", end: "2024-06-15" },
+  ], [
+    post(5000, "2024-03-17", "https://example.com/too-old"),
+    post(8000, "2024-04-01", "https://example.com/spare"),
+    post(9000, "2024-04-20", "https://example.com/older"),
+    post(10000, "2024-05-10", "https://example.com/old"),
+    post(11000, "2024-05-16", "https://example.com/near"),
+    post(14000, "2024-06-01", "https://example.com/recent-a"),
+    post(16000, "2024-06-10", "https://example.com/recent-b"),
+  ]))
+  const chart = doc.querySelector('[aria-label="價格趨勢"]')
+
+  expect(doc.querySelector('button[aria-label="混合均線"]')).not.toBeNull()
+  expect(averages(chart, "hybrid").find((row) => row[0] === "2024-06-15")?.[1]).toBe("12000")
+  expect(percentiles(chart, "50", "hybrid").find((row) => row[0] === "2024-06-15")?.[1]).toBe("11000")
+  expect(percentiles(chart, "25", "hybrid").find((row) => row[0] === "2024-06-15")?.[1]).toBe("9500")
+  expect(sweetZone(chart, "hybrid").find((row) => row[0] === "2024-06-15")?.[1]).toBe("8500")
+})
+
+test("混合均線在 30 天樣本裡剔除 1.5 倍四分位距以外的開價", () => {
+  const wide = update(emptySeries(), [
+    snapshot("2024-06-07T02:00:00.000Z", [`｛${code}｝, $18000`]),
+  ])
+  const doc = documentOf(renderPage(wide, [
+    { type: "setChipGroup", name: "NVIDIA RTX4070" },
+    { type: "setRange", start: "2024-06-01", end: "2024-06-07" },
+  ], [
+    post(10000, "2024-06-01", "https://example.com/a"),
+    post(11000, "2024-06-02", "https://example.com/b"),
+    post(12000, "2024-06-03", "https://example.com/c"),
+    post(13000, "2024-06-04", "https://example.com/d"),
+    post(14000, "2024-06-05", "https://example.com/e"),
+    post(15000, "2024-06-06", "https://example.com/f"),
+    post(80000, "2024-06-07", "https://example.com/outlier"),
+  ]))
+  const chart = doc.querySelector('[aria-label="價格趨勢"]')
+
+  expect(chart?.querySelector('[data-used-price][data-price="80000"]')).not.toBeNull()
+  expect(averages(chart, "hybrid").find((row) => row[0] === "2024-06-07")?.[1]).toBe("12500")
+  expect(percentiles(chart, "50", "hybrid").find((row) => row[0] === "2024-06-07")?.[1]).toBe("12500")
+  expect(percentiles(chart, "25", "hybrid").find((row) => row[0] === "2024-06-07")?.[1]).toBe("11000")
+  expect(sweetZone(chart, "hybrid").find((row) => row[0] === "2024-06-07")?.[1]).toBe("10000")
+  expect(percentiles(chart, "50").find((row) => row[0] === "2024-06-07")?.[1]).toBe("13000")
+  expect(sweetZone(chart).find((row) => row[0] === "2024-06-07")?.[1]).toBe("11000")
+})
+
+test("混合均線的甜蜜區上限是 25% 區間減去 1000 元與 5% 的較大者", () => {
+  const wide = update(emptySeries(), [
+    snapshot("2024-06-05T02:00:00.000Z", [`｛${code}｝, $50000`]),
+  ])
+  const doc = documentOf(renderPage(wide, [
+    { type: "setChipGroup", name: "NVIDIA RTX4070" },
+    { type: "setRange", start: "2024-06-01", end: "2024-06-05" },
+  ], [
+    post(48000, "2024-06-01", "https://example.com/a"),
+    post(49000, "2024-06-02", "https://example.com/b"),
+    post(50000, "2024-06-03", "https://example.com/c"),
+    post(51000, "2024-06-04", "https://example.com/d"),
+    post(52000, "2024-06-05", "https://example.com/e"),
+  ]))
+  const chart = doc.querySelector('[aria-label="價格趨勢"]')
+
+  expect(percentiles(chart, "25", "hybrid").find((row) => row[0] === "2024-06-05")?.[1]).toBe("48500")
+  expect(sweetZone(chart, "hybrid").find((row) => row[0] === "2024-06-05")?.[1]).toBe("46075")
+})
+
+test("均線的 100/105 比 50% 區間高出 2000 元時，甜蜜區跟著抬高", () => {
   const wide = update(emptySeries(), [
     snapshot("2024-06-01T02:00:00.000Z", [`｛${code}｝, $18000`]),
   ])
   const doc = documentOf(renderPage(wide, [
     { type: "setChipGroup", name: "NVIDIA RTX4070" },
-    { type: "setRange", start: "2024-05-01", end: "2024-06-05" },
+    { type: "setRange", start: "2024-06-01", end: "2024-06-03" },
   ], [
-    post(30000, "2024-05-01", "https://example.com/old"),
     post(10000, "2024-06-01", "https://example.com/a"),
-    post(14000, "2024-06-02", "https://example.com/b"),
-    post(18000, "2024-06-03", "https://example.com/c"),
-    post(22000, "2024-06-04", "https://example.com/d"),
-    post(26000, "2024-06-05", "https://example.com/e"),
+    post(10000, "2024-06-02", "https://example.com/b"),
+    post(40000, "2024-06-03", "https://example.com/c"),
   ]))
   const chart = doc.querySelector('[aria-label="價格趨勢"]')
-  const hybrid = averages(chart, "hybrid")
+  const rows = sweetZone(chart)
 
-  expect(hybrid.find((row) => row[0] === "2024-06-02")?.[1]).toBe("18000")
-  expect(hybrid.find((row) => row[0] === "2024-06-04")?.[1]).toBe("18800")
-  expect(hybrid.find((row) => row[0] === "2024-06-05")?.[1]).toBe("18000")
-  expect(averages(chart, "month").find((row) => row[0] === "2024-06-02")?.[1]).toBe("12000")
-  expect(averages(chart, "month").find((row) => row[0] === "2024-06-04")?.[1]).toBe("16000")
-  expect(averages(chart, "month").find((row) => row[0] === "2024-06-05")?.[1]).toBe("18000")
-  expect(averages(chart, "quarter").find((row) => row[0] === "2024-06-05")?.[1]).toBe("20000")
-  expect(averages(chart, "quarter").find((row) => row[0] === "2024-06-05")?.[1]).toBe("20000")
-  expect(percentiles(chart, "50", "hybrid").find((row) => row[0] === "2024-06-02")?.[1]).toBe("14000")
-  expect(percentiles(chart, "25", "hybrid").find((row) => row[0] === "2024-06-02")?.[1]).toBe("10000")
-  expect(percentiles(chart, "50", "hybrid").find((row) => row[0] === "2024-06-05")?.[1]).toBe("18000")
-  expect(percentiles(chart, "25", "hybrid").find((row) => row[0] === "2024-06-05")?.[1]).toBe("12000")
-  expect(sweetZone(chart, "hybrid").filter((row) => row[0] >= "2024-06-01")).toEqual([
-    ["2024-06-01", "10000"],
-    ["2024-06-02", "10000"],
-    ["2024-06-03", "12000"],
-    ["2024-06-04", "12000"],
-    ["2024-06-05", "12000"],
-  ])
+  expect(chart?.textContent).toContain("100/105")
+  expect(rows.find((row) => row[0] === "2024-06-02")?.[1]).toBe("8000")
+  expect(Number(rows.find((row) => row[0] === "2024-06-03")?.[1])).toBeCloseTo(20000 * 100 / 105 - 2000, 5)
 })
 
 test("側邊欄可在月均線與季均線之間切換", () => {
@@ -333,14 +412,14 @@ test("側邊欄可在月均線與季均線之間切換", () => {
   expect(chart?.textContent).toContain("同一季窗口")
 
   const hybrid = chart?.querySelector('path[data-trend][data-window="hybrid"]')
-  document.querySelector<HTMLButtonElement>('button[aria-label="月季均線"]')?.click()
-  expect(document.querySelector('button[aria-label="月季均線"]')?.getAttribute("aria-pressed")).toBe("true")
+  document.querySelector<HTMLButtonElement>('button[aria-label="混合均線"]')?.click()
+  expect(document.querySelector('button[aria-label="混合均線"]')?.getAttribute("aria-pressed")).toBe("true")
   expect(document.querySelector('button[aria-label="季均線"]')?.getAttribute("aria-pressed")).toBe("false")
   expect(month?.hasAttribute("hidden")).toBe(true)
   expect(quarter?.hasAttribute("hidden")).toBe(true)
   expect(hybrid?.hasAttribute("hidden")).toBe(false)
-  expect(chart?.textContent).toContain("月季均線")
-  expect(chart?.textContent).toContain("滿 5 筆")
+  expect(chart?.textContent).toContain("混合均線")
+  expect(chart?.textContent).toContain("1.5 倍四分位距")
 })
 
 test("滑鼠停在二手開價點上時顯示該筆資訊", () => {
@@ -361,7 +440,12 @@ test("滑鼠停在二手開價點上時顯示該筆資訊", () => {
 
   dot?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 24, clientY: 30 }))
   expect(document.querySelector('[role="tooltip"]')?.classList.contains("hidden")).toBe(false)
+  expect(document.querySelector('[role="tooltip"]')?.classList.contains("bg-white")).toBe(true)
   expect(rows()).toEqual(["2024-06-15", listing, "$8,000", "二手開價"])
+
+  const later = document.querySelector(`[aria-label="${group}"] [data-used-price][data-date="2024-06-16"]`)
+  later?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientX: 48, clientY: 30 }))
+  expect(rows()).toEqual(["2024-06-16", listing, "$9,000", "二手開價", "50% 區間 $8,500"])
 
   dot?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }))
   expect(document.querySelector('[role="tooltip"]')?.classList.contains("hidden")).toBe(true)
