@@ -1,4 +1,4 @@
-import { adoptChartMark, applyChartMode, applyIndicator, chartCacheKey, clearPreparedCharts, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart, type ChartRange, type IndicatorWindow } from "./page.ts"
+import { adoptChartMark, applyChartMode, applyIndicator, chartCacheKey, clearPreparedCharts, indicatorLabel, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart, type ChartRange, type IndicatorWindow } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -627,7 +627,7 @@ export function start(series: PriceSeries): {
     }
 
     const pressIndicator = (window: IndicatorWindow): void => {
-      const selected = window === "month" ? "月均線" : "季均線"
+      const selected = indicatorLabel(window)
       for (const button of document.querySelectorAll<HTMLButtonElement>('[aria-label="指標"] button')) {
         button.setAttribute("aria-pressed", button.getAttribute("aria-label") === selected ? "true" : "false")
       }
@@ -641,10 +641,12 @@ export function start(series: PriceSeries): {
         for (const button of indicatorGroup.querySelectorAll<HTMLButtonElement>("button")) {
           button.addEventListener("click", () => {
             const label = button.getAttribute("aria-label") ?? ""
-            if (label !== "月均線" && label !== "季均線") {
+            const windows: IndicatorWindow[] = ["month", "quarter", "hybrid"]
+            const selected = windows.find((item) => indicatorLabel(item) === label)
+            if (selected === undefined) {
               return
             }
-            indicator = label === "月均線" ? "month" : "quarter"
+            indicator = selected
             pressIndicator(indicator)
             applyIndicator(document, indicator)
           })
@@ -959,6 +961,7 @@ export function start(series: PriceSeries): {
         }
         host.append(section)
         applyRange(section, chartRange)
+        applyIndicator(section, indicator)
         for (const svg of plottedSvgs(section)) {
           bindChart(svg)
         }
@@ -1173,6 +1176,7 @@ export function start(series: PriceSeries): {
             bindChart(svg)
           }
           applyRange(section, chartRange)
+          applyIndicator(section, indicator)
           setTimeout(() => appendChart(index + 1), 0)
         }
         setTimeout(() => pump(0), 0)

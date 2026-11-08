@@ -86,7 +86,7 @@ function addMonths(isoDate: string, count: number): string {
 }
 
 export type ChartRange = "fit" | "12" | "6" | "3"
-export type IndicatorWindow = "month" | "quarter"
+export type IndicatorWindow = "month" | "quarter" | "hybrid"
 
 const rangeMonths: Record<Exclude<ChartRange, "fit">, number> = {
   "12": 12,
@@ -687,7 +687,7 @@ function retargetSellingBand(svg: SVGSVGElement, axis: { lower: number; upper: n
 }
 
 function retargetAverage(svg: SVGSVGElement, axis: { lower: number; upper: number }): void {
-  for (const window of ["month", "quarter"] as const) {
+  for (const window of ["month", "quarter", "hybrid"] as const) {
     retargetLine(svg.querySelector(`path[data-trend][data-window="${window}"]`), [...svg.querySelectorAll(`circle[data-average][data-window="${window}"]`)], axis)
     retargetLine(svg.querySelector(`path[data-percentile="50"][data-window="${window}"]`), [...svg.querySelectorAll(`circle[data-percentile="50"][data-window="${window}"]`)], axis)
     retargetLine(svg.querySelector(`path[data-percentile="25"][data-window="${window}"]`), [...svg.querySelectorAll(`circle[data-percentile="25"][data-window="${window}"]`)], axis)
@@ -1189,9 +1189,9 @@ function usedQuarterAverage(
   start: string,
   end: string,
   months = 3,
-): { date: string; price: number; p25: number; p50: number }[] {
+): { date: string; price: number; p25: number; p50: number; posts: number }[] {
   const days = usedDayPrices(used)
-  const points: { date: string; price: number; p25: number; p50: number }[] = []
+  const points: { date: string; price: number; p25: number; p50: number; posts: number }[] = []
   if (days.length === 0 || start > end) {
     return points
   }
@@ -1221,6 +1221,7 @@ function usedQuarterAverage(
         price: sum / prices.length,
         p25: rankedPrice(sorted, 25),
         p50: rankedPrice(sorted, 50),
+        posts,
       })
     }
     const next = addDays(cursor, 1)
@@ -1263,6 +1264,30 @@ function sweetCeiling(point: { p25: number; p50: number }): number {
   return point.p25
 }
 
+const monthPostFloor = 5
+
+function usedHybridAverage(
+  month: readonly { date: string; price: number; p25: number; p50: number; posts: number }[],
+  quarter: readonly { date: string; price: number; p25: number; p50: number; posts: number }[],
+): { date: string; price: number; p25: number; p50: number }[] {
+  const monthByDate = new Map(month.map((point) => [point.date, point]))
+  const seen = new Set<string>()
+  const points: { date: string; price: number; p25: number; p50: number }[] = []
+  for (const point of quarter) {
+    const monthly = monthByDate.get(point.date)
+    const chosen = monthly !== undefined && monthly.posts >= monthPostFloor ? monthly : point
+    points.push({ date: chosen.date, price: chosen.price, p25: chosen.p25, p50: chosen.p50 })
+    seen.add(point.date)
+  }
+  for (const point of month) {
+    if (point.posts >= monthPostFloor && !seen.has(point.date)) {
+      points.push({ date: point.date, price: point.price, p25: point.p25, p50: point.p50 })
+    }
+  }
+  points.sort((left, right) => left.date.localeCompare(right.date))
+  return points
+}
+
 function trendLines(
   used: readonly { date: string; price: number }[],
   start: string,
@@ -1271,16 +1296,34 @@ function trendLines(
   daySpan: number,
   axis: { lower: number; upper: number },
 ): string {
+  const month = usedQuarterAverage(used, start, end, 1)
+  const quarter = usedQuarterAverage(used, start, end, 3)
   return [
-    indicatorSeries(usedQuarterAverage(used, start, end, 1), "month", startDay, daySpan, axis),
-    indicatorSeries(usedQuarterAverage(used, start, end, 3), "quarter", startDay, daySpan, axis),
+    indicatorSeries(month, "month", startDay, daySpan, axis),
+    indicatorSeries(quarter, "quarter", startDay, daySpan, axis),
+    indicatorSeries(usedHybridAverage(month, quarter), "hybrid", startDay, daySpan, axis),
   ].join("")
 }
 
+export function indicatorLabel(window: IndicatorWindow): string {
+  if (window === "month") {
+    return "月均線"
+  }
+  if (window === "quarter") {
+    return "季均線"
+  }
+  return "月季均線"
+}
+
 function indicatorCaption(window: IndicatorWindow): string {
-  const average = window === "month" ? "月均線" : "季均線"
+  const sweet = "價差 2,000 元以上時，甜蜜區在 25% 區間線以下；未達 2,000 元時，甜蜜區在 25% 區間再低 2,000 元以下。"
+  const lead = "藍色面積是過去 7 日售價的最高價到最低價，琥珀色面積是甜蜜區，圓點是二手開價，"
+  if (window === "hybrid") {
+    return `${lead}深色線是二手開價的月季均線。月窗口滿 5 筆時，青線、紫線與甜蜜區用一個月窗口；未滿 5 筆時，改用一季窗口。${sweet}`
+  }
+  const average = indicatorLabel(window)
   const span = window === "month" ? "一個月" : "一季"
-  return `藍色面積是過去 7 日售價的最高價到最低價，琥珀色面積是甜蜜區，圓點是二手開價，深色線是二手開價的${average}，青線是同${span}窗口的 50% 區間，紫線是 25% 區間。價差 2,000 元以上時，甜蜜區在 25% 區間線以下；未達 2,000 元時，甜蜜區在 25% 區間再低 2,000 元以下。`
+  return `${lead}深色線是二手開價的${average}，青線是同${span}窗口的 50% 區間，紫線是 25% 區間。${sweet}`
 }
 
 export function applyIndicator(root: ParentNode, window: IndicatorWindow): void {
@@ -1348,7 +1391,7 @@ function sweetArea(
     upper.push(`${x} ${y}`)
     lower.push(`${x} ${floor}`)
     spans.push(
-      `<line data-sweet-zone="true" data-window="${window}"${window === "quarter" ? " hidden" : ""} data-date="${escapeAttribute(point.date)}" data-price="${ceiling}" x1="${x}" y1="${y}" x2="${x}" y2="${floor}" stroke="transparent" stroke-width="0" pointer-events="none" />`,
+      `<line data-sweet-zone="true" data-window="${window}"${indicatorHidden(window)} data-date="${escapeAttribute(point.date)}" data-price="${ceiling}" x1="${x}" y1="${y}" x2="${x}" y2="${floor}" stroke="transparent" stroke-width="0" pointer-events="none" />`,
     )
     previous = point.date
   }
@@ -1356,8 +1399,7 @@ function sweetArea(
   if (commands.length === 0) {
     return ""
   }
-  const hidden = window === "quarter" ? " hidden" : ""
-  return `<path data-sweet-zone="true" data-window="${window}"${hidden} d="${commands.join("")}" fill="#d97706" fill-opacity="0.45" stroke="#d97706" stroke-width="0.35" pointer-events="none" />${spans.join("")}`
+  return `<path data-sweet-zone="true" data-window="${window}"${indicatorHidden(window)} d="${commands.join("")}" fill="#d97706" fill-opacity="0.45" stroke="#d97706" stroke-width="0.35" pointer-events="none" />${spans.join("")}`
 }
 
 function trendPath(
@@ -1386,11 +1428,10 @@ function trendPath(
     path += `${command}${x} ${y}`
     previous = point.date
     marks.push(
-      `<circle ${markAttribute} data-window="${window}"${window === "quarter" ? " hidden" : ""} data-date="${escapeAttribute(point.date)}" data-price="${price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
+      `<circle ${markAttribute} data-window="${window}"${indicatorHidden(window)} data-date="${escapeAttribute(point.date)}" data-price="${price}" cx="${x}" cy="${y}" r="0" fill="none" pointer-events="none" />`,
     )
   }
-  const hidden = window === "quarter" ? " hidden" : ""
-  return `<path ${pathAttribute} data-window="${window}"${hidden} d="${path}" fill="none" stroke="${color}" stroke-width="0.7"${dash} pointer-events="none" />${marks.join("")}`
+  return `<path ${pathAttribute} data-window="${window}"${indicatorHidden(window)} d="${path}" fill="none" stroke="${color}" stroke-width="0.7"${dash} pointer-events="none" />${marks.join("")}`
 }
 
 function trendUsedMarks(
@@ -1472,15 +1513,16 @@ function chartRangeMarkup(): string {
   return `<div role="group" aria-label="圖表日期範圍" class="flex flex-col gap-2">${buttons}</div>`
 }
 
+function indicatorHidden(window: IndicatorWindow): string {
+  return window === "month" ? "" : " hidden"
+}
+
 function indicatorMarkup(): string {
-  const options: { label: string; window: IndicatorWindow }[] = [
-    { label: "月均線", window: "month" },
-    { label: "季均線", window: "quarter" },
-  ]
+  const options: IndicatorWindow[] = ["month", "quarter", "hybrid"]
   const buttons = options
-    .map((option) => buttonMarkup(option.label, {
-      "aria-pressed": option.window === "month" ? "true" : "false",
-      "aria-label": option.label,
+    .map((option) => buttonMarkup(indicatorLabel(option), {
+      "aria-pressed": option === "month" ? "true" : "false",
+      "aria-label": indicatorLabel(option),
     }))
     .join("")
   return `<div role="group" aria-label="指標" class="flex flex-col gap-2">${buttons}</div>`

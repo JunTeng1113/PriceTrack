@@ -84,6 +84,7 @@ test("售價連成面積，二手開價只留散佈點", () => {
   expect(chart?.textContent).toContain("月均線")
   expect(chart?.querySelector('path[data-trend][data-window="month"]')?.hasAttribute("hidden")).toBe(false)
   expect(chart?.querySelector('path[data-trend][data-window="quarter"]')?.hasAttribute("hidden")).toBe(true)
+  expect(chart?.querySelector('path[data-trend][data-window="hybrid"]')?.hasAttribute("hidden")).toBe(true)
   expect(doc.querySelector('button[aria-label="月均線"]')?.getAttribute("aria-pressed")).toBe("true")
   expect(doc.querySelector('button[aria-label="季均線"]')?.getAttribute("aria-pressed")).toBe("false")
   expect(chart?.textContent).toContain("50% 區間")
@@ -201,21 +202,21 @@ function bands(root: ParentNode | null, attribute: string): string[][] {
   ])
 }
 
-function averages(root: ParentNode | null, window: "month" | "quarter" = "quarter"): string[][] {
+function averages(root: ParentNode | null, window: "month" | "quarter" | "hybrid" = "quarter"): string[][] {
   return [...(root?.querySelectorAll(`[data-average][data-window="${window}"]`) ?? [])].map((node) => [
     node.getAttribute("data-date") ?? "",
     node.getAttribute("data-price") ?? "",
   ])
 }
 
-function percentiles(root: ParentNode | null, share: "25" | "50", window: "month" | "quarter" = "quarter"): string[][] {
+function percentiles(root: ParentNode | null, share: "25" | "50", window: "month" | "quarter" | "hybrid" = "quarter"): string[][] {
   return [...(root?.querySelectorAll(`circle[data-percentile="${share}"][data-window="${window}"]`) ?? [])].map((node) => [
     node.getAttribute("data-date") ?? "",
     node.getAttribute("data-price") ?? "",
   ])
 }
 
-function sweetZone(root: ParentNode | null, window: "month" | "quarter" = "quarter"): string[][] {
+function sweetZone(root: ParentNode | null, window: "month" | "quarter" | "hybrid" = "quarter"): string[][] {
   return [...(root?.querySelectorAll(`line[data-sweet-zone][data-window="${window}"]`) ?? [])].map((node) => [
     node.getAttribute("data-date") ?? "",
     node.getAttribute("data-price") ?? "",
@@ -263,6 +264,45 @@ test("價差未達 2000 元時，甜蜜區改畫在 25% 區間再低 2000 元以
   }
 })
 
+test("月季均線在月窗口滿 5 筆時改用月均線", () => {
+  const wide = update(emptySeries(), [
+    snapshot("2024-06-01T02:00:00.000Z", [`｛${code}｝, $18000`]),
+  ])
+  const doc = documentOf(renderPage(wide, [
+    { type: "setChipGroup", name: "NVIDIA RTX4070" },
+    { type: "setRange", start: "2024-05-01", end: "2024-06-05" },
+  ], [
+    post(30000, "2024-05-01", "https://example.com/old"),
+    post(10000, "2024-06-01", "https://example.com/a"),
+    post(14000, "2024-06-02", "https://example.com/b"),
+    post(18000, "2024-06-03", "https://example.com/c"),
+    post(22000, "2024-06-04", "https://example.com/d"),
+    post(26000, "2024-06-05", "https://example.com/e"),
+  ]))
+  const chart = doc.querySelector('[aria-label="價格趨勢"]')
+  const hybrid = averages(chart, "hybrid")
+
+  expect(hybrid.find((row) => row[0] === "2024-06-02")?.[1]).toBe("18000")
+  expect(hybrid.find((row) => row[0] === "2024-06-04")?.[1]).toBe("18800")
+  expect(hybrid.find((row) => row[0] === "2024-06-05")?.[1]).toBe("18000")
+  expect(averages(chart, "month").find((row) => row[0] === "2024-06-02")?.[1]).toBe("12000")
+  expect(averages(chart, "month").find((row) => row[0] === "2024-06-04")?.[1]).toBe("16000")
+  expect(averages(chart, "month").find((row) => row[0] === "2024-06-05")?.[1]).toBe("18000")
+  expect(averages(chart, "quarter").find((row) => row[0] === "2024-06-05")?.[1]).toBe("20000")
+  expect(averages(chart, "quarter").find((row) => row[0] === "2024-06-05")?.[1]).toBe("20000")
+  expect(percentiles(chart, "50", "hybrid").find((row) => row[0] === "2024-06-02")?.[1]).toBe("14000")
+  expect(percentiles(chart, "25", "hybrid").find((row) => row[0] === "2024-06-02")?.[1]).toBe("10000")
+  expect(percentiles(chart, "50", "hybrid").find((row) => row[0] === "2024-06-05")?.[1]).toBe("18000")
+  expect(percentiles(chart, "25", "hybrid").find((row) => row[0] === "2024-06-05")?.[1]).toBe("12000")
+  expect(sweetZone(chart, "hybrid").filter((row) => row[0] >= "2024-06-01")).toEqual([
+    ["2024-06-01", "10000"],
+    ["2024-06-02", "10000"],
+    ["2024-06-03", "12000"],
+    ["2024-06-04", "12000"],
+    ["2024-06-05", "12000"],
+  ])
+})
+
 test("側邊欄可在月均線與季均線之間切換", () => {
   const listing = "華碩 PRIME-RTX5060TI-8G"
   const group = "NVIDIA RTX5060Ti-8GB"
@@ -291,6 +331,16 @@ test("側邊欄可在月均線與季均線之間切換", () => {
   expect(quarter?.hasAttribute("hidden")).toBe(false)
   expect(chart?.textContent).toContain("季均線")
   expect(chart?.textContent).toContain("同一季窗口")
+
+  const hybrid = chart?.querySelector('path[data-trend][data-window="hybrid"]')
+  document.querySelector<HTMLButtonElement>('button[aria-label="月季均線"]')?.click()
+  expect(document.querySelector('button[aria-label="月季均線"]')?.getAttribute("aria-pressed")).toBe("true")
+  expect(document.querySelector('button[aria-label="季均線"]')?.getAttribute("aria-pressed")).toBe("false")
+  expect(month?.hasAttribute("hidden")).toBe(true)
+  expect(quarter?.hasAttribute("hidden")).toBe(true)
+  expect(hybrid?.hasAttribute("hidden")).toBe(false)
+  expect(chart?.textContent).toContain("月季均線")
+  expect(chart?.textContent).toContain("滿 5 筆")
 })
 
 test("滑鼠停在二手開價點上時顯示該筆資訊", () => {
