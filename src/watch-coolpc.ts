@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs"
-import { readFile, rename, writeFile } from "node:fs/promises"
+import { copyFile, readFile, rename, unlink, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { decodePage } from "./page-bytes.ts"
 import { isQuote } from "./quote.ts"
@@ -54,6 +54,11 @@ async function save(path: string, prepared: PreparedSeries): Promise<void> {
   }
   const temporary = `${path}.tmp`
   await writeFile(temporary, JSON.stringify(prepared))
+  if (existsSync(path)) {
+    await copyFile(temporary, path)
+    await unlink(temporary)
+    return
+  }
   await rename(temporary, path)
 }
 

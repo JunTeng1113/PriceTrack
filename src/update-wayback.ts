@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs"
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { chooseCaptures, parseCdx, snapshotUrl } from "./captures.ts"
 import { decodePage } from "./page-bytes.ts"
@@ -43,6 +43,11 @@ async function save(prepared: PreparedFile): Promise<void> {
   await mkdir(dirname(preparedPath), { recursive: true })
   const temporary = `${preparedPath}.tmp`
   await writeFile(temporary, JSON.stringify(prepared))
+  if (existsSync(preparedPath)) {
+    await copyFile(temporary, preparedPath)
+    await unlink(temporary)
+    return
+  }
   await rename(temporary, preparedPath)
 }
 

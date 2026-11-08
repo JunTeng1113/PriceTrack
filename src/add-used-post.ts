@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs"
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout } from "node:process"
@@ -24,6 +24,11 @@ async function save(posts: readonly UsedPost[]): Promise<void> {
   await mkdir(dirname(preparedPath), { recursive: true })
   const temporary = `${preparedPath}.tmp`
   await writeFile(temporary, `${JSON.stringify({ posts }, null, 2)}\n`)
+  if (existsSync(preparedPath)) {
+    await copyFile(temporary, preparedPath)
+    await unlink(temporary)
+    return
+  }
   await rename(temporary, preparedPath)
 }
 
