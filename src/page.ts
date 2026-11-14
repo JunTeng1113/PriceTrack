@@ -517,13 +517,16 @@ function parkAxis(svg: SVGSVGElement, scale: number): void {
   }
   windowEl.setAttribute("class", "min-w-0 overflow-x-auto")
   windowEl.setAttribute("style", "width:calc(270 / 400 * 100%)")
+  while (side.firstChild !== null) {
+    side.firstChild.remove()
+  }
   for (const node of [...svg.querySelectorAll("*")].filter((item) => isAxisPiece(item))) {
     scaleElement(node, scale, false)
     side.append(node)
   }
 }
 
-function restoreAxis(svg: SVGSVGElement): void {
+export function restoreAxis(svg: SVGSVGElement): void {
   const host = chartHost(svg)
   if (host === null) {
     return

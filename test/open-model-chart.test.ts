@@ -53,6 +53,55 @@ test("點品牌按鈕後，圖上只留該品牌的線", () => {
   expect(document.getElementById("keep")).not.toBeNull()
 })
 
+test("12 個月視窗下篩品牌時，舊的金額軸和型號不會留在圖上", () => {
+  const series = update(emptySeries(), [
+    vga("2024-01-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
+    vga("2025-06-15T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`]),
+  ])
+  start(series)
+
+  const host = document.querySelector(`[aria-label="${modelGroup}"] svg[data-price-chart]`)?.closest("[data-chart-width]")
+  const labels = (): string[] =>
+    [...(host?.querySelectorAll("text[data-series-label]") ?? [])].map((node) => node.textContent ?? "")
+  const yLabels = (): string[] =>
+    [...(host?.querySelectorAll('text[data-axis="y"]') ?? [])].map((node) => node.textContent ?? "")
+
+  expect(labels().sort()).toEqual([prime, windforce].sort())
+  expect(yLabels().length).toBeGreaterThan(0)
+  expect(host?.querySelectorAll("svg[data-chart-axis]")).toHaveLength(1)
+
+  const button = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+    .find((node) => node.textContent === "華碩")
+  button?.click()
+
+  expect(labels()).toEqual([prime])
+  expect(new Set(yLabels()).size).toBe(yLabels().length)
+  expect(host?.querySelectorAll("svg[data-chart-axis]")).toHaveLength(1)
+  expect(host?.querySelector("svg[data-price-chart]")?.querySelector("text[data-series-label]")).toBeNull()
+})
+
+test("12 個月視窗下篩到較短的品牌時，舊的金額軸不會留在圖旁", () => {
+  const brief = "微星 RTX5060Ti VENTUS 2X 8G"
+  const series = update(emptySeries(), [
+    vga("2024-01-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`]),
+    vga("2025-06-15T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${brief}(2490MHz), $16990`]),
+  ])
+  start(series)
+
+  const host = document.querySelector(`[aria-label="${modelGroup}"] svg[data-price-chart]`)?.closest("[data-chart-width]")
+  expect(host?.querySelector("svg[data-chart-axis]")).not.toBeNull()
+
+  const button = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
+    .find((node) => node.textContent === "微星")
+  button?.click()
+
+  const labels = [...(host?.querySelectorAll("text[data-series-label]") ?? [])].map((node) => node.textContent)
+  expect(labels).toEqual([brief])
+  expect(host?.querySelector("svg[data-chart-axis]")).toBeNull()
+  expect(host?.querySelector("[data-chart-row]")).toBeNull()
+  expect(host?.querySelector("svg[data-price-chart]")?.querySelector("text[data-series-label]")?.textContent).toBe(brief)
+})
+
 test("僅顯示在售只留最新快照裡沒有售罄的代號", () => {
   const gone = "微星 RTX5060Ti VENTUS 2X 8G"
   const series = update(emptySeries(), [

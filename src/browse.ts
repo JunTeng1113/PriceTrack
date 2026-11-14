@@ -1,4 +1,4 @@
-import { adoptChartMark, applyChartMode, applyIndicator, chartCacheKey, clearPreparedCharts, indicatorLabel, preparedBrandChart, renderBrandSvg, renderPage, renderShell, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart, type ChartRange, type IndicatorWindow } from "./page.ts"
+import { adoptChartMark, applyChartMode, applyIndicator, chartCacheKey, clearPreparedCharts, indicatorLabel, preparedBrandChart, renderBrandSvg, renderPage, renderShell, restoreAxis, selectedListMarkup, storeBrandChart, usedMarkup, visibleChart, type ChartRange, type IndicatorWindow } from "./page.ts"
 import { present, type Action, type Generation, type PriceSeries, type View } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
@@ -860,6 +860,7 @@ export function start(series: PriceSeries): {
         lockedCode = null
         lockedSvg = null
       }
+      restoreAxis(current)
       current.replaceWith(nextSvg)
       applyChartMode(nextSvg, chartRange)
       bindChart(nextSvg)
