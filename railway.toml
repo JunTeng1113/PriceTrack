@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npm run build"
+buildCommand = "npm run build"
 
 [deploy]
 # 同時跑網頁+API（api-server）與原價屋輪詢（coolpc）

@@ -2,6 +2,9 @@
   "name": "pricetrack",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "vitest run",
     "dev": "vite",
