@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { expect, test, vi } from "vitest"
-import { start } from "../src/browse.ts"
+import { start } from "../src/browse.tsx"
 import { emptySeries, update, type Snapshot } from "../src/present.ts"
 
 const modelGroup = "NVIDIA RTX5060Ti-8GB"

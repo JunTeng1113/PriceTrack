@@ -1,18 +1,23 @@
-import type { ComponentProps } from "react"
+import { forwardRef, type ComponentProps } from "react"
 import { cn } from "../../lib/utils.ts"
 
-function Input({ className, type, ...props }: ComponentProps<"input">) {
+const Input = forwardRef<HTMLInputElement, ComponentProps<"input">>(function Input(
+  { className, type = "text", ...props },
+  ref,
+) {
   return (
     <input
+      ref={ref}
       type={type}
       data-slot="input"
       className={cn(
-        "border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs outline-none md:text-sm",
+        "border-line flex h-9 w-full rounded-md border bg-surface-raised px-3 text-sm text-ink outline-none",
+        "focus-visible:border-accent md:text-sm",
         className,
       )}
       {...props}
     />
   )
-}
+})
 
 export { Input }

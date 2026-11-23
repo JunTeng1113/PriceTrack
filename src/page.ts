@@ -1,3 +1,17 @@
+import {
+  axisGutter,
+  labelStyle,
+  plotBottom,
+  plotLeft,
+  plotRight,
+  plotSpan,
+  plotTop,
+  priceAxisX,
+  seriesNameX,
+  spreadLabelYs,
+  xAt,
+  yAt,
+} from "./chart/geometry.ts"
 import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, generationMarkup, listingTableMarkup } from "./fields.tsx"
 import { brandColorIndex, brandGroup, brandPaint, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 import type { UsedBox, UsedPost } from "./used-post.ts"
@@ -142,34 +156,8 @@ function seriesColor(index: number): string {
   return brandPaint(index)
 }
 
-const plotLeft = 4
-const plotRight = 270
-const priceAxisX = plotRight
-const seriesNameX = priceAxisX + 24
-const labelSize = 3.2
-const labelGap = 3.6
-const labelTop = 2
-const labelBottom = 98
-const plotTop = 4
-const plotBottom = 84
-
 function formatPrice(value: number): string {
   return formatSellingPrice(value)
-}
-
-function xAt(date: string, startDay: number, daySpan: number): number {
-  if (daySpan === 0) {
-    return (plotLeft + plotRight) / 2
-  }
-  return plotLeft + ((dayNumber(date) - startDay) / daySpan) * (plotRight - plotLeft)
-}
-
-function yAt(price: number, axis: { lower: number; upper: number }): number {
-  const span = axis.upper - axis.lower
-  if (span === 0) {
-    return (plotTop + plotBottom) / 2
-  }
-  return plotTop + (1 - (price - axis.lower) / span) * (plotBottom - plotTop)
 }
 
 function monthLastDay(year: number, month: number): string {
@@ -294,61 +282,6 @@ export function preparedBrandChart(group: string, brand: string): string | null 
   return charts.get(brand) ?? null
 }
 
-function labelStyle(count: number): { fontSize: number; gap: number } {
-  if (count <= 1) {
-    return { fontSize: labelSize, gap: labelGap }
-  }
-  const fitted = (labelBottom - labelTop) / (count - 1)
-  if (fitted >= labelGap) {
-    return { fontSize: labelSize, gap: labelGap }
-  }
-  return { fontSize: fitted * 0.9, gap: fitted }
-}
-
-function spreadLabelYs(preferred: readonly number[], gap: number): number[] {
-  const count = preferred.length
-  if (count === 0) {
-    return []
-  }
-  const only = preferred[0] ?? labelTop
-  if (count === 1) {
-    return [Math.min(labelBottom, Math.max(labelTop, only))]
-  }
-  const order = preferred.map((y, index) => ({ y, index }))
-  order.sort((left, right) => left.y - right.y || left.index - right.index)
-  const placed: number[] = []
-  let cursor = labelTop
-  for (const item of order) {
-    const next = Math.max(item.y, cursor)
-    placed.push(next)
-    cursor = next + gap
-  }
-  const last = placed[count - 1] ?? labelBottom
-  if (last > labelBottom) {
-    const shift = last - labelBottom
-    for (let index = 0; index < placed.length; index += 1) {
-      placed[index] = (placed[index] ?? labelBottom) - shift
-    }
-  }
-  const first = placed[0] ?? labelTop
-  if (first < labelTop) {
-    cursor = labelTop
-    for (let index = 0; index < placed.length; index += 1) {
-      placed[index] = cursor
-      cursor += gap
-    }
-  }
-  const result = Array.from({ length: count }, () => labelTop)
-  for (let index = 0; index < order.length; index += 1) {
-    const item = order[index]
-    const y = placed[index]
-    if (item !== undefined && y !== undefined) {
-      result[item.index] = y
-    }
-  }
-  return result
-}
-
 function chartSvg(
   marks: string,
   label = "",
@@ -363,9 +296,6 @@ function chartSvg(
   }
   return `<div data-chart-width data-mode="fit"><div data-chart-window class="w-full max-w-full overflow-x-auto">${svg}</div></div>`
 }
-
-const plotSpan = plotRight - plotLeft
-const axisGutter = 400 - plotRight
 
 function mapX(x: number, scale: number): number {
   if (x <= plotRight) {
@@ -1786,7 +1716,7 @@ function visibleLines(chart: View["modelCharts"][number], onSaleOnly: boolean): 
   return branded.filter((line) => line.onSale)
 }
 
-function modelSection(view: View, chart: View["modelCharts"][number]): string {
+export function modelSection(view: View, chart: View["modelCharts"][number]): string {
   const stored = new Map<string, string>()
   stored.set("", modelSvg(view, chart.allSeries, "", chart.used))
   for (const name of chart.brands) {

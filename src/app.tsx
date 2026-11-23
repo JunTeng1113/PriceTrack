@@ -1,5 +1,5 @@
 import "./index.css"
-import { start } from "./browse.ts"
+import { start } from "./browse.tsx"
 import { readThroughCache } from "./cached-fetch.ts"
 import { demoSeries } from "./main.ts"
 import { emptySeries, type PriceSeries } from "./present.ts"

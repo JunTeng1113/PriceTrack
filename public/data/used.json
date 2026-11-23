@@ -1,6 +1,76 @@
 {
   "posts": [
     {
+      "code": "技嘉 RTX5070Ti EAGLE OC SFF 16G",
+      "date": "2026-11-18",
+      "price": 47000,
+      "link": "https://www.facebook.com/groups/507315352749401/posts/3809979315816305/",
+      "seller": "Chiu Ian"
+    },
+    {
+      "code": "微星 RTX5070Ti 16G SHADOW 3X OC",
+      "date": "2026-11-18",
+      "price": 40000,
+      "link": "https://www.facebook.com/groups/382189418643825/posts/3237601849769220/",
+      "seller": "王駿霖"
+    },
+    {
+      "code": "技嘉 RTX5070Ti EAGLE OC ICE SFF 16G",
+      "date": "2026-11-18",
+      "price": 45000,
+      "link": "https://www.facebook.com/groups/382189418643825/posts/3237610309768374/",
+      "seller": "謝永寓"
+    },
+    {
+      "code": "微星 RTX5070 12G GAMING TRIO OC",
+      "date": "2026-11-18",
+      "price": 29500,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4800061256883614/",
+      "seller": "邱奕鈞"
+    },
+    {
+      "code": "RTX 5070",
+      "date": "2026-11-17",
+      "price": 26000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4799361930286880/",
+      "seller": "Lin Lin"
+    },
+    {
+      "code": "技嘉 RTX5070 EAGLE OC SFF 12G",
+      "date": "2026-11-16",
+      "price": 27000,
+      "link": "https://www.facebook.com/groups/382189418643825/posts/3233589290170476/",
+      "seller": "Quan Chen Lin"
+    },
+    {
+      "code": "微星 RTX 5060 Ti 8G SHADOW 2X OC PLUS",
+      "date": "2026-11-15",
+      "price": 13000,
+      "link": "https://www.facebook.com/groups/565034810263428/posts/28263577013315835/",
+      "seller": "Quan Chen Lin"
+    },
+    {
+      "code": "索泰 RTX 5070 Ti SOLID 白",
+      "date": "2026-11-15",
+      "price": 40000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4795098620713211/",
+      "seller": "HS YA"
+    },
+    {
+      "code": "技嘉 RTX 4060 Ti 8G",
+      "date": "2026-11-15",
+      "price": 11000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4795342270688846/",
+      "seller": "魏子揚"
+    },
+    {
+      "code": "微星 RTX 4070 Ti 12G VENTUS 3X OC",
+      "date": "2026-11-15",
+      "price": 22000,
+      "link": "https://www.facebook.com/groups/382189418643825/posts/3233092496886822/",
+      "seller": "Patrick Chung"
+    },
+    {
       "code": "ZOTAC RTX 3090 24G AMP EXTREME HOLO",
       "date": "2026-11-14",
       "price": 38000,
@@ -169,6 +239,13 @@
       "seller": "翁明彥"
     },
     {
+      "code": "華碩 TUF-RTX5070-O12G-GAMING",
+      "date": "2026-11-14",
+      "price": 29000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4795065124049894/",
+      "seller": "滾葛格"
+    },
+    {
       "code": "NVIDIA RTX 3090 FE 24G",
       "date": "2026-11-13",
       "price": 45000,
@@ -204,6 +281,20 @@
       "seller": "Lice Kinge Lin"
     },
     {
+      "code": "技嘉 RTX5070Ti EAGLE OC ICE SFF 16G",
+      "date": "2026-11-13",
+      "price": 50000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4793323240890749/",
+      "seller": "葉維"
+    },
+    {
+      "code": "技嘉 RTX5070 WINDFORCE OC SFF 12G",
+      "date": "2026-11-13",
+      "price": 28000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4793323240890749/",
+      "seller": "葉維"
+    },
+    {
       "code": "ASUS DUAL-RTX5060TI-O16G",
       "date": "2026-11-12",
       "price": 20000,
@@ -237,6 +328,13 @@
       "price": 43500,
       "link": "https://www.facebook.com/groups/382189418643825/posts/3229043483958390",
       "seller": "Justy Chiang"
+    },
+    {
+      "code": "索泰 RTX5070Ti 天啟",
+      "date": "2026-11-12",
+      "price": 46000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4792011451021928/",
+      "seller": "饒志文"
     },
     {
       "code": "技嘉 RTX 4070 SUPER WINDFORCE OC 12G",
@@ -293,6 +391,13 @@
       "price": 8500,
       "link": "https://www.ptt.cc/bbs/HardwareSale/M.1794322862.A.C17.html",
       "seller": "AVGMLBS"
+    },
+    {
+      "code": "ZOTAC RTX5070Ti SOLID CORE OC",
+      "date": "2026-11-09",
+      "price": 42000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4788602551362818/",
+      "seller": "蔡昇廷"
     },
     {
       "code": "EVGA RTX 3060 Ti FTW3 ULTRA",
@@ -421,6 +526,20 @@
       "seller": "Daruanqq Lin"
     },
     {
+      "code": "微星 RTX5070Ti 16G GAMING TRIO",
+      "date": "2026-11-06",
+      "price": 45000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4784685921754481/",
+      "seller": "張譽騰"
+    },
+    {
+      "code": "技嘉 RTX5070Ti AERO OC 16G",
+      "date": "2026-11-06",
+      "price": 50000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4783930078496732/",
+      "seller": "蔡宇宸"
+    },
+    {
       "code": "EVGA RTX3090 FTW3 ULTRA",
       "date": "2026-11-05",
       "price": 45000,
@@ -484,6 +603,13 @@
       "seller": "kk7ks"
     },
     {
+      "code": "微星 RTX5070 12G VENTUS 3X",
+      "date": "2026-11-04",
+      "price": 25000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4781537012069372/",
+      "seller": "畢格低"
+    },
+    {
       "code": "NVIDIA GeForce RTX5070 Founders Edition",
       "date": "2026-11-03",
       "price": 30000,
@@ -510,6 +636,13 @@
       "price": 23000,
       "link": "https://www.facebook.com/groups/good3c/posts/29006872765641426/",
       "seller": ""
+    },
+    {
+      "code": "華碩 DUAL-RTX5070-O12G",
+      "date": "2026-11-03",
+      "price": 26500,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4780743452148728/",
+      "seller": "邱奕鈞"
     },
     {
       "code": "微星 RTX4060Ti VENTUS 2X BLACK 8G OC",
@@ -1247,6 +1380,13 @@
       "seller": ""
     },
     {
+      "code": "技嘉 RTX5070 EAGLE OC SFF 12G",
+      "date": "2026-10-22",
+      "price": 27000,
+      "link": "https://www.facebook.com/groups/507315352749401/posts/3774242332723337/",
+      "seller": "劉小杰"
+    },
+    {
       "code": "華碩 PRIME-RTX5070TI-16G",
       "date": "2026-10-21",
       "price": 39000,
@@ -1350,6 +1490,13 @@
       "price": 20000,
       "link": "https://www.facebook.com/marketplace/item/956344560864857/",
       "seller": "https://www.facebook.com/profile.php?id=pfbid0YCP1yjzsngVmkBtSRQSRLDJTatWFnF5g75jTALNHHqdCa2WxZFwr7vj1H1dcpUqol"
+    },
+    {
+      "code": "技嘉 RTX5070 WINDFORCE OC SFF 12G",
+      "date": "2026-10-20",
+      "price": 27500,
+      "link": "https://www.facebook.com/groups/507315352749401/posts/3769356293211941/",
+      "seller": "楊處凡"
     },
     {
       "code": "微星 RTX5060Ti 16G CYCLONE OC",
@@ -1674,6 +1821,13 @@
       "seller": ""
     },
     {
+      "code": "RTX 5070 Ti",
+      "date": "2026-10-08",
+      "price": 39000,
+      "link": "https://www.facebook.com/groups/507315352749401/posts/3753978061416431/",
+      "seller": "賴韋丞"
+    },
+    {
       "code": "華碩 TUF-RTX4070TIS-O16G-GAMING",
       "date": "2026-10-07",
       "price": 33000,
@@ -1828,6 +1982,13 @@
       "seller": "nerolanx"
     },
     {
+      "code": "ASUS PRIME RTX 5070 12GB OC WHITE",
+      "date": "2026-10-02",
+      "price": 28000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4741699122719828/",
+      "seller": "Kai Wu"
+    },
+    {
       "code": "技嘉 RTX5060Ti EAGLE OC 16G",
       "date": "2026-10-01",
       "price": 21987,
@@ -1891,6 +2052,13 @@
       "seller": ""
     },
     {
+      "code": "PNY RTX5070Ti 16G OC",
+      "date": "2026-09-28",
+      "price": 39000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4736601783229562/",
+      "seller": "Billy He"
+    },
+    {
       "code": "技嘉 RTX4080 16GB GAMING OC",
       "date": "2026-09-27",
       "price": 32000,
@@ -1931,6 +2099,13 @@
       "price": 16500,
       "link": "https://www.facebook.com/groups/507315352749401/posts/3739638372850400/",
       "seller": ""
+    },
+    {
+      "code": "華碩 TUF RTX5070Ti 16G",
+      "date": "2026-09-25",
+      "price": 42000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4732839860272421/",
+      "seller": "ル ミア"
     },
     {
       "code": "華碩 DUAL-RTX5060TI-O16G",
@@ -2064,6 +2239,13 @@
       "price": 14500,
       "link": "https://www.facebook.com/groups/1923977991158636/posts/4725344227688651/",
       "seller": ""
+    },
+    {
+      "code": "華碩 ROG STRIX RTX5070Ti 16G OC",
+      "date": "2026-09-18",
+      "price": 63000,
+      "link": "https://www.facebook.com/groups/1923977991158636/posts/4724112687811805/",
+      "seller": "李政州"
     },
     {
       "code": "技嘉 RTX4060Ti EAGLE OC 8G",

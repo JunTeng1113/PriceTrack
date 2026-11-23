@@ -1,4 +1,4 @@
-import { start } from "./browse.ts"
+import { start } from "./browse.tsx"
 import { emptySeries, update, type PriceSeries, type Snapshot } from "./present.ts"
 
 const snapshot: Snapshot = {

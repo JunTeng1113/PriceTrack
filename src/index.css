@@ -1,5 +1,29 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
-details:not([open]) > :not(summary) {
-  display: none;
+@theme {
+  --font-sans: "IBM Plex Sans", "Noto Sans TC", sans-serif;
+  --color-surface: #f4f6f8;
+  --color-surface-raised: #ffffff;
+  --color-ink: #1e293b;
+  --color-ink-muted: #64748b;
+  --color-line: #d8dee6;
+  --color-accent: #0f766e;
+  --color-accent-ink: #ffffff;
+  --color-plot: #e8eef7;
+  --color-plot-grid: #c5d0de;
+}
+
+@layer base {
+  html {
+    @apply font-sans text-ink antialiased;
+  }
+
+  body {
+    @apply m-0 min-h-dvh bg-surface text-ink;
+  }
+
+  details:not([open]) > :not(summary) {
+    display: none;
+  }
 }

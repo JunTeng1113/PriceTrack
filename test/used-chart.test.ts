@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { expect, test } from "vitest"
-import { start } from "../src/browse.ts"
+import { start } from "../src/browse.tsx"
 import { renderPage } from "../src/page.ts"
 import { emptySeries, present, update, type Snapshot } from "../src/present.ts"
 import type { UsedPost } from "../src/used-post.ts"
