@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { flushSync } from "react-dom"
+import {
+  fetchModelCatalog,
+  fetchQuotesForGroups,
+  fetchUsedForGroups,
+  type ModelOption,
+} from "../model-data.ts"
 import { clearPreparedCharts, type ChartRange, type IndicatorWindow } from "../page.ts"
 import {
   groupsMatchingRtxModel,
   present,
   rtxModelLabel,
+  rtxModelLabels,
   type Action,
   type PriceSeries,
   type View,
@@ -17,6 +24,11 @@ import { FilterPanel } from "./FilterPanel.tsx"
 import { ModelChartList } from "./ModelChartSection.tsx"
 
 const chartQuoteLimit = 2000
+
+type ModelBundle = {
+  quotes: PriceSeries["quotes"][number][]
+  used: UsedPost[]
+}
 
 function sharedBrandNames(view: View): string[] {
   const names: string[] = []
@@ -67,6 +79,8 @@ function BrowseApp({
   const [actions, setActions] = useState<Action[]>(() => [...initialActions])
   const [vendor, setVendor] = useState("NVIDIA")
   const [draftChips, setDraftChips] = useState<string[]>([])
+  const [modelCatalog, setModelCatalog] = useState<ModelOption[]>([])
+  const [bundles, setBundles] = useState<Readonly<Record<string, ModelBundle>>>({})
   const [chartRange, setChartRange] = useState<ChartRange>(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       return "3"
@@ -84,8 +98,52 @@ function BrowseApp({
   const startRef = useRef<HTMLInputElement | null>(null)
   const endRef = useRef<HTMLInputElement | null>(null)
   const lockRef = useRef<ChartLock>({ code: null, svg: null })
+  const fetchToken = useRef(0)
 
-  const listView = useMemo(() => present(series, actions, usedPosts), [series, actions, usedPosts])
+  const workingSeries = useMemo((): PriceSeries => {
+    const labels = Object.keys(bundles)
+    if (labels.length === 0) {
+      return series
+    }
+    const quotes = series.quotes.map((quote) => quote)
+    for (const label of labels) {
+      const bundle = bundles[label]
+      if (bundle === undefined) {
+        continue
+      }
+      for (const quote of bundle.quotes) {
+        if (!quotes.some((item) => item.code === quote.code && item.date === quote.date)) {
+          quotes.push(quote)
+        }
+      }
+    }
+    return { quotes }
+  }, [series, bundles])
+
+  const workingUsed = useMemo((): readonly UsedPost[] => {
+    const labels = Object.keys(bundles)
+    if (labels.length === 0) {
+      return usedPosts
+    }
+    const posts = usedPosts.map((post) => post)
+    for (const label of labels) {
+      const bundle = bundles[label]
+      if (bundle === undefined) {
+        continue
+      }
+      for (const post of bundle.used) {
+        if (!posts.some((item) => item.link === post.link && item.code === post.code && item.price === post.price)) {
+          posts.push(post)
+        }
+      }
+    }
+    return posts
+  }, [usedPosts, bundles])
+
+  const listView = useMemo(
+    () => present(workingSeries, actions, workingUsed),
+    [workingSeries, actions, workingUsed],
+  )
   const chartsKey = chartActionKey(actions)
   const actionsRef = useRef(actions)
   actionsRef.current = actions
@@ -94,23 +152,48 @@ function BrowseApp({
       (action) =>
         action.type !== "select" && action.type !== "deselect" && action.type !== "point",
     )
-    return present(series, chartActions, usedPosts)
-  }, [series, usedPosts, chartsKey])
+    return present(workingSeries, chartActions, workingUsed)
+  }, [workingSeries, workingUsed, chartsKey])
 
-  const progressive = series.quotes.length > chartQuoteLimit
+  const progressive = workingSeries.quotes.length > chartQuoteLimit
   const brands = sharedBrandNames(chartView)
   const selectedBrands = chartView.modelCharts[0]?.selectedBrands ?? []
   const selectedChipGroups = appliedChipGroups(actions)
+  const modelLabels =
+    modelCatalog.length > 0
+      ? modelCatalog.map((item) => item.label)
+      : rtxModelLabels(listView.chipGroups)
 
   useEffect(() => {
     document.documentElement.lang = "zh-Hant"
   }, [])
 
   useEffect(() => {
+    if (series.quotes.length > 0) {
+      return
+    }
+    let cancelled = false
+    setLoadingText("正在讀取型號清單")
+    void fetchModelCatalog().then((models) => {
+      if (cancelled) {
+        return
+      }
+      setModelCatalog(models)
+      setLoadingText("")
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [series.quotes.length])
+
+  useEffect(() => {
     clearPreparedCharts()
     setVisibleCount(progressive ? 0 : Number.POSITIVE_INFINITY)
-    setLoadingText(progressive ? "正在繪製圖表" : "")
-  }, [series, usedPosts, progressive])
+    if (Object.keys(bundles).length === 0 && series.quotes.length === 0 && modelCatalog.length === 0) {
+      return
+    }
+    setLoadingText((text) => (text.startsWith("正在讀取") ? text : progressive ? "正在繪製圖表" : ""))
+  }, [workingSeries, workingUsed, progressive, bundles, series.quotes.length, modelCatalog.length])
 
   useEffect(() => {
     if (!progressive) {
@@ -129,6 +212,36 @@ function BrowseApp({
       clearTimeout(timer)
     }
   }, [progressive, visibleCount, chartView.modelCharts.length])
+
+  const applyModelActions = (labels: readonly string[], groupSource: readonly string[]): void => {
+    const base = actionsRef.current.filter(
+      (action) => action.type !== "setChipGroup" && action.type !== "setGeneration",
+    )
+    if (labels.length === 0) {
+      flushSync(() => {
+        setActions(base)
+      })
+      return
+    }
+    const nextGroups: string[] = []
+    for (const name of labels) {
+      const catalog = modelCatalog.find((item) => item.label === name)
+      const matched = catalog !== undefined
+        ? catalog.groups
+        : groupsMatchingRtxModel(groupSource, name)
+      for (const group of matched) {
+        if (!nextGroups.includes(group)) {
+          nextGroups.push(group)
+        }
+      }
+    }
+    flushSync(() => {
+      setActions([
+        ...base,
+        ...nextGroups.map((group) => ({ type: "setChipGroup" as const, name: group })),
+      ])
+    })
+  }
 
   const onSearch = (): void => {
     const start = startRef.current?.value ?? ""
@@ -155,40 +268,64 @@ function BrowseApp({
   }
 
   const onToggleModel = (label: string): void => {
-    flushSync(() => {
-      setDraftChips([])
-      setActions((previous) => {
-        const currentGroups = appliedChipGroups(previous)
-        const currentLabels: string[] = []
-        for (const group of currentGroups) {
-          const name = rtxModelLabel(group)
-          if (name !== null && !currentLabels.includes(name)) {
-            currentLabels.push(name)
-          }
+    setDraftChips([])
+    const currentGroups = appliedChipGroups(actionsRef.current)
+    const currentLabels: string[] = []
+    for (const group of currentGroups) {
+      const name = rtxModelLabel(group)
+      if (name !== null && !currentLabels.includes(name)) {
+        currentLabels.push(name)
+      }
+    }
+    const selected = currentLabels.includes(label)
+    const nextLabels = selected
+      ? currentLabels.filter((name) => name !== label)
+      : [...currentLabels, label]
+
+    if (selected) {
+      setBundles((previous) => {
+        if (!(label in previous)) {
+          return previous
         }
-        const nextLabels = currentLabels.includes(label)
-          ? currentLabels.filter((name) => name !== label)
-          : [...currentLabels, label]
-        const base = previous.filter(
-          (action) => action.type !== "setChipGroup" && action.type !== "setGeneration",
-        )
-        if (nextLabels.length === 0) {
-          return base
-        }
-        const nextGroups: string[] = []
-        for (const name of nextLabels) {
-          for (const group of groupsMatchingRtxModel(listView.chipGroups, name)) {
-            if (!nextGroups.includes(group)) {
-              nextGroups.push(group)
-            }
-          }
-        }
-        return [
-          ...base,
-          ...nextGroups.map((group) => ({ type: "setChipGroup" as const, name: group })),
-        ]
+        const next = { ...previous }
+        delete next[label]
+        return next
       })
-    })
+      applyModelActions(nextLabels, listView.chipGroups)
+      return
+    }
+
+    const catalog = modelCatalog.find((item) => item.label === label)
+    const groups = catalog !== undefined
+      ? [...catalog.groups]
+      : groupsMatchingRtxModel(listView.chipGroups, label)
+
+    if (catalog === undefined || series.quotes.length > 0) {
+      applyModelActions(nextLabels, listView.chipGroups)
+      return
+    }
+
+    if (bundles[label] !== undefined) {
+      applyModelActions(nextLabels, groups)
+      return
+    }
+
+    const token = fetchToken.current + 1
+    fetchToken.current = token
+    setLoadingText(`正在讀取 ${label}`)
+    void Promise.all([fetchQuotesForGroups(groups), fetchUsedForGroups(groups)]).then(
+      ([quotes, used]) => {
+        if (fetchToken.current !== token) {
+          return
+        }
+        setBundles((previous) => ({
+          ...previous,
+          [label]: { quotes, used },
+        }))
+        applyModelActions(nextLabels, groups)
+        setLoadingText("")
+      },
+    )
   }
 
   const onBrand = (name: string): void => {
@@ -222,7 +359,7 @@ function BrowseApp({
   const onSelectCode = (code: string): void => {
     flushSync(() => {
       setActions((previous) => {
-        const selected = present(series, previous, usedPosts).selected
+        const selected = present(workingSeries, previous, workingUsed).selected
         const type: "select" | "deselect" = selected.includes(code) ? "deselect" : "select"
         return [...previous, { type, code }]
       })
@@ -274,6 +411,7 @@ function BrowseApp({
           view={listView}
           chipGroups={draftChips}
           appliedChipGroups={selectedChipGroups}
+          modelLabels={modelLabels}
           vendor={vendor}
           startRef={startRef}
           endRef={endRef}

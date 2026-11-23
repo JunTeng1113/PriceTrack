@@ -1,6 +1,6 @@
 import type { Plugin } from "vite"
 import { config as loadEnv } from "dotenv"
-import { seriesPayload, usedPayload, jsonResponse } from "./api-data.ts"
+import { modelsPayload, seriesPayload, usedPayload, jsonResponse } from "./api-data.ts"
 
 loadEnv()
 
@@ -14,13 +14,16 @@ function writeResponse(res: import("node:http").ServerResponse, result: Response
   })
 }
 
+const apiPaths = new Set(["/api/models", "/api/series", "/api/used"])
+
 export function priceTrackApiPlugin(): Plugin {
   return {
     name: "pricetrack-api",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        const path = req.url?.split("?")[0] ?? ""
-        if (req.method === "OPTIONS" && (path === "/api/series" || path === "/api/used")) {
+        const requestUrl = new URL(req.url ?? "/", "http://localhost")
+        const path = requestUrl.pathname
+        if (req.method === "OPTIONS" && apiPaths.has(path)) {
           res.statusCode = 204
           res.setHeader("access-control-allow-origin", "*")
           res.setHeader("access-control-allow-methods", "GET, OPTIONS")
@@ -31,8 +34,17 @@ export function priceTrackApiPlugin(): Plugin {
           next()
           return
         }
+        if (path === "/api/models") {
+          void modelsPayload()
+            .then((body) => writeResponse(res, jsonResponse(body)))
+            .catch((error: unknown) => {
+              console.error(error)
+              writeResponse(res, jsonResponse({ error: "models failed" }, 500))
+            })
+          return
+        }
         if (path === "/api/series") {
-          void seriesPayload()
+          void seriesPayload(requestUrl.searchParams.get("groups"))
             .then((body) => writeResponse(res, jsonResponse(body)))
             .catch((error: unknown) => {
               console.error(error)
@@ -41,7 +53,7 @@ export function priceTrackApiPlugin(): Plugin {
           return
         }
         if (path === "/api/used") {
-          void usedPayload()
+          void usedPayload(requestUrl.searchParams.get("groups"))
             .then((body) => writeResponse(res, jsonResponse(body)))
             .catch((error: unknown) => {
               console.error(error)

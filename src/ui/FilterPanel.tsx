@@ -3,7 +3,7 @@ import { Button } from "../components/ui/button.tsx"
 import { Input } from "../components/ui/input.tsx"
 import { ChipGroupSelect, chipVendors } from "../components/ui/select.tsx"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table.tsx"
-import { rtxModelLabel, rtxModelLabels, type View } from "../present.ts"
+import { rtxModelLabel, type View } from "../present.ts"
 
 function formatSellingPrice(price: number): string {
   const rounded = Math.round(price)
@@ -35,6 +35,7 @@ function FilterPanel({
   view,
   chipGroups,
   appliedChipGroups,
+  modelLabels,
   vendor,
   startRef,
   endRef,
@@ -48,6 +49,7 @@ function FilterPanel({
   view: View
   chipGroups: readonly string[]
   appliedChipGroups: readonly string[]
+  modelLabels: readonly string[]
   vendor: string
   startRef: RefObject<HTMLInputElement | null>
   endRef: RefObject<HTMLInputElement | null>
@@ -58,7 +60,6 @@ function FilterPanel({
   onSelectCode: (code: string) => void
   onRemoveCode: (code: string) => void
 }): ReactNode {
-  const models = rtxModelLabels(view.chipGroups)
   const pressed = selectedModelLabels(appliedChipGroups)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
   const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
@@ -67,7 +68,7 @@ function FilterPanel({
     <section className="mb-6 flex flex-col gap-4 text-sm md:gap-6">
       <h2 className="font-semibold tracking-tight">篩選</h2>
       <div aria-label="型號" className="flex flex-wrap gap-2">
-        {models.map((label) => (
+        {modelLabels.map((label) => (
           <Button
             key={label}
             aria-pressed={pressed.has(label) ? "true" : "false"}

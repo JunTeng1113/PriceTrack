@@ -2,7 +2,7 @@ import { config as loadEnv } from "dotenv"
 import { createReadStream, existsSync, statSync } from "node:fs"
 import { createServer } from "node:http"
 import { extname, join, normalize, resolve, sep } from "node:path"
-import { seriesPayload, usedPayload, jsonResponse } from "./api-data.ts"
+import { modelsPayload, seriesPayload, usedPayload, jsonResponse } from "./api-data.ts"
 import { closePool } from "./db.ts"
 
 loadEnv()
@@ -73,8 +73,17 @@ const server = createServer((request, response) => {
     return
   }
 
+  if (url.pathname === "/api/models" || url.pathname === "/models") {
+    void modelsPayload()
+      .then((body) => sendJson(response, jsonResponse(body)))
+      .catch((error: unknown) => {
+        console.error(error)
+        sendJson(response, jsonResponse({ error: "models failed" }, 500))
+      })
+    return
+  }
   if (url.pathname === "/api/series" || url.pathname === "/series") {
-    void seriesPayload()
+    void seriesPayload(url.searchParams.get("groups"))
       .then((body) => sendJson(response, jsonResponse(body)))
       .catch((error: unknown) => {
         console.error(error)
@@ -83,7 +92,7 @@ const server = createServer((request, response) => {
     return
   }
   if (url.pathname === "/api/used" || url.pathname === "/used") {
-    void usedPayload()
+    void usedPayload(url.searchParams.get("groups"))
       .then((body) => sendJson(response, jsonResponse(body)))
       .catch((error: unknown) => {
         console.error(error)

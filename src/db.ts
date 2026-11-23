@@ -69,20 +69,48 @@ function toStoredQuote(row: QuoteRow): PriceSeries["quotes"][number] | null {
   return isQuote(candidate) ? candidate : null
 }
 
-export async function loadQuotes(kind: QuoteKind): Promise<PriceSeries["quotes"][number][]> {
-  const result = await getPool().query<QuoteRow>(
-    `SELECT code, quote_date, selling_price, chip_group, row_text, captured_at, row_index, source
-     FROM ${quoteTable[kind]}
-     ORDER BY quote_date, code`,
-  )
+function quotesFromRows(rows: readonly QuoteRow[]): PriceSeries["quotes"][number][] {
   const quotes: PriceSeries["quotes"][number][] = []
-  for (const row of result.rows) {
+  for (const row of rows) {
     const quote = toStoredQuote(row)
     if (quote !== null) {
       quotes.push(quote)
     }
   }
   return quotes
+}
+
+export async function loadQuotes(kind: QuoteKind): Promise<PriceSeries["quotes"][number][]> {
+  const result = await getPool().query<QuoteRow>(
+    `SELECT code, quote_date, selling_price, chip_group, row_text, captured_at, row_index, source
+     FROM ${quoteTable[kind]}
+     ORDER BY quote_date, code`,
+  )
+  return quotesFromRows(result.rows)
+}
+
+export async function listChipGroups(kind: QuoteKind): Promise<string[]> {
+  const result = await getPool().query<{ chip_group: string }>(
+    `SELECT DISTINCT chip_group FROM ${quoteTable[kind]} ORDER BY chip_group`,
+  )
+  return result.rows.map((row) => row.chip_group)
+}
+
+export async function loadQuotesByGroups(
+  kind: QuoteKind,
+  groups: readonly string[],
+): Promise<PriceSeries["quotes"][number][]> {
+  if (groups.length === 0) {
+    return []
+  }
+  const result = await getPool().query<QuoteRow>(
+    `SELECT code, quote_date, selling_price, chip_group, row_text, captured_at, row_index, source
+     FROM ${quoteTable[kind]}
+     WHERE chip_group = ANY($1::text[])
+     ORDER BY quote_date, code`,
+    [groups],
+  )
+  return quotesFromRows(result.rows)
 }
 
 export async function markIngestDone(kind: QuoteKind, capturedAt: string): Promise<void> {
@@ -224,21 +252,44 @@ export async function replacePrepared(kind: QuoteKind, prepared: PreparedSeries)
   await replaceIngestDone(kind, prepared.done)
 }
 
-export async function loadUsedPosts(): Promise<UsedPost[]> {
-  const result = await getPool().query<{
-    code: string
-    post_date: string | Date
-    price: number
-    link: string
-    seller: string
-  }>(`SELECT code, post_date, price, link, seller FROM used_posts ORDER BY post_date, code, price`)
-  return result.rows.map((row) => ({
+type UsedRow = {
+  code: string
+  post_date: string | Date
+  price: number
+  link: string
+  seller: string
+}
+
+function usedFromRows(rows: readonly UsedRow[]): UsedPost[] {
+  return rows.map((row) => ({
     code: row.code,
     date: row.post_date instanceof Date ? row.post_date.toISOString().slice(0, 10) : String(row.post_date).slice(0, 10),
     price: Number(row.price),
     link: row.link,
     seller: row.seller,
   }))
+}
+
+export async function loadUsedPosts(): Promise<UsedPost[]> {
+  const result = await getPool().query<UsedRow>(
+    `SELECT code, post_date, price, link, seller FROM used_posts ORDER BY post_date, code, price`,
+  )
+  return usedFromRows(result.rows)
+}
+
+export async function loadUsedPostsByGroups(groups: readonly string[]): Promise<UsedPost[]> {
+  if (groups.length === 0) {
+    return []
+  }
+  const result = await getPool().query<UsedRow>(
+    `SELECT DISTINCT u.code, u.post_date, u.price, u.link, u.seller
+     FROM used_posts u
+     INNER JOIN gpu_quotes g ON g.code = u.code
+     WHERE g.chip_group = ANY($1::text[])
+     ORDER BY u.post_date, u.code, u.price`,
+    [groups],
+  )
+  return usedFromRows(result.rows)
 }
 
 export async function replaceUsedPosts(posts: readonly UsedPost[]): Promise<void> {
