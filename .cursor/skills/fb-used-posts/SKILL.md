@@ -2,14 +2,14 @@
 name: fb-used-posts
 description: >-
   Find Facebook group GPU sale posts for a named card or any model (不限)
-  inside a date range, identify each seller, and merge them into
-  public/data/used.json. Use when the user gives a graphics card or says 不限,
-  gives a start and end date, and wants those listings saved to used.json.
+  inside a date range, identify each seller, and merge them into the
+  Railway used_posts table. Use when the user gives a graphics card or says 不限,
+  gives a start and end date, and wants those listings saved to the database.
 ---
 
 # Facebook 二手顯卡
 
-輸入是顯卡和日期範圍。顯卡是一個型號，或「不限」。日期是台北日曆日的起日和迄日，兩端都算。用 Google 找公開社團出售貼文，讀到賣家才寫入 `public/data/used.json`。用 Google，不用 `gpu_price_crawler`。
+輸入是顯卡和日期範圍。顯卡是一個型號，或「不限」。日期是台北日曆日的起日和迄日，兩端都算。用 Google 找公開社團出售貼文，讀到賣家才寫入資料庫 `used_posts`。用 Google，不用 `gpu_price_crawler`。
 
 ## 步驟
 
@@ -31,10 +31,16 @@ description: >-
 4. 同一賣家、同一代號只留最低價；價格相同留日期較晚的那筆。同一賣家的不同代號各留一筆。同一篇裡的多張卡共用一個連結。
    完成條件：沒有兩筆的 `seller` 與 `code` 都相同。
 
-5. 用 `save_used_posts` 的 merge 寫入 `public/data/used.json`。merge 以連結加代號去重，已存在的列不會被蓋過。
-   完成條件：檔案裡這些連結的 `seller` 是步驟 3 印出的人名。
+5. 把結果做成 `{ "posts": [ ... ] }`，執行：
 
-6. 在回覆裡放這次找到的結果表格，欄位依序是型號、日期、價格、賣家、連結、備註。這次新寫入的列，備註寫「新增」。已在檔案裡的列，備註留白。同一賣家被併掉的列，備註寫「併入最低價」。讀不到賣家、已售、整機、徵收、故障的列也放進表，備註寫原因。
+   ```
+   npm run used:merge -- path/to/posts.json
+   ```
+
+   或用 `save_used_posts` merge 後再 `npm run used:merge`。以連結加代號加開價去重，已存在的列不會被蓋過。
+   完成條件：資料庫裡這些連結的 `seller` 是步驟 3 印出的人名。
+
+6. 在回覆裡放這次找到的結果表格，欄位依序是型號、日期、價格、賣家、連結、備註。這次新寫入的列，備註寫「新增」。已在庫裡的列，備註留白。同一賣家被併掉的列，備註寫「併入最低價」。讀不到賣家、已售、整機、徵收、故障的列也放進表，備註寫原因。
    完成條件：表格含這六欄，而且每一筆這次新寫入的列，備註都是「新增」。
 
 只打開腳本收到的公開社團貼文網址。不要打開 Messenger 或私人訊息。

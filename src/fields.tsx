@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { Button } from "./components/ui/button.tsx"
 import { ChipGroupSelect, chipVendors } from "./components/ui/select.tsx"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table.tsx"
-import { brandColor, type Generation } from "./present.ts"
+import { brandColor, rtxModelLabel, rtxModelLabels } from "./present.ts"
 
 export function buttonMarkup(
   label: ReactNode,
@@ -12,12 +12,23 @@ export function buttonMarkup(
   return renderToStaticMarkup(createElement(Button, props, label))
 }
 
-export function generationMarkup(selected: Generation | ""): string {
-  const names: readonly Generation[] = ["30", "40", "50"]
-  const buttons = names
-    .map((name) => buttonMarkup(`${name}系列`, { "aria-pressed": name === selected ? "true" : "false" }))
+export function modelFilterMarkup(
+  groups: readonly string[],
+  selectedGroups: readonly string[],
+): string {
+  const selected = new Set<string>()
+  for (const group of selectedGroups) {
+    const label = rtxModelLabel(group)
+    if (label !== null) {
+      selected.add(label)
+    }
+  }
+  const buttons = rtxModelLabels(groups)
+    .map((label) =>
+      buttonMarkup(label, { "aria-pressed": selected.has(label) ? "true" : "false" }),
+    )
     .join("")
-  return `<div aria-label="世代" class="flex flex-wrap gap-2">${buttons}</div>`
+  return `<div aria-label="型號" class="flex flex-wrap gap-2">${buttons}</div>`
 }
 
 export function chipVendorMarkup(): string {
@@ -28,7 +39,14 @@ export function chipVendorMarkup(): string {
 }
 
 export function chipGroupMarkup(groups: readonly string[], selected: readonly string[]): string {
-  return renderToStaticMarkup(createElement(ChipGroupSelect, { groups, selected }))
+  return renderToStaticMarkup(
+    createElement(ChipGroupSelect, {
+      groups,
+      selected,
+      vendor: "NVIDIA",
+      onToggle: () => undefined,
+    }),
+  )
 }
 
 export function listingTableMarkup(

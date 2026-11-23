@@ -389,7 +389,7 @@ test("側邊欄可在月均線與季均線之間切換", () => {
     snapshot("2024-06-15T02:00:00.000Z", [`｛${listing}｝, $10000`], group),
     snapshot("2024-06-16T02:00:00.000Z", [`｛${listing}｝, $11000`], group),
   ])
-  const session = start(priced)
+  const session = start(priced, [{ type: "setGeneration", name: "50" }])
   session.setUsedPosts([
     post(8000, "2024-06-15", "https://example.com/seller/a", listing),
     post(9000, "2024-06-16", "https://example.com/seller/b", listing),
@@ -429,7 +429,7 @@ test("滑鼠停在二手開價點上時顯示該筆資訊", () => {
     snapshot("2024-06-15T02:00:00.000Z", [`｛${listing}｝, $10000`], group),
     snapshot("2024-06-16T02:00:00.000Z", [`｛${listing}｝, $11000`], group),
   ])
-  const session = start(priced)
+  const session = start(priced, [{ type: "setGeneration", name: "50" }])
   session.setUsedPosts([
     post(8000, "2024-06-15", "https://example.com/seller/a", listing),
     post(9000, "2024-06-16", "https://example.com/seller/b", listing),

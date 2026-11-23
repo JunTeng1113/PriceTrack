@@ -115,7 +115,7 @@ describe("代號與排除", () => {
         </optgroup>
       `),
     ])
-    const view = present(series, [])
+    const view = present(series, [{ type: "setGeneration", name: "50" }])
     const chart = view.modelCharts.find((item) => item.group === "NVIDIA RTX5090-32GB")
 
     expect(view.chipGroups).toEqual(["NVIDIA RTX5090-32GB"])
@@ -482,7 +482,7 @@ describe("代號與排除", () => {
         </optgroup>
       `),
     ])
-    const view = present(series, [])
+    const view = present(series, [{ type: "setGeneration", name: "50" }])
 
     expect(view.modelCharts[0]?.brands).toEqual(["華碩", "技嘉", "微星", "INNO3D", "ZOTAC", "其他"])
   })
@@ -510,7 +510,7 @@ describe("代號與排除", () => {
         </optgroup>
       `),
     ])
-    const view = present(series, [])
+    const view = present(series, [{ type: "setGeneration", name: "50" }])
     const chart = view.modelCharts[0]
 
     expect(chart?.brands).toEqual(["華碩", "技嘉", "微星", "ZOTAC", "其他"])
@@ -601,7 +601,10 @@ describe("代號與排除", () => {
         </optgroup>
       `),
     ])
-    const view = present(series, [{ type: "setBrand", group: "NVIDIA RTX5070Ti", name: "華碩" }])
+    const view = present(series, [
+      { type: "setGeneration", name: "50" },
+      { type: "setBrand", group: "NVIDIA RTX5070Ti", name: "華碩" },
+    ])
     const chart = view.modelCharts[0]
 
     expect(chart?.brands).toEqual(["華碩"])
@@ -639,7 +642,7 @@ describe("代號與排除", () => {
         `,
       },
     ])
-    const view = present(series, [])
+    const view = present(series, [{ type: "setGeneration", name: "50" }])
     const eight = view.modelCharts.find((chart) => chart.group === "NVIDIA RTX5060Ti-8GB")
     const dragonChart = view.modelCharts.find((chart) => chart.group === "NVIDIA RTX5080-16GB")
 

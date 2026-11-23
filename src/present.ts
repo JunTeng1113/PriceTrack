@@ -516,6 +516,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
   const prepared = prepareSeries(series.quotes)
   let keyword = ""
   let generation: Generation = "50"
+  let generationSet = false
   const chosenGroups: string[] = []
   const selectedBrands: string[] = []
   let onSaleOnly = false
@@ -537,6 +538,7 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     }
     if (action.type === "setGeneration") {
       generation = action.name
+      generationSet = true
       continue
     }
     if (action.type === "setBrand") {
@@ -595,7 +597,9 @@ export function present(series: PriceSeries, actions: readonly Action[], usedPos
     quotes: marksFor(prepared, code, queryRange),
   }))
   const shownGroups = chosenGroups.length === 0
-    ? chipGroups.filter((group) => isRtxGeneration(group, generation))
+    ? generationSet
+      ? chipGroups.filter((group) => isRtxGeneration(group, generation))
+      : []
     : chipGroups.filter((group) => chosenGroups.includes(group))
   const recordedPosts = rememberPosts(usedPosts, prepared.spellings)
   const modelCharts = shownGroups.map((group) => {
@@ -1040,6 +1044,60 @@ function compareCodePoints(left: string, right: string): number {
 
 function isRtxGeneration(group: string, generation: Generation): boolean {
   return new RegExp(`RTX${generation}(?:50|60|70|80|90)`).test(group)
+}
+
+export function rtxModelLabel(group: string): string | null {
+  const match = /RTX(\d{4})(Ti)?(?:\s*SUPER)?/i.exec(group)
+  if (match === null || match[1] === undefined) {
+    return null
+  }
+  const number = match[1]
+  const ti = match[2] !== undefined ? "Ti" : ""
+  const superSuffix = /SUPER/i.test(match[0]) ? "S" : ""
+  return `${number}${ti}${superSuffix}`
+}
+
+export function rtxModelLabels(groups: readonly string[]): string[] {
+  const labels: string[] = []
+  for (const group of groups) {
+    const label = rtxModelLabel(group)
+    if (label !== null && !labels.includes(label)) {
+      labels.push(label)
+    }
+  }
+  labels.sort((left, right) => compareRtxModelLabels(right, left))
+  return labels
+}
+
+export function groupsMatchingRtxModel(groups: readonly string[], label: string): string[] {
+  return groups.filter((group) => rtxModelLabel(group) === label)
+}
+
+function compareRtxModelLabels(left: string, right: string): number {
+  const leftParts = parseRtxModelLabel(left)
+  const rightParts = parseRtxModelLabel(right)
+  if (leftParts.number !== rightParts.number) {
+    return leftParts.number < rightParts.number ? -1 : 1
+  }
+  if (leftParts.ti !== rightParts.ti) {
+    return leftParts.ti ? 1 : -1
+  }
+  if (leftParts.superSuffix !== rightParts.superSuffix) {
+    return leftParts.superSuffix ? 1 : -1
+  }
+  return 0
+}
+
+function parseRtxModelLabel(label: string): { number: number; ti: boolean; superSuffix: boolean } {
+  const match = /^(\d{4})(Ti)?(S)?$/.exec(label)
+  if (match === null || match[1] === undefined) {
+    return { number: 0, ti: false, superSuffix: false }
+  }
+  return {
+    number: Number(match[1]),
+    ti: match[2] !== undefined,
+    superSuffix: match[3] !== undefined,
+  }
 }
 
 function chipGroupsInOrder(quotes: readonly StoredQuote[]): string[] {

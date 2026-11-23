@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.cursor
+*.json.tmp
+public/data
+data/*.json
+.env
+.env.local

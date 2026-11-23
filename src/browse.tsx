@@ -2,12 +2,13 @@ import { createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { flushSync } from "react-dom"
 import { BrowseApp } from "./ui/BrowseApp.tsx"
-import type { PriceSeries } from "./present.ts"
+import type { Action, PriceSeries } from "./present.ts"
 import type { UsedPost } from "./used-post.ts"
 
 let root: Root | null = null
 let seriesState: PriceSeries = { quotes: [] }
 let usedState: readonly UsedPost[] = []
+let actionsState: readonly Action[] = []
 let revision = 0
 
 function mountHost(): HTMLElement {
@@ -35,17 +36,19 @@ function renderApp(): void {
         key: revision,
         series: seriesState,
         usedPosts: usedState,
+        initialActions: actionsState,
       }),
     )
   })
 }
 
-export function start(series: PriceSeries): {
+export function start(series: PriceSeries, actions: readonly Action[] = []): {
   setSeries(next: PriceSeries): void
   setUsedPosts(next: readonly UsedPost[]): void
 } {
   seriesState = series
   usedState = []
+  actionsState = actions
   renderApp()
   return {
     setSeries(next: PriceSeries): void {

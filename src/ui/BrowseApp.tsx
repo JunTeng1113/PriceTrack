@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { flushSync } from "react-dom"
 import { clearPreparedCharts, type ChartRange, type IndicatorWindow } from "../page.ts"
 import {
+  groupsMatchingRtxModel,
   present,
+  rtxModelLabel,
   type Action,
-  type Generation,
   type PriceSeries,
   type View,
 } from "../present.ts"
@@ -16,7 +17,6 @@ import { FilterPanel } from "./FilterPanel.tsx"
 import { ModelChartList } from "./ModelChartSection.tsx"
 
 const chartQuoteLimit = 2000
-const generationNames: readonly Generation[] = ["30", "40", "50"]
 
 function sharedBrandNames(view: View): string[] {
   const names: string[] = []
@@ -45,14 +45,26 @@ function chartActionKey(actions: readonly Action[]): string {
     .join("|")
 }
 
+function appliedChipGroups(actions: readonly Action[]): string[] {
+  const names: string[] = []
+  for (const action of actions) {
+    if (action.type === "setChipGroup" && action.name !== "" && !names.includes(action.name)) {
+      names.push(action.name)
+    }
+  }
+  return names
+}
+
 function BrowseApp({
   series,
   usedPosts,
+  initialActions = [],
 }: {
   series: PriceSeries
   usedPosts: readonly UsedPost[]
+  initialActions?: readonly Action[]
 }): ReactNode {
-  const [actions, setActions] = useState<Action[]>([])
+  const [actions, setActions] = useState<Action[]>(() => [...initialActions])
   const [vendor, setVendor] = useState("NVIDIA")
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [chartRange, setChartRange] = useState<ChartRange>(() => {
@@ -63,9 +75,6 @@ function BrowseApp({
   })
   const [indicator, setIndicator] = useState<IndicatorWindow>("month")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [preparedGenerations, setPreparedGenerations] = useState<ReadonlySet<Generation>>(
-    () => new Set(),
-  )
   const [visibleCount, setVisibleCount] = useState(() =>
     series.quotes.length > chartQuoteLimit ? 0 : Number.POSITIVE_INFINITY,
   )
@@ -75,9 +84,6 @@ function BrowseApp({
   const startRef = useRef<HTMLInputElement | null>(null)
   const endRef = useRef<HTMLInputElement | null>(null)
   const lockRef = useRef<ChartLock>({ code: null, svg: null })
-  const generationCache = useRef(
-    new Map<Generation, { view: View; key: string }>(),
-  )
 
   const listView = useMemo(() => present(series, actions, usedPosts), [series, actions, usedPosts])
   const chartsKey = chartActionKey(actions)
@@ -94,6 +100,7 @@ function BrowseApp({
   const progressive = series.quotes.length > chartQuoteLimit
   const brands = sharedBrandNames(chartView)
   const selectedBrands = chartView.modelCharts[0]?.selectedBrands ?? []
+  const selectedChipGroups = appliedChipGroups(actions)
 
   useEffect(() => {
     document.documentElement.lang = "zh-Hant"
@@ -101,7 +108,6 @@ function BrowseApp({
 
   useEffect(() => {
     clearPreparedCharts()
-    generationCache.current.clear()
     setVisibleCount(progressive ? 0 : Number.POSITIVE_INFINITY)
     setLoadingText(progressive ? "正在繪製圖表" : "")
   }, [series, usedPosts, progressive])
@@ -124,53 +130,6 @@ function BrowseApp({
     }
   }, [progressive, visibleCount, chartView.modelCharts.length])
 
-  useEffect(() => {
-    const shown = chartView.generation
-    const base = actionsRef.current.filter(
-      (action) => action.type !== "setChipGroup" && action.type !== "setGeneration",
-    )
-    const key = chartActionKey([...base, { type: "setGeneration", name: shown }])
-    generationCache.current.set(shown, { view: chartView, key })
-    setPreparedGenerations((previous) => {
-      if (previous.has(shown)) {
-        return previous
-      }
-      const next = new Set(previous)
-      next.add(shown)
-      return next
-    })
-    const queue = generationNames.filter((name) => name !== shown)
-    let cancelled = false
-    const load = (index: number): void => {
-      if (cancelled) {
-        return
-      }
-      const name = queue[index]
-      if (name === undefined) {
-        return
-      }
-      const view = present(series, [...base, { type: "setGeneration", name }], usedPosts)
-      generationCache.current.set(name, {
-        view,
-        key: chartActionKey([...base, { type: "setGeneration", name }]),
-      })
-      setPreparedGenerations((previous) => {
-        const next = new Set(previous)
-        next.add(name)
-        return next
-      })
-      setTimeout(() => {
-        load(index + 1)
-      }, 0)
-    }
-    setTimeout(() => {
-      load(0)
-    }, 0)
-    return () => {
-      cancelled = true
-    }
-  }, [chartView, series, usedPosts, chartsKey])
-
   const onSearch = (): void => {
     const start = startRef.current?.value ?? ""
     const end = endRef.current?.value ?? ""
@@ -180,7 +139,8 @@ function BrowseApp({
           (action) =>
             action.type !== "setKeyword"
             && action.type !== "setChipGroup"
-            && action.type !== "setRange",
+            && action.type !== "setRange"
+            && action.type !== "setGeneration",
         )
         const next: Action[] = [...kept, { type: "setKeyword", text: "" }]
         for (const name of draftChips) {
@@ -194,15 +154,40 @@ function BrowseApp({
     })
   }
 
-  const onGeneration = (name: Generation): void => {
+  const onToggleModel = (label: string): void => {
     flushSync(() => {
       setDraftChips([])
-      setActions((previous) => [
-        ...previous.filter(
+      setActions((previous) => {
+        const currentGroups = appliedChipGroups(previous)
+        const currentLabels: string[] = []
+        for (const group of currentGroups) {
+          const name = rtxModelLabel(group)
+          if (name !== null && !currentLabels.includes(name)) {
+            currentLabels.push(name)
+          }
+        }
+        const nextLabels = currentLabels.includes(label)
+          ? currentLabels.filter((name) => name !== label)
+          : [...currentLabels, label]
+        const base = previous.filter(
           (action) => action.type !== "setChipGroup" && action.type !== "setGeneration",
-        ),
-        { type: "setGeneration", name },
-      ])
+        )
+        if (nextLabels.length === 0) {
+          return base
+        }
+        const nextGroups: string[] = []
+        for (const name of nextLabels) {
+          for (const group of groupsMatchingRtxModel(listView.chipGroups, name)) {
+            if (!nextGroups.includes(group)) {
+              nextGroups.push(group)
+            }
+          }
+        }
+        return [
+          ...base,
+          ...nextGroups.map((group) => ({ type: "setChipGroup" as const, name: group })),
+        ]
+      })
     })
   }
 
@@ -288,8 +273,8 @@ function BrowseApp({
         <FilterPanel
           view={listView}
           chipGroups={draftChips}
+          appliedChipGroups={selectedChipGroups}
           vendor={vendor}
-          preparedGenerations={preparedGenerations}
           startRef={startRef}
           endRef={endRef}
           onVendor={(name) => {
@@ -306,7 +291,7 @@ function BrowseApp({
               )
             })
           }}
-          onGeneration={onGeneration}
+          onToggleModel={onToggleModel}
           onSearch={onSearch}
           onSelectCode={onSelectCode}
           onRemoveCode={onRemoveCode}

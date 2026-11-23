@@ -12,7 +12,7 @@ import {
   xAt,
   yAt,
 } from "./chart/geometry.ts"
-import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, generationMarkup, listingTableMarkup } from "./fields.tsx"
+import { brandMarkup, buttonMarkup, chipGroupMarkup, chipVendorMarkup, listingTableMarkup, modelFilterMarkup } from "./fields.tsx"
 import { brandColorIndex, brandGroup, brandPaint, present, steppedPriceBounds, type Action, type PriceSeries, type View } from "./present.ts"
 import type { UsedBox, UsedPost } from "./used-post.ts"
 
@@ -1547,10 +1547,9 @@ function filterSection(view: View, actions: readonly Action[]): string {
     pressed: view.selected.includes(row.code),
   })))
   const selected = selectedListMarkup(view.selected)
-  const generation = chipGroups.length === 0 ? view.generation : ""
   return `<section class="mb-6 flex flex-col gap-6 text-sm">
       <h2>篩選</h2>
-      ${generationMarkup(generation)}
+      ${modelFilterMarkup(view.chipGroups, chipGroups)}
       <label>起日 <input type="date" aria-label="起日" value="${escapeAttribute(rangeStart)}"></label>
       <label>迄日 <input type="date" aria-label="迄日" value="${escapeAttribute(rangeEnd)}"></label>
       <div>核心規格 ${chipVendorMarkup()}${chipGroupMarkup(view.chipGroups, chipGroups)}</div>

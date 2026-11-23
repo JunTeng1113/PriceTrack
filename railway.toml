@@ -1,0 +1,9 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+# 同時跑網頁+API（api-server）與原價屋輪詢（coolpc）
+startCommand = "npm run start"
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"

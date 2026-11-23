@@ -1,8 +1,5 @@
-import { existsSync, mkdirSync } from "node:fs"
-import { copyFile, readFile, rename, unlink, writeFile } from "node:fs/promises"
-import { dirname, resolve } from "node:path"
+import { config as loadEnv } from "dotenv"
 import { decodePage } from "./page-bytes.ts"
-import { isQuote } from "./quote.ts"
 import {
   changesAgainstPrevious,
   coolpcPageUrl,
@@ -11,55 +8,15 @@ import {
   nextCheck,
   type PreparedSeries,
 } from "./coolpc-daily.ts"
+import { closePool, loadPrepared, savePreparedDay } from "./db.ts"
 import { formatCnsTaipei } from "./taipei-time.ts"
 
-const preparedPath = resolve("public/data/series.json")
-const memoryPath = resolve("data/memory-series.json")
+loadEnv()
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolveWait) => {
     setTimeout(resolveWait, ms)
   })
-}
-
-function isPrepared(value: unknown): value is PreparedSeries {
-  if (typeof value !== "object" || value === null || !("quotes" in value) || !("done" in value)) {
-    return false
-  }
-  if (!Array.isArray(value.quotes) || !Array.isArray(value.done)) {
-    return false
-  }
-  return value.quotes.every((quote) => isQuote(quote)) && value.done.every((item) => typeof item === "string")
-}
-
-async function readPrepared(path: string): Promise<PreparedSeries | null> {
-  if (!existsSync(path)) {
-    return { quotes: [], done: [] }
-  }
-  const text = await readFile(path, "utf8")
-  if (!text.startsWith("{")) {
-    return null
-  }
-  const parsed: unknown = JSON.parse(text)
-  if (!isPrepared(parsed)) {
-    return null
-  }
-  return { quotes: parsed.quotes, done: parsed.done }
-}
-
-async function save(path: string, prepared: PreparedSeries): Promise<void> {
-  const directory = dirname(path)
-  if (!existsSync(directory)) {
-    mkdirSync(directory)
-  }
-  const temporary = `${path}.tmp`
-  await writeFile(temporary, JSON.stringify(prepared))
-  if (existsSync(path)) {
-    await copyFile(temporary, path)
-    await unlink(temporary)
-    return
-  }
-  await rename(temporary, path)
 }
 
 function reportChanges(label: string, before: PreparedSeries, after: PreparedSeries, capturedAt: string): void {
@@ -98,11 +55,7 @@ async function fetchPage(): Promise<{ ok: boolean; status: number; text: string 
 }
 
 async function fetchOnce(): Promise<void> {
-  const prepared = await readPrepared(preparedPath)
-  if (prepared === null) {
-    console.error("價格檔讀不起來，這次沒有寫入。")
-    return
-  }
+  const prepared = await loadPrepared("gpu")
   const fetched = await fetchPage()
   if (fetched === null || !fetched.ok) {
     if (fetched !== null) {
@@ -121,22 +74,15 @@ async function fetchOnce(): Promise<void> {
   }
   const capturedAt = ingested.result.capturedAt
   if (ingested.result.status === "saved") {
-    await save(preparedPath, ingested.prepared)
-    console.log(`已記下顯示卡 ${capturedAt}，報價 ${ingested.result.quotes}`)
+    await savePreparedDay("gpu", ingested.prepared, capturedAt)
+    console.log(`已寫入資料庫顯示卡 ${capturedAt}，報價 ${ingested.result.quotes}`)
     reportChanges("顯示卡", prepared, ingested.prepared, capturedAt)
   }
   await recordMemory(fetched.text, capturedAt, ingested.result.status === "already")
 }
 
 async function recordMemory(html: string, capturedAt: string, gpuAlready: boolean): Promise<void> {
-  const prepared = await readPrepared(memoryPath)
-  if (prepared === null) {
-    console.error("記憶體報價讀不起來，這次沒有寫入記憶體。")
-    if (gpuAlready) {
-      console.log(`這份快照已經記過 ${capturedAt}`)
-    }
-    return
-  }
+  const prepared = await loadPrepared("memory")
   const ingested = ingestMemory(prepared, html, capturedAt)
   if (ingested.status === "no-menu") {
     console.error("這頁沒有記憶體選單。")
@@ -149,12 +95,12 @@ async function recordMemory(html: string, capturedAt: string, gpuAlready: boolea
     console.log(gpuAlready ? `這份快照已經記過 ${capturedAt}` : `記憶體這份快照已經記過 ${capturedAt}`)
     return
   }
-  await save(memoryPath, ingested.prepared)
-  console.log(`已記下記憶體 ${capturedAt}，報價 ${ingested.quotes}`)
+  await savePreparedDay("memory", ingested.prepared, capturedAt)
+  console.log(`已寫入資料庫記憶體 ${capturedAt}，報價 ${ingested.quotes}`)
   reportChanges("記憶體", prepared, ingested.prepared, capturedAt)
 }
 
-console.log("原價屋一開就檢查一次，之後每 6 小時再檢查。程式開著才會抓。")
+console.log("原價屋一開就檢查一次，之後每 6 小時再檢查。程式開著才會抓。寫入 Railway Postgres。")
 let due = new Date()
 while (true) {
   const delay = due.getTime() - Date.now()
@@ -166,3 +112,9 @@ while (true) {
   await fetchOnce()
   due = nextCheck(new Date())
 }
+
+process.on("SIGINT", () => {
+  void closePool().then(() => {
+    process.exit(0)
+  })
+})

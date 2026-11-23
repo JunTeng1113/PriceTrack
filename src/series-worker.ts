@@ -3,7 +3,8 @@ import { isQuote } from "./quote.ts"
 import type { PriceSeries } from "./present.ts"
 
 const batchSize = 2500
-const url = `${import.meta.env.BASE_URL}data/series.json`
+const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ?? ""
+const url = `${apiBase}/api/series`
 let posted = false
 
 function publish(text: string): void {

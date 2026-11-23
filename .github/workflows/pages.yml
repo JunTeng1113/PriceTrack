@@ -27,6 +27,7 @@ jobs:
       - run: npm run build
         env:
           GITHUB_PAGES: "true"
+          VITE_API_BASE: "https://api-production-986c603c.up.railway.app"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

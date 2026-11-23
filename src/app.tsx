@@ -89,7 +89,8 @@ function applyUsed(text: string): void {
 }
 
 function loadUsedPosts(): void {
-  void readThroughCache(`${import.meta.env.BASE_URL}data/used.json`, applyUsed).then((delivered) => {
+  const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "") ?? ""
+  void readThroughCache(`${apiBase}/api/used`, applyUsed).then((delivered) => {
     if (!delivered) {
       usedReady = true
       publish()

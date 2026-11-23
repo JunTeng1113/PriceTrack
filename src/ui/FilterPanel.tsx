@@ -3,7 +3,7 @@ import { Button } from "../components/ui/button.tsx"
 import { Input } from "../components/ui/input.tsx"
 import { ChipGroupSelect, chipVendors } from "../components/ui/select.tsx"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table.tsx"
-import type { Generation, View } from "../present.ts"
+import { rtxModelLabel, rtxModelLabels, type View } from "../present.ts"
 
 function formatSellingPrice(price: number): string {
   const rounded = Math.round(price)
@@ -20,52 +20,62 @@ function formatSellingPrice(price: number): string {
   return negative ? `-$${grouped}` : `$${grouped}`
 }
 
+function selectedModelLabels(chipGroups: readonly string[]): ReadonlySet<string> {
+  const labels = new Set<string>()
+  for (const group of chipGroups) {
+    const label = rtxModelLabel(group)
+    if (label !== null) {
+      labels.add(label)
+    }
+  }
+  return labels
+}
+
 function FilterPanel({
   view,
   chipGroups,
+  appliedChipGroups,
   vendor,
-  preparedGenerations,
   startRef,
   endRef,
   onVendor,
   onToggleChip,
-  onGeneration,
+  onToggleModel,
   onSearch,
   onSelectCode,
   onRemoveCode,
 }: {
   view: View
   chipGroups: readonly string[]
+  appliedChipGroups: readonly string[]
   vendor: string
-  preparedGenerations: ReadonlySet<Generation>
   startRef: RefObject<HTMLInputElement | null>
   endRef: RefObject<HTMLInputElement | null>
   onVendor: (name: string) => void
   onToggleChip: (name: string) => void
-  onGeneration: (name: Generation) => void
+  onToggleModel: (label: string) => void
   onSearch: () => void
   onSelectCode: (code: string) => void
   onRemoveCode: (code: string) => void
 }): ReactNode {
-  const generation = chipGroups.length === 0 ? view.generation : ""
-  const names: readonly Generation[] = ["30", "40", "50"]
+  const models = rtxModelLabels(view.chipGroups)
+  const pressed = selectedModelLabels(appliedChipGroups)
   const rangeStart = view.queryRange === null ? "" : view.queryRange.start
   const rangeEnd = view.queryRange === null ? "" : view.queryRange.end
 
   return (
     <section className="mb-6 flex flex-col gap-4 text-sm md:gap-6">
       <h2 className="font-semibold tracking-tight">篩選</h2>
-      <div aria-label="世代" className="flex flex-wrap gap-2">
-        {names.map((name) => (
+      <div aria-label="型號" className="flex flex-wrap gap-2">
+        {models.map((label) => (
           <Button
-            key={name}
-            aria-pressed={name === generation ? "true" : "false"}
-            data-prepared={preparedGenerations.has(name) ? "true" : undefined}
+            key={label}
+            aria-pressed={pressed.has(label) ? "true" : "false"}
             onClick={() => {
-              onGeneration(name)
+              onToggleModel(label)
             }}
           >
-            {`${name}系列`}
+            {label}
           </Button>
         ))}
       </div>

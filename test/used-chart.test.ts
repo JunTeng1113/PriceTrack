@@ -58,9 +58,9 @@ function documentOf(html: string): Document {
 
 test("同一份報價只整理一次", () => {
   const prepared = series()
-  const first = present(prepared, [])
+  const first = present(prepared, [{ type: "setGeneration", name: "50" }])
   present(prepared, [{ type: "setGeneration", name: "40" }])
-  const again = present(prepared, [])
+  const again = present(prepared, [{ type: "setGeneration", name: "50" }])
   const line = first.modelCharts.find((chart) => chart.group === group)?.allSeries[0]?.quotes
   const repeated = again.modelCharts.find((chart) => chart.group === group)?.allSeries[0]?.quotes
 
@@ -69,7 +69,10 @@ test("同一份報價只整理一次", () => {
 })
 
 test("區間內同一代號合成一個盒鬚圖，畫在該晶片分組折線下方", () => {
-  const doc = documentOf(renderPage(series(), [{ type: "setRange", start: "2020-01-01", end: "2024-06-16" }], posts))
+  const doc = documentOf(renderPage(series(), [
+    { type: "setGeneration", name: "50" },
+    { type: "setRange", start: "2020-01-01", end: "2024-06-16" },
+  ], posts))
   const section = doc.querySelector(`[aria-label="${group}"]`)
   const boxes = [...(section?.querySelectorAll('[aria-label="盒鬚圖"]') ?? [])]
   const asusBox = section?.querySelector(`[data-used] [data-code="${asus}"]`)
@@ -94,7 +97,7 @@ test("區間內同一代號合成一個盒鬚圖，畫在該晶片分組折線�
 })
 
 test("品牌按鈕只留該品牌的盒鬚圖，而且不重畫整頁", () => {
-  const session = start(series())
+  const session = start(series(), [{ type: "setGeneration", name: "50" }])
   session.setUsedPosts(posts)
   const marker = document.createElement("p")
   marker.id = "keep"

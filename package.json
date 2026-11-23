@@ -8,13 +8,22 @@
     "build": "vite build",
     "update": "vite-node src/update-wayback.ts",
     "used": "vite-node src/add-used-post.ts",
-    "coolpc": "vite-node src/watch-coolpc.ts"
+    "used:merge": "vite-node src/merge-used-db.ts",
+    "coolpc": "vite-node src/watch-coolpc.ts",
+    "api": "vite-node src/api-server.ts",
+    "start": "vite-node src/start-all.ts",
+    "start:web": "vite-node src/api-server.ts",
+    "coolpc:start": "vite-node src/watch-coolpc.ts",
+    "db:import": "vite-node src/import-db.ts",
+    "db:migrate": "vite-node src/import-db.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "clsx": "^2.1.1",
+    "dotenv": "^18.0.10",
     "happy-dom": "^21.0.3",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
@@ -23,6 +32,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

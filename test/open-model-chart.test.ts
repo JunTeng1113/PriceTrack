@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { expect, test, vi } from "vitest"
+import { expect, test } from "vitest"
 import { start } from "../src/browse.tsx"
 import { emptySeries, update, type Snapshot } from "../src/present.ts"
 
@@ -29,7 +29,7 @@ test("點品牌按鈕後，圖上只留該品牌的線", () => {
   const series = update(emptySeries(), [
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const button = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
     .find((node) => node.textContent === "華碩")
@@ -58,7 +58,7 @@ test("12 個月視窗下篩品牌時，舊的金額軸和型號不會留在圖�
     vga("2024-01-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
     vga("2025-06-15T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const host = document.querySelector(`[aria-label="${modelGroup}"] svg[data-price-chart]`)?.closest("[data-chart-width]")
   const labels = (): string[] =>
@@ -86,7 +86,7 @@ test("12 個月視窗下篩到較短的品牌時，舊的金額軸不會留在�
     vga("2024-01-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`]),
     vga("2025-06-15T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${brief}(2490MHz), $16990`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const host = document.querySelector(`[aria-label="${modelGroup}"] svg[data-price-chart]`)?.closest("[data-chart-width]")
   expect(host?.querySelector("svg[data-chart-axis]")).not.toBeNull()
@@ -115,7 +115,7 @@ test("僅顯示在售只留最新快照裡沒有售罄的代號", () => {
       `${windforce}(2497MHz), $18990 售罄`,
     ]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const button = document.querySelector<HTMLButtonElement>('button[aria-label="僅顯示在售"]')
   const codes = (): string[] =>
@@ -162,7 +162,7 @@ test("按下品牌或僅顯示在售時，每一張圖一起篩", () => {
       { group: otherGroup, options: [`${asus5070}(2500MHz), $29990`] },
     ]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const brand = (name: string): HTMLButtonElement | undefined =>
     [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
@@ -205,7 +205,7 @@ test("品牌可以複選，再點一次就取消", () => {
   const series = update(emptySeries(), [
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const button = (name: string): HTMLButtonElement | undefined =>
     [...document.querySelectorAll<HTMLButtonElement>('[aria-label="品牌"] button')]
@@ -231,7 +231,7 @@ test("滑鼠移到線上時，頁面不重畫", () => {
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`]),
     vga("2024-06-16T02:00:00.000Z", [`${prime}(2505MHz), $11000`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const line = document.querySelector<SVGLineElement>(`[aria-label="${modelGroup}"] line[data-code="${prime}"]`)
   expect(line).not.toBeNull()
@@ -249,7 +249,7 @@ test("滑鼠沒停在折線上時，不 focus 任何一條線", () => {
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
     vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
   const name = (): Element | undefined =>
@@ -283,7 +283,7 @@ test("滑鼠停在型號名稱上時 focus 該折線", () => {
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
     vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const marker = document.createElement("p")
   marker.id = "keep"
@@ -317,7 +317,7 @@ test("滑鼠移到一條線上時其他線變半透明，移開就恢復", () =>
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`, `${windforce}(2497MHz), $20000`]),
     vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $13000`, `${windforce}(2497MHz), $22000`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
   expect(svg).not.toBeNull()
@@ -354,7 +354,7 @@ test("每一條折線懸停都會出現 Tooltip", () => {
     vga("2024-06-16T02:00:00.000Z", [`${prime}(2505MHz), $11000`]),
     vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $13000`, `${windforce}(2497MHz), $22000`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
   expect(svg?.querySelectorAll("[data-day]").length).toBe(0)
@@ -374,7 +374,7 @@ test("滑鼠停在折線上時，Tooltip 顯示日期、型號名稱與價格", 
     vga("2024-06-15T02:00:00.000Z", [`${prime}(2505MHz), $10000`, `${windforce}(2497MHz), $20000`]),
     vga("2024-06-18T02:00:00.000Z", [`${prime}(2505MHz), $13000`, `${windforce}(2497MHz), $22000`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
   const line = svg?.querySelector(`line[data-hit="true"][data-code="${prime}"]`)
@@ -399,7 +399,7 @@ test("下架的日子在 Tooltip 標明下架", () => {
     vga("2024-06-16T02:00:00.000Z", [`${prime}(2505MHz), $11000`]),
     vga("2024-06-17T02:00:00.000Z", [`${prime}(2505MHz), $12000`, `${windforce}(2497MHz), $22000`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
   const removed = svg?.querySelector(`circle[data-code="${windforce}"][data-delisted="true"]`)
@@ -470,7 +470,7 @@ test("晶片分組可以複選，搜尋後留下勾選的圖", () => {
   expect(document.querySelector(`[aria-label="${other}"]`)).toBeNull()
 })
 
-test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分組", () => {
+test("點型號 checkbox 就改畫該型號，並清掉已選的晶片分組", () => {
   const fifty = "NVIDIA RTX5090"
   const older = "NVIDIA RTX4070"
   const other = "NVIDIA RTX3060-8GB"
@@ -488,20 +488,25 @@ test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分�
   `
   start(update(emptySeries(), [{ capturedAt: "2024-06-15T02:00:00.000Z", html }]))
 
-  const generation = (name: string): HTMLButtonElement | undefined =>
-    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')]
+  const model = (name: string): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="型號"] button')]
       .find((node) => node.textContent === name)
   const item = (name: string): HTMLElement | undefined =>
     [...document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')]
       .find((node) => node.textContent === name)
 
-  expect(generation("50系列")?.getAttribute("aria-pressed")).toBe("true")
-  expect(document.querySelector(`[aria-label="${fifty}"]`)).not.toBeNull()
+  expect([...document.querySelectorAll('[aria-label="型號"] button')].map((button) => button.textContent)).toEqual([
+    "5090",
+    "4070",
+    "3060",
+  ])
+  expect(model("5090")?.getAttribute("aria-pressed")).toBe("false")
+  expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
   expect(document.querySelector(`[aria-label="${older}"]`)).toBeNull()
 
-  generation("40系列")?.click()
-  expect(generation("40系列")?.getAttribute("aria-pressed")).toBe("true")
-  expect(generation("50系列")?.getAttribute("aria-pressed")).toBe("false")
+  model("4070")?.click()
+  expect(model("4070")?.getAttribute("aria-pressed")).toBe("true")
+  expect(model("5090")?.getAttribute("aria-pressed")).toBe("false")
   expect(document.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
   expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
   expect(document.querySelector(`[aria-label="${other}"]`)).toBeNull()
@@ -511,16 +516,18 @@ test("點 30系列或 40系列就改畫該世代，並清掉已選的晶片分�
   document.querySelector<HTMLButtonElement>('button[aria-label="搜尋"]')?.click()
   expect(document.querySelector(`[aria-label="${fifty}"]`)).not.toBeNull()
   expect(document.querySelector(`[aria-label="${older}"]`)).toBeNull()
-  expect(generation("40系列")?.getAttribute("aria-pressed")).toBe("false")
+  expect(model("4070")?.getAttribute("aria-pressed")).toBe("false")
+  expect(model("5090")?.getAttribute("aria-pressed")).toBe("true")
 
-  generation("30系列")?.click()
-  expect(generation("30系列")?.getAttribute("aria-pressed")).toBe("true")
+  model("3060")?.click()
+  expect(model("3060")?.getAttribute("aria-pressed")).toBe("true")
+  expect(model("5090")?.getAttribute("aria-pressed")).toBe("true")
   expect(document.querySelector(`[aria-label="${other}"]`)).not.toBeNull()
-  expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+  expect(document.querySelector(`[aria-label="${fifty}"]`)).not.toBeNull()
   expect(document.querySelector('[aria-label="核心規格"]')?.textContent).toBe("")
 })
 
-test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
+test("型號可以複選，取消後不畫任何圖", () => {
   const fifty = "NVIDIA RTX5090"
   const older = "NVIDIA RTX4070"
   const other = "NVIDIA RTX3060-8GB"
@@ -538,36 +545,25 @@ test("世代圖先畫好，按下按鈕時不用重畫篩選", async () => {
   `
   start(update(emptySeries(), [{ capturedAt: "2024-06-15T02:00:00.000Z", html }]))
 
-  const generation = (name: string): HTMLButtonElement | undefined =>
-    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')]
+  const model = (name: string): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('[aria-label="型號"] button')]
       .find((node) => node.textContent === name)
-  const marker = document.createElement("p")
-  marker.id = "keep"
-  document.querySelector("section")?.append(marker)
 
-  await vi.waitFor(() => {
-    expect(generation("30系列")?.getAttribute("data-prepared")).toBe("true")
-    expect(generation("40系列")?.getAttribute("data-prepared")).toBe("true")
-  })
-
-  generation("40系列")?.click()
-  expect(document.getElementById("keep")).not.toBeNull()
-  expect(document.querySelector("[data-loading]")).toBeNull()
-  expect(generation("40系列")?.getAttribute("aria-pressed")).toBe("true")
-  expect(generation("50系列")?.getAttribute("aria-pressed")).toBe("false")
+  model("4070")?.click()
+  model("3060")?.click()
+  expect(model("4070")?.getAttribute("aria-pressed")).toBe("true")
+  expect(model("3060")?.getAttribute("aria-pressed")).toBe("true")
   expect(document.querySelector(`[aria-label="${older}"]`)).not.toBeNull()
-  expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
-  expect(document.querySelector(`[aria-label="${other}"]`)).toBeNull()
-
-  const item = [...document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')]
-    .find((node) => node.textContent === fifty)
-  document.querySelector<HTMLElement>('[data-slot="select-trigger"]')?.click()
-  item?.click()
-  generation("30系列")?.click()
-  expect(document.getElementById("keep")).not.toBeNull()
   expect(document.querySelector(`[aria-label="${other}"]`)).not.toBeNull()
+  expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
+
+  model("4070")?.click()
+  model("3060")?.click()
+  expect(model("4070")?.getAttribute("aria-pressed")).toBe("false")
+  expect(model("3060")?.getAttribute("aria-pressed")).toBe("false")
+  expect(document.querySelector(`[aria-label="${fifty}"]`)).toBeNull()
   expect(document.querySelector(`[aria-label="${older}"]`)).toBeNull()
-  expect(document.querySelector('[aria-label="核心規格"]')?.textContent).toBe("")
+  expect(document.querySelector(`[aria-label="${other}"]`)).toBeNull()
 })
 
 test("跨很多天的圖不為每個缺日各做一個節點", () => {
@@ -575,7 +571,7 @@ test("跨很多天的圖不為每個缺日各做一個節點", () => {
     vga("2024-01-01T02:00:00.000Z", [`${prime}(2505MHz), $18990`, `${windforce}(2497MHz), $17990`]),
     vga("2024-07-01T02:00:00.000Z", [`${prime}(2505MHz), $19990`, `${windforce}(2497MHz), $16990`]),
   ])
-  start(series)
+  start(series, [{ type: "setGeneration", name: "50" }])
 
   const svg = document.querySelector(`[aria-label="${modelGroup}"] svg`)
   expect(svg?.querySelectorAll("[data-day]").length).toBe(0)
@@ -596,7 +592,9 @@ test("側邊欄的日期範圍同時套到每一張圖，而且側邊欄可以�
       </select></td></tr>
     `,
   })
-  start(update(emptySeries(), [page("2023-01-15T02:00:00.000Z"), page("2025-06-15T02:00:00.000Z")]))
+  start(update(emptySeries(), [page("2023-01-15T02:00:00.000Z"), page("2025-06-15T02:00:00.000Z")]), [
+    { type: "setGeneration", name: "50" },
+  ])
 
   const widthOf = (group: string): number =>
     Number(document.querySelector(`[aria-label="${group}"] svg[data-price-chart]`)?.getAttribute("viewBox")?.split(" ")[2])
@@ -620,8 +618,8 @@ test("側邊欄的日期範圍同時套到每一張圖，而且側邊欄可以�
   expect(document.querySelector("[data-sidebar-panel]")?.classList.contains("hidden")).toBe(true)
   expect(document.querySelector('button[aria-label="展開側邊欄"]')?.textContent).toBe("展開")
 
-  const older = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="世代"] button')]
-    .find((button) => button.textContent === "30系列")
+  const older = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="型號"] button')]
+    .find((button) => button.textContent === "5070")
   older?.click()
   expect(document.querySelector("[data-sidebar-panel]")?.classList.contains("hidden")).toBe(true)
 
