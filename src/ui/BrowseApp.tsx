@@ -81,6 +81,8 @@ function BrowseApp({
   const [draftChips, setDraftChips] = useState<string[]>([])
   const [modelCatalog, setModelCatalog] = useState<ModelOption[]>([])
   const [bundles, setBundles] = useState<Readonly<Record<string, ModelBundle>>>({})
+  const bundlesRef = useRef(bundles)
+  bundlesRef.current = bundles
   const [chartRange, setChartRange] = useState<ChartRange>(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       return "3"
@@ -218,29 +220,21 @@ function BrowseApp({
       (action) => action.type !== "setChipGroup" && action.type !== "setGeneration",
     )
     if (labels.length === 0) {
-      flushSync(() => {
-        setActions(base)
-      })
+      setActions(base)
       return
     }
     const nextGroups: string[] = []
     for (const name of labels) {
-      const catalog = modelCatalog.find((item) => item.label === name)
-      const matched = catalog !== undefined
-        ? catalog.groups
-        : groupsMatchingRtxModel(groupSource, name)
-      for (const group of matched) {
+      for (const group of groupsMatchingRtxModel(groupSource, name)) {
         if (!nextGroups.includes(group)) {
           nextGroups.push(group)
         }
       }
     }
-    flushSync(() => {
-      setActions([
-        ...base,
-        ...nextGroups.map((group) => ({ type: "setChipGroup" as const, name: group })),
-      ])
-    })
+    setActions([
+      ...base,
+      ...nextGroups.map((group) => ({ type: "setChipGroup" as const, name: group })),
+    ])
   }
 
   const onSearch = (): void => {
@@ -283,47 +277,70 @@ function BrowseApp({
       : [...currentLabels, label]
 
     if (selected) {
-      setBundles((previous) => {
-        if (!(label in previous)) {
-          return previous
-        }
-        const next = { ...previous }
-        delete next[label]
-        return next
+      const nextBundles = { ...bundlesRef.current }
+      delete nextBundles[label]
+      const remainingQuotes = Object.values(nextBundles).flatMap((bundle) => bundle.quotes)
+      const groupSource =
+        remainingQuotes.length > 0
+          ? present({ quotes: remainingQuotes }, []).chipGroups
+          : listView.chipGroups.filter((group) => rtxModelLabel(group) !== label)
+      flushSync(() => {
+        bundlesRef.current = nextBundles
+        setBundles(nextBundles)
+        applyModelActions(nextLabels, groupSource)
       })
-      applyModelActions(nextLabels, listView.chipGroups)
       return
     }
 
     const catalog = modelCatalog.find((item) => item.label === label)
-    const groups = catalog !== undefined
+    const fetchGroups = catalog !== undefined
       ? [...catalog.groups]
       : groupsMatchingRtxModel(listView.chipGroups, label)
 
     if (catalog === undefined || series.quotes.length > 0) {
-      applyModelActions(nextLabels, listView.chipGroups)
+      flushSync(() => {
+        applyModelActions(nextLabels, listView.chipGroups)
+      })
       return
     }
 
-    if (bundles[label] !== undefined) {
-      applyModelActions(nextLabels, groups)
+    if (bundlesRef.current[label] !== undefined) {
+      const groupSource = present(
+        {
+          quotes: Object.values(bundlesRef.current).flatMap((bundle) => bundle.quotes),
+        },
+        [],
+      ).chipGroups
+      flushSync(() => {
+        applyModelActions(nextLabels, groupSource)
+      })
       return
     }
 
     const token = fetchToken.current + 1
     fetchToken.current = token
     setLoadingText(`正在讀取 ${label}`)
-    void Promise.all([fetchQuotesForGroups(groups), fetchUsedForGroups(groups)]).then(
+    void Promise.all([fetchQuotesForGroups(fetchGroups), fetchUsedForGroups(fetchGroups)]).then(
       ([quotes, used]) => {
         if (fetchToken.current !== token) {
           return
         }
-        setBundles((previous) => ({
-          ...previous,
+        const nextBundles = {
+          ...bundlesRef.current,
           [label]: { quotes, used },
-        }))
-        applyModelActions(nextLabels, groups)
-        setLoadingText("")
+        }
+        const groupSource = present(
+          {
+            quotes: Object.values(nextBundles).flatMap((bundle) => bundle.quotes),
+          },
+          [],
+        ).chipGroups
+        flushSync(() => {
+          bundlesRef.current = nextBundles
+          setBundles(nextBundles)
+          applyModelActions(nextLabels, groupSource)
+          setLoadingText("")
+        })
       },
     )
   }
